@@ -1,0 +1,5 @@
+export * from './en.ts'
+export * from './ja.ts'
+export * from './ko.ts'
+export * from './zh-CN.ts'
+export * from './zh-TW.ts'

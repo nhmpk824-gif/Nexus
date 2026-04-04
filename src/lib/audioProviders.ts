@@ -1,0 +1,266 @@
+/**
+ * Audio provider API — re-exports and compatibility layer.
+ *
+ * All provider data now lives in providerCatalog.ts. This module preserves the
+ * existing public API so consumers don't need to change. New code should import
+ * directly from providerCatalog.ts when it only needs catalog queries.
+ */
+
+import {
+  SPEECH_INPUT_PROVIDERS,
+  SPEECH_OUTPUT_PROVIDERS,
+  VOICE_CLONE_PROVIDERS,
+  getSpeechInputProvider,
+  getSpeechOutputProvider,
+  type SpeechInputProviderEntry,
+  type SpeechOutputProviderEntry,
+  type VoiceCloneProviderEntry,
+  type SpeechModelOption,
+  type SpeechVoiceOption,
+  type SpeechOutputAdjustmentSupport,
+} from './providerCatalog.ts'
+
+// ── Re-export types ──
+
+export type {
+  SpeechModelOption,
+  SpeechVoiceOption,
+  SpeechOutputAdjustmentSupport,
+}
+
+export type SpeechInputProviderPreset = {
+  id: string
+  label: string
+  baseUrl: string
+  defaultModel: string
+  notes: string
+}
+
+export type SpeechOutputProviderPreset = {
+  id: string
+  label: string
+  baseUrl: string
+  defaultModel: string
+  defaultVoice: string
+  notes: string
+}
+
+export type VoiceCloneProviderPreset = {
+  id: string
+  label: string
+  baseUrl: string
+  notes: string
+}
+
+// ── Preset arrays (derived from catalog) ──
+
+function toInputPreset(entry: SpeechInputProviderEntry): SpeechInputProviderPreset {
+  return { id: entry.id, label: entry.label, baseUrl: entry.baseUrl, defaultModel: entry.defaultModel, notes: entry.notes }
+}
+
+function toOutputPreset(entry: SpeechOutputProviderEntry): SpeechOutputProviderPreset {
+  return { id: entry.id, label: entry.label, baseUrl: entry.baseUrl, defaultModel: entry.defaultModel, defaultVoice: entry.defaultVoice, notes: entry.notes }
+}
+
+function toClonePreset(entry: VoiceCloneProviderEntry): VoiceCloneProviderPreset {
+  return { id: entry.id, label: entry.label, baseUrl: entry.baseUrl, notes: entry.notes }
+}
+
+export const SPEECH_INPUT_PROVIDER_PRESETS: SpeechInputProviderPreset[] =
+  SPEECH_INPUT_PROVIDERS.map(toInputPreset)
+
+export const USER_VISIBLE_SPEECH_INPUT_PROVIDER_PRESETS: SpeechInputProviderPreset[] =
+  SPEECH_INPUT_PROVIDERS.filter((p) => !p.hidden).map(toInputPreset)
+
+export const SPEECH_OUTPUT_PROVIDER_PRESETS: SpeechOutputProviderPreset[] =
+  SPEECH_OUTPUT_PROVIDERS.map(toOutputPreset)
+
+export const USER_VISIBLE_SPEECH_OUTPUT_PROVIDER_PRESETS: SpeechOutputProviderPreset[] =
+  SPEECH_OUTPUT_PROVIDERS.filter((p) => !p.hidden).map(toOutputPreset)
+
+export const VOICE_CLONE_PROVIDER_PRESETS: VoiceCloneProviderPreset[] =
+  VOICE_CLONE_PROVIDERS.map(toClonePreset)
+
+// ── Model & voice option arrays (delegated to catalog entries) ──
+
+export const LOCAL_WHISPER_MODEL_OPTIONS: SpeechModelOption[] =
+  getSpeechInputProvider('local-whisper').modelOptions
+
+export const LOCAL_SHERPA_MODEL_OPTIONS: SpeechModelOption[] =
+  getSpeechInputProvider('local-sherpa').modelOptions
+
+export const MINIMAX_TTS_MODEL_OPTIONS: SpeechModelOption[] =
+  getSpeechOutputProvider('minimax-tts').modelOptions
+
+export const LOCAL_QWEN3_TTS_MODEL_OPTIONS: SpeechModelOption[] =
+  getSpeechOutputProvider('local-qwen3-tts').modelOptions
+
+export const COSYVOICE_MODEL_OPTIONS: SpeechModelOption[] =
+  getSpeechOutputProvider('cosyvoice-tts').modelOptions
+
+export const MINIMAX_FALLBACK_VOICE_OPTIONS: SpeechVoiceOption[] =
+  getSpeechOutputProvider('minimax-tts').fallbackVoiceOptions
+
+export const LOCAL_SHERPA_TTS_FALLBACK_VOICE_OPTIONS: SpeechVoiceOption[] =
+  getSpeechOutputProvider('local-sherpa-tts').fallbackVoiceOptions
+
+export const COSYVOICE_FALLBACK_VOICE_OPTIONS: SpeechVoiceOption[] =
+  getSpeechOutputProvider('cosyvoice-tts').fallbackVoiceOptions
+
+export const LOCAL_QWEN3_TTS_FALLBACK_VOICE_OPTIONS: SpeechVoiceOption[] =
+  getSpeechOutputProvider('local-qwen3-tts').fallbackVoiceOptions
+
+export const VOLCENGINE_FALLBACK_VOICE_OPTIONS: SpeechVoiceOption[] =
+  getSpeechOutputProvider('volcengine-tts').fallbackVoiceOptions
+
+// ── Preset lookup ──
+
+export function getSpeechInputProviderPreset(providerId: string): SpeechInputProviderPreset {
+  return toInputPreset(getSpeechInputProvider(providerId))
+}
+
+export function getSpeechOutputProviderPreset(providerId: string): SpeechOutputProviderPreset {
+  return toOutputPreset(getSpeechOutputProvider(providerId))
+}
+
+export function getVoiceCloneProviderPreset(providerId: string): VoiceCloneProviderPreset {
+  const found = VOICE_CLONE_PROVIDERS.find((p) => p.id === providerId)
+  return toClonePreset(found ?? VOICE_CLONE_PROVIDERS[0])
+}
+
+// ── Model & voice resolution (delegated to catalog) ──
+
+export function getSpeechInputModelOptions(providerId: string): SpeechModelOption[] {
+  return getSpeechInputProvider(providerId).modelOptions
+}
+
+export function resolveSpeechInputModel(providerId: string, requestedModel?: string | null): string {
+  const normalizedModel = String(requestedModel ?? '').trim()
+  const entry = getSpeechInputProvider(providerId)
+
+  if (!normalizedModel) return entry.defaultModel
+
+  if (!entry.modelOptions.length) return normalizedModel
+
+  return entry.modelOptions.some((opt) => opt.value === normalizedModel)
+    ? normalizedModel
+    : entry.defaultModel
+}
+
+export function getSpeechOutputModelOptions(providerId: string): SpeechModelOption[] {
+  return getSpeechOutputProvider(providerId).modelOptions
+}
+
+export function getFallbackSpeechOutputVoices(providerId: string): SpeechVoiceOption[] {
+  return getSpeechOutputProvider(providerId).fallbackVoiceOptions
+}
+
+// ── Provider type detection (delegated to catalog protocol) ──
+
+export function isBrowserSpeechInputProvider(providerId: string) {
+  return getSpeechInputProvider(providerId).protocol === 'browser'
+}
+
+export function isLocalWhisperSpeechInputProvider(providerId: string) {
+  return getSpeechInputProvider(providerId).protocol === 'whisper'
+}
+
+export function isLocalSherpaSpeechInputProvider(providerId: string) {
+  return getSpeechInputProvider(providerId).protocol === 'sherpa'
+}
+
+export function isFunAsrSpeechInputProvider(providerId: string) {
+  return getSpeechInputProvider(providerId).protocol === 'funasr'
+}
+
+export function isBrowserSpeechOutputProvider(providerId: string) {
+  return getSpeechOutputProvider(providerId).protocol === 'browser'
+}
+
+export function isLocalSherpaSpeechOutputProvider(providerId: string) {
+  return getSpeechOutputProvider(providerId).protocol === 'sherpa'
+}
+
+export function isPiperSpeechOutputProvider(providerId: string) {
+  return getSpeechOutputProvider(providerId).protocol === 'piper'
+}
+
+export function isCoquiSpeechOutputProvider(providerId: string) {
+  return getSpeechOutputProvider(providerId).protocol === 'coqui'
+}
+
+export function isVoiceCloneDisabled(providerId: string) {
+  return providerId === 'none'
+}
+
+export function isElevenLabsSpeechProvider(providerId: string) {
+  return providerId === 'elevenlabs-stt' || providerId === 'elevenlabs-tts'
+}
+
+export function isOpenAiCompatibleSpeechInputProvider(providerId: string) {
+  return getSpeechInputProvider(providerId).protocol === 'openai-compatible'
+}
+
+export function isOpenAiCompatibleSpeechOutputProvider(providerId: string) {
+  const protocol = getSpeechOutputProvider(providerId).protocol
+  return protocol === 'openai-compatible' || protocol === 'local-qwen3'
+}
+
+export function isVolcengineSpeechInputProvider(providerId: string) {
+  return getSpeechInputProvider(providerId).protocol === 'volcengine'
+}
+
+export function isVolcengineSpeechOutputProvider(providerId: string) {
+  return getSpeechOutputProvider(providerId).protocol === 'volcengine'
+}
+
+export function isMiniMaxSpeechOutputProvider(providerId: string) {
+  return getSpeechOutputProvider(providerId).protocol === 'minimax'
+}
+
+export function isCosyVoiceSpeechOutputProvider(providerId: string) {
+  return getSpeechOutputProvider(providerId).protocol === 'cosyvoice'
+}
+
+export function isDashScopeSpeechOutputProvider(providerId: string) {
+  return getSpeechOutputProvider(providerId).protocol === 'dashscope'
+}
+
+export function isEdgeTtsSpeechOutputProvider(providerId: string) {
+  return getSpeechOutputProvider(providerId).protocol === 'edge-tts'
+}
+
+// ── Capability queries (delegated to catalog) ──
+
+export function getSpeechOutputAdjustmentSupport(providerId: string): SpeechOutputAdjustmentSupport {
+  return getSpeechOutputProvider(providerId).adjustmentSupport
+}
+
+// ── URL normalization ──
+
+function normalizeHttpBaseUrl(baseUrl: string) {
+  return String(baseUrl ?? '').trim().replace(/\/+$/, '')
+}
+
+function isIpv6LoopbackHost(hostname: string) {
+  return hostname === '::1' || hostname === '[::1]'
+}
+
+export function normalizeSpeechOutputApiBaseUrl(providerId: string, baseUrl: string) {
+  const normalized = normalizeHttpBaseUrl(baseUrl)
+  if (!normalized || !isCosyVoiceSpeechOutputProvider(providerId)) {
+    return normalized
+  }
+
+  try {
+    const parsed = new URL(normalized)
+    if (parsed.hostname !== 'localhost' && !isIpv6LoopbackHost(parsed.hostname)) {
+      return normalized
+    }
+
+    parsed.hostname = '127.0.0.1'
+    return parsed.toString().replace(/\/+$/, '')
+  } catch {
+    return normalized
+  }
+}
