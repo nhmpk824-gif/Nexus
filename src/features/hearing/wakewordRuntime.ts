@@ -1,0 +1,452 @@
+import type {
+  WakewordModelKind,
+  WakewordRuntimeState,
+} from '../../types'
+import {
+  checkWakewordAvailability,
+  startWakewordListener,
+  type WakewordListener,
+  type WakewordListenerCallbacks,
+  type WakewordListenerOptions,
+} from './wakewordListener.ts'
+
+type TimerHandle = ReturnType<typeof globalThis.setTimeout>
+
+export type WakewordRuntimeConfig = {
+  enabled: boolean
+  wakeWord: string
+  suspended?: boolean
+  suspendReason?: string
+}
+
+export type WakewordAvailabilityStatus = Awaited<ReturnType<typeof checkWakewordAvailability>>
+
+export type WakewordRuntimeController = {
+  update: (config: WakewordRuntimeConfig) => Promise<void>
+  getState: () => WakewordRuntimeState
+  stop: () => void
+  destroy: () => void
+}
+
+type WakewordRuntimeOptions = {
+  checkAvailability?: (options?: WakewordListenerOptions) => Promise<WakewordAvailabilityStatus>
+  startListener?: (
+    callbacks: WakewordListenerCallbacks,
+    options?: WakewordListenerOptions,
+  ) => Promise<WakewordListener>
+  onStateChange?: (nextState: WakewordRuntimeState, previousState: WakewordRuntimeState) => void
+  onKeywordDetected?: (keyword: string, state: WakewordRuntimeState) => void
+  now?: () => number
+  setTimeoutFn?: (callback: () => void, delayMs: number) => TimerHandle
+  clearTimeoutFn?: (timer: TimerHandle) => void
+  triggerCooldownMs?: number
+  retryBaseMs?: number
+  retryMaxMs?: number
+}
+
+const DEFAULT_TRIGGER_COOLDOWN_MS = 1_500
+const DEFAULT_RETRY_BASE_MS = 1_200
+const DEFAULT_RETRY_MAX_MS = 10_000
+
+function toIso(timestampMs: number) {
+  return new Date(timestampMs).toISOString()
+}
+
+function normalizeWakewordRuntimeConfig(config: WakewordRuntimeConfig): Required<WakewordRuntimeConfig> {
+  return {
+    enabled: Boolean(config.enabled),
+    wakeWord: String(config.wakeWord ?? '').trim(),
+    suspended: Boolean(config.suspended),
+    suspendReason: String(config.suspendReason ?? '').trim(),
+  }
+}
+
+function buildBaseStatePatch(config: Required<WakewordRuntimeConfig>) {
+  return {
+    enabled: config.enabled,
+    wakeWord: config.wakeWord,
+    suspended: config.suspended,
+    suspendReason: config.suspendReason,
+  }
+}
+
+function normalizeRuntimeError(error: unknown, fallbackMessage: string) {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'string'
+      ? error
+      : ''
+
+  return message.trim() || fallbackMessage
+}
+
+export function createInitialWakewordRuntimeState(): WakewordRuntimeState {
+  return {
+    phase: 'disabled',
+    enabled: false,
+    wakeWord: '',
+    active: false,
+    available: false,
+    suspended: false,
+    suspendReason: '',
+    retryCount: 0,
+    modelKind: null,
+    reason: '',
+    error: '',
+    lastKeyword: '',
+    lastTriggeredAt: '',
+    lastStartedAt: '',
+    cooldownUntil: '',
+    updatedAt: toIso(Date.now()),
+  }
+}
+
+export function getWakewordRetryDelayMs(
+  attempt: number,
+  baseMs = DEFAULT_RETRY_BASE_MS,
+  maxMs = DEFAULT_RETRY_MAX_MS,
+) {
+  const normalizedAttempt = Math.max(0, Math.floor(attempt))
+  return Math.min(maxMs, baseMs * (2 ** normalizedAttempt))
+}
+
+export function shouldIgnoreWakewordTrigger(options: {
+  lastTriggeredAtMs: number
+  nowMs: number
+  cooldownMs: number
+}) {
+  const { lastTriggeredAtMs, nowMs, cooldownMs } = options
+  return lastTriggeredAtMs > 0 && nowMs - lastTriggeredAtMs < cooldownMs
+}
+
+export function createWakewordRuntime(
+  options: WakewordRuntimeOptions = {},
+): WakewordRuntimeController {
+  const now = options.now ?? (() => Date.now())
+  const setTimeoutFn = options.setTimeoutFn ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs))
+  const clearTimeoutFn = options.clearTimeoutFn ?? ((timer) => globalThis.clearTimeout(timer))
+  const checkAvailability = options.checkAvailability ?? checkWakewordAvailability
+  const startListener = options.startListener ?? startWakewordListener
+  const triggerCooldownMs = options.triggerCooldownMs ?? DEFAULT_TRIGGER_COOLDOWN_MS
+  const retryBaseMs = options.retryBaseMs ?? DEFAULT_RETRY_BASE_MS
+  const retryMaxMs = options.retryMaxMs ?? DEFAULT_RETRY_MAX_MS
+
+  let state = createInitialWakewordRuntimeState()
+  let config = normalizeWakewordRuntimeConfig({
+    enabled: false,
+    wakeWord: '',
+    suspended: false,
+    suspendReason: '',
+  })
+  let listener: WakewordListener | null = null
+  let retryTimer: TimerHandle | null = null
+  let cooldownTimer: TimerHandle | null = null
+  let disposed = false
+  let generation = 0
+  let lastTriggeredAtMs = 0
+
+  function emitState(patch: Partial<WakewordRuntimeState>) {
+    const previousState = state
+    state = {
+      ...state,
+      ...patch,
+      updatedAt: toIso(now()),
+    }
+    options.onStateChange?.(state, previousState)
+  }
+
+  function clearRetryTimer() {
+    if (retryTimer == null) return
+    clearTimeoutFn(retryTimer)
+    retryTimer = null
+  }
+
+  function clearCooldownTimer() {
+    if (cooldownTimer == null) return
+    clearTimeoutFn(cooldownTimer)
+    cooldownTimer = null
+  }
+
+  function stopListener() {
+    const currentListener = listener
+    listener = null
+    currentListener?.stop()
+  }
+
+  function scheduleRetry() {
+    clearRetryTimer()
+    const delayMs = getWakewordRetryDelayMs(state.retryCount, retryBaseMs, retryMaxMs)
+    retryTimer = setTimeoutFn(() => {
+      retryTimer = null
+      void reconcile()
+    }, delayMs)
+
+    emitState({
+      phase: 'error',
+      active: false,
+      available: true,
+      reason: `唤醒词监听异常，将在 ${Math.round(delayMs / 100) / 10} 秒后重试`,
+      retryCount: state.retryCount + 1,
+    })
+  }
+
+  function scheduleCooldown(untilMs: number) {
+    clearCooldownTimer()
+    cooldownTimer = setTimeoutFn(() => {
+      cooldownTimer = null
+      void reconcile()
+    }, Math.max(0, untilMs - now()))
+  }
+
+  function handleRecoverableError(message: string, modelKind: WakewordModelKind) {
+    stopListener()
+    scheduleRetry()
+    emitState({
+      ...buildBaseStatePatch(config),
+      phase: 'error',
+      active: false,
+      available: true,
+      modelKind,
+      error: message,
+    })
+  }
+
+  function handleKeywordDetected(keyword: string) {
+    const normalizedKeyword = String(keyword ?? '').trim()
+    const nowMs = now()
+
+    if (shouldIgnoreWakewordTrigger({
+      lastTriggeredAtMs,
+      nowMs,
+      cooldownMs: triggerCooldownMs,
+    })) {
+      return
+    }
+
+    lastTriggeredAtMs = nowMs
+    clearRetryTimer()
+    stopListener()
+
+    const cooldownUntilMs = nowMs + triggerCooldownMs
+    scheduleCooldown(cooldownUntilMs)
+
+    emitState({
+      ...buildBaseStatePatch(config),
+      phase: 'cooldown',
+      active: false,
+      available: true,
+      reason: '唤醒词已命中，正在切入收音',
+      error: '',
+      retryCount: 0,
+      lastKeyword: normalizedKeyword,
+      lastTriggeredAt: toIso(nowMs),
+      cooldownUntil: toIso(cooldownUntilMs),
+    })
+
+    options.onKeywordDetected?.(normalizedKeyword, state)
+  }
+
+  async function reconcile() {
+    if (disposed) return
+
+    const nextGeneration = generation + 1
+    generation = nextGeneration
+    const currentConfig = config
+    const basePatch = buildBaseStatePatch(currentConfig)
+
+    if (!currentConfig.enabled || !currentConfig.wakeWord) {
+      clearRetryTimer()
+      clearCooldownTimer()
+      stopListener()
+      emitState({
+        ...basePatch,
+        phase: 'disabled',
+        active: false,
+        available: false,
+        modelKind: null,
+        reason: '',
+        error: '',
+        retryCount: 0,
+        cooldownUntil: '',
+      })
+      return
+    }
+
+    if (currentConfig.suspended) {
+      clearRetryTimer()
+      stopListener()
+      emitState({
+        ...basePatch,
+        phase: 'paused',
+        active: false,
+        reason: currentConfig.suspendReason || '唤醒词监听已暂停',
+        error: '',
+      })
+      return
+    }
+
+    if (state.cooldownUntil) {
+      const cooldownUntilMs = Date.parse(state.cooldownUntil)
+      if (Number.isFinite(cooldownUntilMs) && cooldownUntilMs > now()) {
+        stopListener()
+        scheduleCooldown(cooldownUntilMs)
+        emitState({
+          ...basePatch,
+          phase: 'cooldown',
+          active: false,
+          available: true,
+          reason: '唤醒词命中冷却中',
+          error: '',
+        })
+        return
+      }
+    }
+
+    clearCooldownTimer()
+
+    if (
+      listener
+      && state.phase === 'listening'
+      && state.wakeWord === currentConfig.wakeWord
+    ) {
+      clearRetryTimer()
+      emitState({
+        ...basePatch,
+        phase: 'listening',
+        active: true,
+        available: true,
+        reason: '',
+        error: '',
+        cooldownUntil: '',
+        retryCount: 0,
+      })
+      return
+    }
+
+    clearRetryTimer()
+    stopListener()
+    emitState({
+      ...basePatch,
+      phase: 'checking',
+      active: false,
+      available: false,
+      reason: '正在检查唤醒词模型',
+      error: '',
+      modelKind: null,
+      cooldownUntil: '',
+    })
+
+    let availability: WakewordAvailabilityStatus
+    try {
+      availability = await checkAvailability({ wakeWord: currentConfig.wakeWord })
+    } catch (error) {
+      if (disposed || nextGeneration !== generation) return
+      handleRecoverableError(
+        normalizeRuntimeError(error, '唤醒词状态检查失败'),
+        null,
+      )
+      return
+    }
+
+    if (disposed || nextGeneration !== generation) return
+
+    if (!availability.installed || !availability.modelFound) {
+      clearRetryTimer()
+      emitState({
+        ...basePatch,
+        phase: 'unavailable',
+        active: false,
+        available: false,
+        modelKind: availability.modelKind ?? null,
+        reason: availability.reason?.trim() || '唤醒词模型当前不可用',
+        error: '',
+        retryCount: 0,
+        cooldownUntil: '',
+      })
+      return
+    }
+
+    emitState({
+      ...basePatch,
+      phase: 'starting',
+      active: false,
+      available: true,
+      modelKind: availability.modelKind ?? null,
+      reason: '正在启动唤醒词监听',
+      error: '',
+    })
+
+    try {
+      const nextListener = await startListener({
+        onKeywordDetected: (keyword) => {
+          if (disposed || nextGeneration !== generation) return
+          handleKeywordDetected(keyword)
+        },
+        onError: (message) => {
+          if (disposed || nextGeneration !== generation) return
+          handleRecoverableError(message, availability.modelKind ?? null)
+        },
+      }, {
+        wakeWord: currentConfig.wakeWord,
+      })
+
+      if (disposed || nextGeneration !== generation) {
+        nextListener.stop()
+        return
+      }
+
+      listener = nextListener
+      clearRetryTimer()
+      emitState({
+        ...basePatch,
+        phase: 'listening',
+        active: true,
+        available: true,
+        modelKind: availability.modelKind ?? null,
+        reason: '',
+        error: '',
+        retryCount: 0,
+        lastStartedAt: toIso(now()),
+      })
+    } catch (error) {
+      if (disposed || nextGeneration !== generation) return
+      handleRecoverableError(
+        normalizeRuntimeError(error, '唤醒词监听启动失败'),
+        availability.modelKind ?? null,
+      )
+    }
+  }
+
+  return {
+    async update(nextConfig) {
+      config = normalizeWakewordRuntimeConfig(nextConfig)
+      await reconcile()
+    },
+    getState() {
+      return state
+    },
+    stop() {
+      generation += 1
+      clearRetryTimer()
+      clearCooldownTimer()
+      stopListener()
+      emitState({
+        phase: 'disabled',
+        active: false,
+        available: false,
+        reason: '',
+        error: '',
+        retryCount: 0,
+        cooldownUntil: '',
+      })
+    },
+    destroy() {
+      if (disposed) return
+      disposed = true
+      generation += 1
+      clearRetryTimer()
+      clearCooldownTimer()
+      stopListener()
+    },
+  }
+}
