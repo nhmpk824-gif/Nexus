@@ -134,11 +134,18 @@ test('open-app requests are classified even before desktop execution is implemen
   assert.match(plan.promptContext, /打开本地软件/u)
 })
 
-test('music-control requests are classified even before execution is implemented', () => {
+test('music requests with specific songs are routed to web search', () => {
   const plan = planToolIntent('给我播放周传雄的黄昏')
+
+  assert.equal(plan.intent, 'web_search')
+  assert.equal(plan.matchedTool?.id, 'web_search')
+  assert.equal(plan.reason, 'direct_match')
+})
+
+test('generic music-control requests are classified as unsupported', () => {
+  const plan = planToolIntent('暂停音乐')
 
   assert.equal(plan.intent, 'music_control')
   assert.equal(plan.matchedTool, null)
   assert.equal(plan.reason, 'unsupported_music_control')
-  assert.match(plan.promptContext, /音乐播放或控制/u)
 })

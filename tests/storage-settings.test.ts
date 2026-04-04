@@ -41,51 +41,8 @@ beforeEach(() => {
   })
 })
 
-test('promotes legacy volcengine primary tts to cosyvoice and preserves the old volcengine profile', () => {
+test('preserves volcengine-tts selection without migration', () => {
   const localStorage = createLocalStorageMock({
-    [SETTINGS_STORAGE_KEY]: JSON.stringify({
-      speechOutputProviderId: 'volcengine-tts',
-      speechOutputApiBaseUrl: 'https://openspeech.bytedance.com/api',
-      speechOutputApiKey: '1000:test-token',
-      speechOutputModel: 'volcano_tts',
-      speechOutputVoice: 'BV001_streaming',
-      speechOutputInstructions: 'legacy volcengine instructions',
-    }),
-  })
-
-  Object.defineProperty(globalThis, 'window', {
-    value: { localStorage },
-    configurable: true,
-    writable: true,
-  })
-
-  const settings = loadSettings()
-
-  assert.equal(settings.speechOutputProviderId, 'cosyvoice-tts')
-  assert.equal(settings.speechOutputApiBaseUrl, 'http://127.0.0.1:50000')
-  assert.equal(settings.speechOutputModel, 'sft')
-  assert.equal(settings.speechOutputVoice, '中文女')
-  assert.equal(settings.speechOutputApiKey, '')
-  assert.equal(
-    settings.speechOutputProviderProfiles['volcengine-tts']?.apiBaseUrl,
-    'https://openspeech.bytedance.com/api',
-  )
-  assert.equal(
-    settings.speechOutputProviderProfiles['volcengine-tts']?.apiKey,
-    '1000:test-token',
-  )
-  assert.equal(
-    settings.speechOutputProviderProfiles['volcengine-tts']?.instructions,
-    'legacy volcengine instructions',
-  )
-  assert.ok(localStorage.getItem(LOCAL_FIRST_TTS_MIGRATION_STORAGE_KEY))
-})
-
-test('honors a later explicit volcengine selection after the one-time local-first migration marker exists', () => {
-  const localStorage = createLocalStorageMock({
-    [LOCAL_FIRST_TTS_MIGRATION_STORAGE_KEY]: JSON.stringify({
-      appliedAt: '2026-03-30T00:00:00.000Z',
-    }),
     [SETTINGS_STORAGE_KEY]: JSON.stringify({
       speechOutputProviderId: 'volcengine-tts',
       speechOutputApiBaseUrl: 'https://openspeech.bytedance.com/api',
