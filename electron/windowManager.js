@@ -368,7 +368,12 @@ export function createMainWindow() {
   win.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'screen-saver')
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        shell.openExternal(url)
+      }
+    } catch { /* ignore malformed URLs */ }
     return { action: 'deny' }
   })
 
@@ -458,7 +463,12 @@ export function createPanelWindow() {
   })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        shell.openExternal(url)
+      }
+    } catch { /* ignore malformed URLs */ }
     return { action: 'deny' }
   })
 
