@@ -1,0 +1,272 @@
+@import "tailwindcss";
+
+/* ── Nexus Kawaii Theme ── */
+
+@theme {
+  /* Typography */
+  --font-sans: 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
+  --font-heading: 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', ui-monospace, Consolas, monospace;
+
+  /* Neutral palette — light mode */
+  --color-neutral-50: #f5f5f5;
+  --color-neutral-100: #e8e8e8;
+  --color-neutral-200: #d4d4d4;
+  --color-neutral-300: #a3a3a3;
+  --color-neutral-400: #737373;
+  --color-neutral-500: #525252;
+  --color-neutral-600: #333333;
+
+  --color-lavender-50: #f5f3ff;
+  --color-lavender-100: #ede9fe;
+  --color-lavender-200: #ddd6fe;
+  --color-lavender-300: #c4b5fd;
+  --color-lavender-400: #a78bfa;
+  --color-lavender-500: #8b5cf6;
+  --color-lavender-600: #7c3aed;
+
+  --color-sky-50: #f0f9ff;
+  --color-sky-100: #e0f2fe;
+  --color-sky-200: #bae6fd;
+  --color-sky-300: #7dd3fc;
+  --color-sky-400: #38bdf8;
+  --color-sky-500: #0ea5e9;
+
+  --color-mint-50: #f0fdf4;
+  --color-mint-100: #dcfce7;
+  --color-mint-200: #bbf7d0;
+  --color-mint-300: #86efac;
+  --color-mint-400: #4ade80;
+
+  --color-peach-50: #fff7ed;
+  --color-peach-100: #ffedd5;
+  --color-peach-200: #fed7aa;
+  --color-peach-300: #fdba74;
+
+  /* Semantic tokens — light */
+  --color-surface: rgba(255, 255, 255, 0.95);
+  --color-surface-muted: rgba(248, 248, 248, 0.92);
+  --color-surface-glass: rgba(255, 255, 255, 0.72);
+  --color-surface-elevated: rgba(255, 255, 255, 0.96);
+  --color-text-primary: #1a1a1a;
+  --color-text-muted: #6b6b6b;
+  --color-text-soft: #a0a0a0;
+  --color-accent: #333333;
+  --color-accent-soft: rgba(50, 50, 50, 0.14);
+  --color-accent-hover: #555555;
+  --color-border: rgba(200, 200, 200, 0.3);
+  --color-border-strong: rgba(180, 180, 180, 0.45);
+  --color-shadow: rgba(0, 0, 0, 0.08);
+  --color-shadow-accent: rgba(50, 50, 50, 0.12);
+
+  /* Dark mode semantic tokens */
+  --color-dark-surface: rgba(30, 24, 34, 0.96);
+  --color-dark-surface-muted: rgba(40, 32, 44, 0.94);
+  --color-dark-surface-glass: rgba(36, 28, 40, 0.78);
+  --color-dark-surface-elevated: rgba(48, 38, 52, 0.96);
+  --color-dark-text-primary: #ede4ef;
+  --color-dark-text-muted: #9a8e9e;
+  --color-dark-text-soft: #6e626e;
+  --color-dark-accent: #b0b0b0;
+  --color-dark-accent-soft: rgba(180, 180, 180, 0.16);
+  --color-dark-accent-hover: #c0c0c0;
+  --color-dark-border: rgba(100, 100, 100, 0.35);
+  --color-dark-border-strong: rgba(140, 140, 140, 0.4);
+  --color-dark-shadow: rgba(0, 0, 0, 0.2);
+  --color-dark-shadow-accent: rgba(180, 180, 180, 0.1);
+
+  /* Radius — generous & soft */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  /* Shadows — colored & layered */
+  --shadow-sm: 0 2px 8px var(--color-shadow);
+  --shadow-md: 0 4px 16px var(--color-shadow), 0 1px 4px var(--color-shadow-accent);
+  --shadow-lg: 0 8px 32px var(--color-shadow), 0 2px 8px var(--color-shadow-accent);
+  --shadow-glow: 0 0 20px var(--color-shadow-accent), 0 4px 16px var(--color-shadow);
+
+  /* Transitions — bouncy */
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Backdrop blur */
+  --blur-glass: 16px;
+  --blur-heavy: 24px;
+}
+
+/* ── Base styles ── */
+
+:root {
+  /* Legacy token bridge — maps to new theme */
+  --nexus-surface: var(--color-surface);
+  --nexus-surface-muted: var(--color-surface-muted);
+  --nexus-text-primary: var(--color-text-primary);
+  --nexus-text-muted: var(--color-text-muted);
+  --nexus-accent: var(--color-accent);
+  --nexus-accent-soft: var(--color-accent-soft);
+  --nexus-border: var(--color-border);
+  --nexus-shadow: var(--color-shadow);
+  --nexus-app-background: transparent;
+
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+  color-scheme: light dark;
+  color: var(--color-text-primary);
+  background: transparent;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --nexus-surface: var(--color-dark-surface);
+    --nexus-surface-muted: var(--color-dark-surface-muted);
+    --nexus-text-primary: var(--color-dark-text-primary);
+    --nexus-text-muted: var(--color-dark-text-muted);
+    --nexus-accent: var(--color-dark-accent);
+    --nexus-accent-soft: var(--color-dark-accent-soft);
+    --nexus-border: var(--color-dark-border);
+    --nexus-shadow: var(--color-dark-shadow);
+    color: var(--color-dark-text-primary);
+  }
+}
+
+/* Force dark with attribute */
+[data-theme="dark"] {
+  --nexus-surface: var(--color-dark-surface);
+  --nexus-surface-muted: var(--color-dark-surface-muted);
+  --nexus-text-primary: var(--color-dark-text-primary);
+  --nexus-text-muted: var(--color-dark-text-muted);
+  --nexus-accent: var(--color-dark-accent);
+  --nexus-accent-soft: var(--color-dark-accent-soft);
+  --nexus-border: var(--color-dark-border);
+  --nexus-shadow: var(--color-dark-shadow);
+  color: var(--color-dark-text-primary);
+}
+
+html,
+body,
+#root {
+  min-height: 100vh;
+  background: var(--nexus-app-background);
+}
+
+body {
+  margin: 0;
+}
+
+html[data-window-view='pet'],
+body[data-window-view='pet'] {
+  overflow: hidden;
+}
+
+html[data-window-view='panel'],
+body[data-window-view='panel'] {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h1, h2 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+h1 {
+  font-size: 34px;
+  margin: 0;
+  letter-spacing: -0.04em;
+}
+
+h2 {
+  font-size: 22px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+h3 {
+  font-size: 18px;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+p { margin: 0; }
+
+code { font-family: var(--font-mono); }
+
+button, input, textarea, select {
+  font-family: var(--font-sans);
+}
+
+/* Scrollbar — cute & rounded */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-accent-soft);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Utility layers ── */
+
+@utility glass {
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(var(--blur-glass));
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+}
+
+@utility glass-heavy {
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(var(--blur-heavy));
+  -webkit-backdrop-filter: blur(var(--blur-heavy));
+}
+
+@utility shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+@utility bounce-in {
+  animation: bounceIn 0.4s var(--ease-bounce);
+}
+
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.9) translateY(8px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}

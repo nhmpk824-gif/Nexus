@@ -1,0 +1,130 @@
+{
+  "name": "nexus",
+  "private": true,
+  "version": "0.1.1",
+  "description": "Nexus desktop AI companion built with Electron, React, and TypeScript.",
+  "author": "Nexus Team",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "electron:dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:47821 && cross-env DESKTOP_PET_USE_DEV_SERVER=1 electron .\"",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "test": "node --experimental-strip-types --test tests/audio-providers.test.ts tests/browser-vad.test.ts tests/text-files.test.ts tests/performance.test.ts tests/voice-core.test.ts tests/voice-session.test.ts tests/wakeword-runtime.test.ts tests/tool-registry.test.ts tests/tool-assistant.test.ts tests/tool-planner.test.ts tests/reminder-intent.test.ts tests/reminder-schedule.test.ts tests/lyrics-search.test.ts tests/search-content-extract.test.ts tests/background-search.test.ts tests/chat-runtime.test.ts tests/web-search-runtime.test.ts tests/storage-settings.test.ts tests/memory.test.ts tests/memory-archive.test.ts tests/failover.test.ts tests/harness.test.ts tests/chat-turn-guards.test.ts tests/notification-bridge.test.ts",
+    "preview": "vite preview",
+    "start:app": "npm run build && electron .",
+    "smoke": "npm run build && cross-env SMOKE_TEST=1 electron .",
+    "smoke:packaged": "cross-env SMOKE_TEST=1 electron .",
+    "package": "npm run package:win",
+    "package:dir": "npm run build && electron-builder --dir --config.win.signAndEditExecutable=false",
+    "package:win": "npm run build && electron-builder --win nsis --config.win.signAndEditExecutable=false",
+    "package:win:signed": "npm run build && electron-builder --win nsis",
+    "package:mac": "npm run build && electron-builder --mac",
+    "package:linux": "npm run build && electron-builder --linux",
+    "verify:release": "npm run lint && npm test && npm run build"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "@ricky0123/vad-web": "^0.0.30",
+    "onnxruntime-web": "^1.24.3",
+    "pinyin-pro": "^3.28.0",
+    "pixi-live2d-display": "^0.4.0",
+    "pixi.js": "^6.5.10",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tesseract.js": "^7.0.0",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^24.12.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^36.2.1",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.27.7",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.57.0",
+    "vite": "^8.0.1",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "ai.factory.desktoppet",
+    "productName": "Nexus",
+    "directories": {
+      "output": "release"
+    },
+    "artifactName": "${productName}-Setup-${version}.${ext}",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "!node_modules/onnxruntime-node/**"
+    ],
+    "asarUnpack": [
+      "electron/mediaSession.ps1"
+    ],
+    "icon": "public/nexus-256.png",
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/nexus.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "public/nexus-1024.png",
+      "category": "public.app-category.utilities",
+      "darkModeSupport": true
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "public/nexus-256.png",
+      "category": "Utility",
+      "desktop": {
+        "entry": {
+          "Name": "Nexus",
+          "Comment": "Desktop AI Companion",
+          "StartupWMClass": "nexus"
+        }
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Nexus"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}

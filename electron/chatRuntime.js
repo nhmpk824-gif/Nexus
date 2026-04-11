@@ -1,0 +1,314 @@
+function normalizeBaseUrl(value) {
+  return String(value ?? '').trim().replace(/\/+$/u, '')
+}
+
+function stripAnthropicVersionSuffix(baseUrl) {
+  return normalizeBaseUrl(baseUrl).replace(/\/v1$/iu, '')
+}
+
+function extractTextFromContent(content) {
+  if (typeof content === 'string') {
+    return content.trim()
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part
+        if (typeof part?.text === 'string') return part.text
+        if (typeof part?.delta?.text === 'string') return part.delta.text
+        return ''
+      })
+      .join('\n')
+      .trim()
+  }
+
+  if (typeof content?.text === 'string') {
+    return content.text.trim()
+  }
+
+  if (typeof content?.delta?.text === 'string') {
+    return content.delta.text.trim()
+  }
+
+  return ''
+}
+
+const CHAT_PROVIDER_PROTOCOLS = Object.freeze({
+  anthropic: 'anthropic',
+  minimax: 'anthropic',
+})
+
+const CHAT_PROVIDER_API_KEY_POLICY = Object.freeze({
+  custom: false,
+  ollama: false,
+})
+
+export function normalizeChatProviderId(providerId, baseUrl = '') {
+  const explicit = String(providerId ?? '').trim().toLowerCase()
+  if (explicit) {
+    return explicit
+  }
+
+  const normalized = normalizeBaseUrl(baseUrl).toLowerCase()
+  if (!normalized) {
+    return 'openai'
+  }
+
+  if (normalized.includes('api.anthropic.com')) return 'anthropic'
+  if (normalized.includes('api.minimax.io/anthropic') || normalized.includes('api.minimaxi.com/anthropic')) {
+    return 'minimax'
+  }
+  if (normalized.includes('openrouter.ai')) return 'openrouter'
+  if (normalized.includes('api.together.xyz')) return 'together'
+  if (normalized.includes('api.mistral.ai')) return 'mistral'
+  if (normalized.includes('api.groq.com')) return 'groq'
+  if (normalized.includes('api.deepseek.com')) return 'deepseek'
+  if (normalized.includes('api.moonshot.ai') || normalized.includes('api.moonshot.cn')) return 'moonshot'
+  if (normalized.includes('dashscope.aliyuncs.com')) return 'dashscope'
+  if (normalized.includes('api.siliconflow.com') || normalized.includes('api.siliconflow.cn')) {
+    return 'siliconflow'
+  }
+  if (normalized.includes('api.x.ai')) return 'xai'
+  if (normalized.includes('qianfan.baidubce.com')) return 'qianfan'
+  if (normalized.includes('api.z.ai') || normalized.includes('open.bigmodel.cn')) return 'zai'
+  if (normalized.includes('bytepluses.com')) return 'byteplus'
+  if (normalized.includes('integrate.api.nvidia.com')) return 'nvidia'
+  if (normalized.includes('api.venice.ai')) return 'venice'
+  if (normalized.includes('127.0.0.1:11434') || normalized.includes('localhost:11434')) return 'ollama'
+
+  return 'openai'
+}
+
+export function getChatProviderProtocol(providerId, baseUrl = '') {
+  const explicit = String(providerId ?? '').trim().toLowerCase()
+  if (explicit === 'anthropic' || explicit === 'openai-compatible') {
+    return explicit
+  }
+
+  const normalizedProviderId = normalizeChatProviderId(providerId, baseUrl)
+  if (
+    normalizedProviderId === 'minimax'
+    && !normalizeBaseUrl(baseUrl).toLowerCase().includes('/anthropic')
+  ) {
+    return 'openai-compatible'
+  }
+
+  return CHAT_PROVIDER_PROTOCOLS[normalizedProviderId] ?? 'openai-compatible'
+}
+
+export function chatProviderRequiresApiKey(providerId) {
+  const normalized = normalizeChatProviderId(providerId)
+  return CHAT_PROVIDER_API_KEY_POLICY[normalized] ?? true
+}
+
+function buildChatAuthorizationHeaders(providerId, apiKey, baseUrl = '') {
+  const normalizedProviderId = normalizeChatProviderId(providerId)
+  const protocol = getChatProviderProtocol(normalizedProviderId, baseUrl)
+
+  if (protocol === 'anthropic') {
+    return {
+      ...(apiKey ? { 'x-api-key': apiKey } : {}),
+      'anthropic-version': '2023-06-01',
+    }
+  }
+
+  return apiKey
+    ? {
+        Authorization: `Bearer ${apiKey}`,
+      }
+    : {}
+}
+
+function splitSystemMessages(messages) {
+  const system = []
+  const normalizedMessages = []
+
+  for (const message of Array.isArray(messages) ? messages : []) {
+    const text = extractTextFromContent(message?.content)
+    if (!text) {
+      continue
+    }
+
+    if (message?.role === 'system') {
+      system.push(text)
+      continue
+    }
+
+    if (message?.role === 'assistant' || message?.role === 'user') {
+      normalizedMessages.push({
+        role: message.role,
+        content: text,
+      })
+    }
+  }
+
+  return {
+    system: system.join('\n\n').trim(),
+    messages: normalizedMessages,
+  }
+}
+
+function resolveAnthropicEndpoint(baseUrl, suffix) {
+  const normalized = stripAnthropicVersionSuffix(baseUrl)
+  return `${normalized}${suffix}`
+}
+
+export function buildChatRequest(payload, options = {}) {
+  const providerId = normalizeChatProviderId(payload?.providerId, payload?.baseUrl)
+  const baseUrl = normalizeBaseUrl(payload?.baseUrl)
+  const protocol = getChatProviderProtocol(providerId, baseUrl)
+  const stream = options.stream === true
+
+  if (protocol === 'anthropic') {
+    const normalizedMessages = splitSystemMessages(payload?.messages)
+
+    return {
+      providerId,
+      protocol,
+      endpoint: resolveAnthropicEndpoint(baseUrl, '/v1/messages'),
+      headers: {
+        'Content-Type': 'application/json',
+        ...buildChatAuthorizationHeaders(providerId, payload?.apiKey, baseUrl),
+      },
+      body: JSON.stringify({
+        model: payload?.model,
+        messages: normalizedMessages.messages,
+        max_tokens: payload?.maxTokens ?? 500,
+        temperature: payload?.temperature ?? 0.8,
+        ...(normalizedMessages.system ? { system: normalizedMessages.system } : {}),
+        ...(stream ? { stream: true } : {}),
+      }),
+    }
+  }
+
+  return {
+    providerId,
+    protocol,
+    endpoint: `${baseUrl}/chat/completions`,
+    headers: {
+      'Content-Type': 'application/json',
+      ...buildChatAuthorizationHeaders(providerId, payload?.apiKey, baseUrl),
+    },
+    body: JSON.stringify({
+      model: payload?.model,
+      messages: payload?.messages,
+      temperature: payload?.temperature ?? 0.8,
+      max_tokens: payload?.maxTokens ?? 500,
+      ...(stream ? { stream: true } : {}),
+    }),
+  }
+}
+
+export function buildChatConnectionTestRequest(payload) {
+  const providerId = normalizeChatProviderId(payload?.providerId, payload?.baseUrl)
+  const baseUrl = normalizeBaseUrl(payload?.baseUrl)
+  const protocol = getChatProviderProtocol(providerId, baseUrl)
+
+  if (protocol === 'anthropic') {
+    return {
+      providerId,
+      protocol,
+      successKind: 'message',
+      endpoint: resolveAnthropicEndpoint(baseUrl, '/v1/messages'),
+      request: {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildChatAuthorizationHeaders(providerId, payload?.apiKey, baseUrl),
+        },
+        body: JSON.stringify({
+          model: payload?.model,
+          max_tokens: 1,
+          temperature: 0,
+          messages: [
+            {
+              role: 'user',
+              content: 'Ping.',
+            },
+          ],
+        }),
+      },
+    }
+  }
+
+  return {
+    providerId,
+    protocol,
+    successKind: 'model_list',
+    endpoint: `${baseUrl}/models`,
+    request: {
+      method: 'GET',
+      headers: buildChatAuthorizationHeaders(providerId, payload?.apiKey, baseUrl),
+    },
+  }
+}
+
+export function extractChatResponseContent(providerId, payload) {
+  if (getChatProviderProtocol(providerId) === 'anthropic') {
+    return extractTextFromContent(payload?.content)
+  }
+
+  return extractTextFromContent(
+    payload?.choices?.[0]?.message?.content
+    ?? payload?.message?.content
+    ?? payload?.content
+    ?? '',
+  )
+}
+
+export function extractChatStreamingDeltaContent(providerId, payload) {
+  if (getChatProviderProtocol(providerId) === 'anthropic') {
+    return extractTextFromContent(
+      payload?.delta?.text
+      ?? payload?.content_block?.text
+      ?? '',
+    )
+  }
+
+  return extractTextFromContent(
+    payload?.choices?.[0]?.delta?.content
+    ?? payload?.choices?.[0]?.message?.content
+    ?? payload?.message?.content
+    ?? '',
+  )
+}
+
+export function isChatStreamingPayloadTerminal(providerId, payload) {
+  if (getChatProviderProtocol(providerId) === 'anthropic') {
+    return payload?.type === 'message_stop' || payload?.type === 'error'
+  }
+
+  const finishReason = String(payload?.choices?.[0]?.finish_reason ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (finishReason && finishReason !== 'null') {
+    return true
+  }
+
+  return payload?.done === true || payload?.stop === true
+}
+
+export function trimRepeatedStreamingDelta(fullContent, incomingDelta) {
+  const delta = String(incomingDelta ?? '')
+  if (!delta) return ''
+  if (!fullContent) return delta
+
+  if (delta.startsWith(fullContent)) {
+    return delta.slice(fullContent.length)
+  }
+
+  if (fullContent.endsWith(delta)) {
+    return ''
+  }
+
+  const maxOverlap = Math.min(fullContent.length, delta.length)
+  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+    if (fullContent.endsWith(delta.slice(0, overlap))) {
+      return delta.slice(overlap)
+    }
+  }
+
+  return delta
+}

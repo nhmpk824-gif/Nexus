@@ -1,0 +1,47 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+tmp-debug/
+release/
+resources/local-speech/
+sherpa-models/
+.venv-qwen3tts/
+.hf-home/
+tmp_qwen3_tts_server_test.wav
+tmp_qwen3_tts_server_test.pcm
+qwen3-tts-server.out.log
+qwen3-tts-server.err.log
+electron-run.out.log
+electron-run.err.log
+electron-v*-win32-*.zip
+tmp_qwen3_tts_*.wav
+tmp_qwen3_tts_*.pcm
+tmp_test_keyword_spotter_transducer.js
+*.stage2-backup
+*.corrupt-backup
+__pycache__/
+*.pyc
+
+# Large vendor binaries (download via npm postinstall or manually)
+public/vendor/

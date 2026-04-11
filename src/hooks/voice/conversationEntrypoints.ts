@@ -1,0 +1,173 @@
+import type { MutableRefObject, RefObject } from 'react'
+import {
+  isTencentAsrSpeechInputProvider,
+} from '../../lib/audioProviders'
+import type {
+  VoiceSessionEvent,
+  VoiceSessionTransport,
+} from '../../features/voice/sessionMachine'
+import type {
+  AppSettings,
+  PetMood,
+  VoicePipelineState,
+  VoiceState,
+} from '../../types'
+import type {
+  VadConversationSession,
+  VoiceConversationOptions,
+} from './types'
+import type { BrowserSpeechRecognition } from '../../lib/voice'
+import type { TencentAsrStreamSession } from '../../features/hearing/tencentAsr.ts'
+
+type ShowPetStatus = (
+  message: string,
+  duration?: number,
+  dedupeWindowMs?: number,
+) => void
+
+type ActiveVoiceConversationOptions = {
+  restart?: boolean
+  passive?: boolean
+}
+
+export type StartVoiceConversationEntrypointOptions = {
+  options?: VoiceConversationOptions
+  settingsRef: RefObject<AppSettings>
+  busyRef: RefObject<boolean>
+  activeVoiceConversationOptionsRef: MutableRefObject<ActiveVoiceConversationOptions>
+  voiceStateRef: MutableRefObject<VoiceState>
+  suppressVoiceReplyRef: MutableRefObject<boolean>
+  recognitionRef: MutableRefObject<BrowserSpeechRecognition | null>
+  vadSessionRef: MutableRefObject<VadConversationSession | null>
+  tencentAsrSessionRef: MutableRefObject<TencentAsrStreamSession | null>
+  clearPendingVoiceRestart: () => void
+  canInterruptSpeech: () => boolean
+  interruptSpeakingForVoiceInput: () => boolean
+  setContinuousVoiceSession: (active: boolean) => void
+  shouldKeepContinuousVoiceSession: () => boolean
+  resetNoSpeechRestartCount: () => void
+  beginVoiceListeningSession: (transport: VoiceSessionTransport) => unknown
+  dispatchVoiceSessionAndSync: (event: VoiceSessionEvent) => unknown
+  setMood: (mood: PetMood) => void
+  setError: (error: string | null) => void
+  setLiveTranscript: (transcript: string) => void
+  updateVoicePipeline: (
+    step: VoicePipelineState['step'],
+    detail: string,
+    transcript?: string,
+  ) => void
+  showPetStatus: ShowPetStatus
+  handleRecognizedVoiceTranscript: (
+    transcript: string,
+    options?: { traceId?: string },
+  ) => Promise<boolean>
+  handleVoiceListeningFailure: (message: string, errorCode?: string) => void
+  shouldAutoRestartVoice: () => boolean
+  scheduleVoiceRestart: (statusText?: string, delay?: number) => void
+  ensureSupportedSpeechInputSettings: (announce?: boolean) => AppSettings
+  startTencentAsrConversation: (options?: VoiceConversationOptions) => Promise<void>
+  startVadVoiceConversation: (
+    transcribeMode: 'api' | 'local',
+    options?: VoiceConversationOptions,
+  ) => Promise<void>
+  startApiVoiceConversation: (options?: VoiceConversationOptions) => Promise<void>
+}
+
+export type StopVoiceConversationEntrypointOptions = {
+  continuousVoiceActiveRef: MutableRefObject<boolean>
+  suppressVoiceReplyRef: MutableRefObject<boolean>
+  recognitionRef: MutableRefObject<BrowserSpeechRecognition | null>
+  tencentAsrSessionRef: MutableRefObject<TencentAsrStreamSession | null>
+  clearPendingVoiceRestart: () => void
+  setContinuousVoiceSession: (active: boolean) => void
+  resetNoSpeechRestartCount: () => void
+  clearTencentConversationState: () => void
+  stopApiRecording: (cancel?: boolean) => void
+  stopVadListening: (cancel?: boolean) => Promise<void>
+  stopActiveSpeechOutput: () => void
+  dispatchVoiceSessionAndSync: (event: VoiceSessionEvent) => unknown
+  busEmit: (event: import('../../features/voice/busEvents').VoiceBusEvent) => void
+  setLiveTranscript: (transcript: string) => void
+  setMood: (mood: PetMood) => void
+  updateVoicePipeline: (
+    step: VoicePipelineState['step'],
+    detail: string,
+    transcript?: string,
+  ) => void
+  showPetStatus: ShowPetStatus
+}
+
+export function startVoiceConversationEntrypoint(
+  params: StartVoiceConversationEntrypointOptions,
+) {
+  params.activeVoiceConversationOptionsRef.current = {
+    restart: params.options?.restart ?? false,
+    passive: params.options?.passive ?? false,
+  }
+
+  let currentSettings = params.ensureSupportedSpeechInputSettings(true)
+
+  if (isTencentAsrSpeechInputProvider(currentSettings.speechInputProviderId)) {
+    void params.startTencentAsrConversation(params.options)
+    return
+  }
+
+  currentSettings = params.settingsRef.current
+
+  if (!currentSettings.speechInputEnabled) {
+    params.setContinuousVoiceSession(false)
+    params.setError('请先在设置中启用语音输入。')
+    return
+  }
+
+  if (
+    params.busyRef.current
+    || params.vadSessionRef.current
+    || params.tencentAsrSessionRef.current
+    || params.voiceStateRef.current === 'processing'
+  ) {
+    console.log('[VoiceEntrypoint] startVoiceConversation blocked — busy:', params.busyRef.current,
+      'vad:', Boolean(params.vadSessionRef.current),
+      'tencent:', Boolean(params.tencentAsrSessionRef.current),
+      'voiceState:', params.voiceStateRef.current)
+    return
+  }
+
+  if (currentSettings.voiceActivityDetectionEnabled) {
+    void params.startVadVoiceConversation('api', params.options)
+    return
+  }
+
+  void params.startApiVoiceConversation(params.options)
+}
+
+export function stopVoiceConversationEntrypoint(
+  params: StopVoiceConversationEntrypointOptions,
+) {
+  const wasContinuousVoiceActive = params.continuousVoiceActiveRef.current
+
+  params.clearPendingVoiceRestart()
+  params.setContinuousVoiceSession(false)
+  params.resetNoSpeechRestartCount()
+  params.suppressVoiceReplyRef.current = true
+  params.recognitionRef.current?.abort()
+  params.recognitionRef.current = null
+  params.clearTencentConversationState()
+  params.tencentAsrSessionRef.current?.abort()
+  params.tencentAsrSessionRef.current = null
+  params.stopApiRecording(true)
+  void params.stopVadListening(true)
+  params.stopActiveSpeechOutput()
+  params.dispatchVoiceSessionAndSync({ type: 'aborted' })
+  params.busEmit({ type: 'session:aborted', reason: 'user_stopped' })
+  params.setLiveTranscript('')
+  params.updateVoicePipeline(
+    'idle',
+    wasContinuousVoiceActive ? '连续语音已停止' : '语音已停止',
+  )
+  params.showPetStatus(
+    wasContinuousVoiceActive ? '连续语音已停止。' : '语音已停止。',
+    2_600,
+    2_800,
+  )
+}

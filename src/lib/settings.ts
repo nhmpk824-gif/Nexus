@@ -1,0 +1,10 @@
+export const DEFAULT_PROACTIVE_PRESENCE_INTERVAL_MINUTES = 25
+export const MIN_PROACTIVE_PRESENCE_INTERVAL_MINUTES = 5
+export const MAX_PROACTIVE_PRESENCE_INTERVAL_MINUTES = 120
+
+export function clampPresenceIntervalMinutes(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_PROACTIVE_PRESENCE_INTERVAL_MINUTES
+
+  const rounded = Math.round(value)
+  return Math.min(MAX_PROACTIVE_PRESENCE_INTERVAL_MINUTES, Math.max(MIN_PROACTIVE_PRESENCE_INTERVAL_MINUTES, rounded))
+}
