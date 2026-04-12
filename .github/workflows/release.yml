@@ -1,0 +1,53 @@
+name: Release Build
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            cmd: npx electron-builder --win nsis --config.win.signAndEditExecutable=false
+            pattern: "release/*.exe"
+          - os: macos-latest
+            cmd: npx electron-builder --mac dmg zip
+            pattern: "release/*.dmg\nrelease/*.zip"
+          - os: ubuntu-latest
+            cmd: npx electron-builder --linux AppImage deb
+            pattern: "release/*.AppImage\nrelease/*.deb"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+        name: Vite build
+
+      - run: ${{ matrix.cmd }}
+        name: Package installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload assets to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          for f in release/*.exe release/*.dmg release/*.zip release/*.AppImage release/*.deb release/*.blockmap; do
+            [ -f "$f" ] && gh release upload "$tag" "$f" --clobber || true
+          done
