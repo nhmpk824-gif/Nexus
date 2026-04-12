@@ -60,44 +60,34 @@ Nexus is a desktop AI companion featuring Live2D character rendering, continuous
 
 ## Recommended Models
 
+> Recommendations are tailored for **English** users. For other languages, see [简体中文](docs/README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md).
+
 ### Chat Models (LLM)
 
 | Use Case | Provider | Model | Notes |
 |----------|----------|-------|-------|
-| **Daily companion (CN)** | DeepSeek | `deepseek-chat` | Strong Chinese, very affordable |
-| **Daily companion (alt)** | DashScope Qwen | `qwen-plus` | Long context, natural Chinese |
-| **Deep reasoning** | DeepSeek | `deepseek-reasoner` | Complex reasoning / math / code |
-| **Best overall** | Anthropic | `claude-sonnet-4-6` | Top capability, reliable tool use |
-| **Cost-effective** | OpenAI | `gpt-5.4-mini` | Fast and cheap for high-frequency chat |
-| **Free tier** | Google Gemini | `gemini-2.5-flash` | Generous free quota |
-| **Local** | Ollama | `qwen3:8b` | Runs smoothly on RTX 3060 12GB, fully offline |
-| **Local (lightweight)** | Ollama | `qwen3:4b` | 4GB VRAM, faster response |
+| **Best overall** | Anthropic | `claude-sonnet-4-6` | Strongest reasoning + tool use, most natural English |
+| **Cost-effective** | OpenAI | `gpt-5.4-mini` | Fast and cheap for daily companion chat |
+| **Free tier** | Google Gemini | `gemini-2.5-flash` | Generous free quota, solid English |
+| **Long context** | Anthropic | `claude-sonnet-4-6` | 200K context, ideal for long memory recall |
+| **Open source / cheapest** | DeepSeek | `deepseek-chat` | Surprisingly strong English at the lowest price |
 
 ### STT (Speech-to-Text)
 
 | Use Case | Provider | Model | Notes |
 |----------|----------|-------|-------|
-| **Local high-accuracy** | GLM-ASR-Nano | `glm-asr-nano` | Best Chinese accuracy, runs on RTX 3060, offline |
-| **Local streaming** | Paraformer | `paraformer-trilingual` | Low-latency real-time transcription, CN/EN/Cantonese |
-| **Local (alt)** | SenseVoice | `sensevoice-zh-en` | 15x faster than Whisper, CN/EN bilingual offline |
-| **Cloud (CN)** | Zhipu GLM-ASR | `glm-asr-2512` | Top Chinese accuracy with hotword support |
-| **Cloud (Global)** | OpenAI | `gpt-4o-mini-transcribe` | Multilingual, use your existing OpenAI key |
-| **Cloud (Global, premium)** | ElevenLabs Scribe | `scribe_v1` | 99 languages, auto-punctuation, speaker detection |
-| **Cloud (CN, alt)** | Volcengine | `bigmodel` | ByteDance large-model speech recognition |
-| **Cloud (CN, alt)** | Tencent ASR | `16k_zh` | Real-time streaming, low latency, multi-language |
+| **Best accuracy** | ElevenLabs Scribe | `scribe_v1` | 99 languages, auto-punctuation, speaker detection |
+| **Cost-effective** | OpenAI | `gpt-4o-mini-transcribe` | Reliable English transcription, low cost |
+| **Premium English** | OpenAI | `whisper-large-v3` | Industry standard, highest English accuracy |
 
 ### TTS (Text-to-Speech)
 
 | Use Case | Provider | Voice | Notes |
 |----------|----------|-------|-------|
-| **Free default** | Edge TTS | `zh-CN-XiaoxiaoNeural` | Microsoft free voices, no API key needed |
-| **Local offline** | CosyVoice | SFT presets | Fully offline on RTX 3060 |
-| **Local multilingual** | OmniVoice | `female, young adult` | 646 languages, fully offline, descriptor-based |
-| **Most natural (CN)** | MiniMax | `female-shaonv` | Expressive voices for companion characters |
-| **Most natural (Global)** | ElevenLabs | custom `voice_id` | World-class synthesis, voice cloning support |
-| **Cloud (Global)** | OpenAI TTS | `alloy` | Use your existing OpenAI key, `gpt-4o-mini-tts` model |
-| **CN instructable** | DashScope Qwen-TTS | `Cherry` | Alibaba Qwen3-TTS, dialect and instruction support |
-| **Cost-effective (CN)** | Volcengine | `BV700_streaming` | High naturalness, low cost |
+| **Free default** | Edge TTS | `en-US-AriaNeural` / `en-GB-SoniaNeural` | Microsoft free voices, no API key needed |
+| **Most natural** | ElevenLabs | custom `voice_id` | World-class synthesis with voice cloning |
+| **Cloud (Global)** | OpenAI TTS | `nova` / `alloy` | Reuses your OpenAI key, `gpt-4o-mini-tts` model |
+| **Local offline** | OmniVoice | `female, young adult` | 646 languages including English, fully offline |
 
 ---
 

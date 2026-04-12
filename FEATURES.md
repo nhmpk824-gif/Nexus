@@ -23,7 +23,7 @@
 |---|---|
 | Multi-provider LLM | 19 providers: OpenAI, Anthropic, Gemini, xAI, DeepSeek, Moonshot, MiniMax, DashScope, SiliconFlow, OpenRouter, Together, Mistral, Qianfan, ZAI, BytePlus, NVIDIA, Venice, Ollama, Custom |
 | Streaming | SSE / delta streaming with abort support |
-| Failover | Auto-fallback to Ollama when primary provider fails |
+| Failover | Auto-fallback to a backup provider when the primary one fails |
 | Context Compaction | Token budget → older messages summarized, context window managed |
 | Provider Profiles | Per-provider saved configurations (base URL, API key, model) |
 | Chat Archive | JSON export/import of full conversation history |
