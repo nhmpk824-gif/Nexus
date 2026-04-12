@@ -98,7 +98,6 @@ Nexus is a desktop AI companion featuring Live2D character rendering, continuous
 | CPU | Intel Core i5-12400F (6C12T) |
 | GPU | NVIDIA GeForce RTX 3060 12GB |
 | RAM | 32GB DDR4 |
-| OS | Windows 11 Pro |
 
 > The RTX 3060 12GB can smoothly run most local models (under 8B parameters), including local STT and TTS. If your GPU has less than 8GB VRAM, cloud-based models are recommended.
 
@@ -122,8 +121,10 @@ npm run electron:dev
 # 4. Build for production
 npm run build
 
-# 5. Package Windows installer
-npm run package:win
+# 5. Package the installer for your platform
+npm run package:win     # Windows
+npm run package:mac     # macOS
+npm run package:linux   # Linux
 ```
 
 ---
@@ -209,6 +210,8 @@ scripts/                 Local model launch scripts (GLM-ASR · OmniVoice)
 | `npm run build` | Build frontend |
 | `npm test` | Run tests |
 | `npm run package:win` | Package Windows installer |
+| `npm run package:mac` | Package macOS installer |
+| `npm run package:linux` | Package Linux installer |
 
 ---
 
