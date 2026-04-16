@@ -25,14 +25,6 @@ Nexus is a cross-platform desktop companion powered by LLMs. It pairs a Live2D c
 
 Built with Electron + React + TypeScript. Runs on Windows, macOS, and Linux. Supports 18+ LLM providers, works fully offline or with cloud models.
 
-<!-- TODO: Add demo screenshots here
-### Demo
-
-| ![](docs/assets/demo-1.png) | ![](docs/assets/demo-2.png) |
-|:---:|:---:|
-| Pet mode | Chat panel |
--->
-
 ---
 
 ## Features

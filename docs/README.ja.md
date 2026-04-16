@@ -25,13 +25,6 @@ Nexus は LLM を搭載したクロスプラットフォームのデスクトッ
 
 Electron + React + TypeScript で構築。Windows、macOS、Linux に対応。18 以上の LLM プロバイダーを内蔵し、完全オフラインまたはクラウドモデルで動作します。
 
-<!-- TODO: Add demo screenshots here
-### デモ
-
-| ![](docs/assets/demo-1.png) | ![](docs/assets/demo-2.png) |
-|:---:|:---:|
-| ペットモード | チャットパネル |
--->
 
 ---
 
