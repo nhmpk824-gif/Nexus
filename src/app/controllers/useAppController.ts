@@ -4,7 +4,6 @@ import {
   getWindowView,
   getWindowViewSync,
 } from '../appSupport'
-import { subscribeToSettings } from '../store/settingsStore'
 import {
   loadPetWindowPreferences,
 } from '../../lib'
@@ -25,40 +24,23 @@ import {
   useVoice,
 } from '../../hooks'
 import { useReminderController } from './useReminderController'
-import { getSettingsSnapshot, initializeSettingsWithVault } from '../store/settingsStore'
-import {
-  getCoreRuntime,
-  setDiscordKnownChannelIds,
-  setTelegramKnownChatIds,
-} from '../../lib/coreRuntime'
+import { getSettingsSnapshot } from '../store/settingsStore'
 import { useAppOverlays } from './useAppOverlays'
 import { useAutonomyController } from './useAutonomyController'
+import { useBudgetConfigSync } from './useBudgetConfigSync'
 import { useDebugConsole } from './useDebugConsole'
 import { useDesktopBridge } from './useDesktopBridge'
+import { useIntegrationWhitelists } from './useIntegrationWhitelists'
 import { useMediaSessionController } from './useMediaSessionController'
 import { useReminderTaskStore } from './useReminderTaskStore'
+import { useSettingsSubscription } from './useSettingsSubscription'
+import { useWorkspaceRootBridge } from './useWorkspaceRootBridge'
 import { commitSettingsUpdate } from '../store/commitSettingsUpdate'
 import { AUTONOMY_GOALS_STORAGE_KEY, readJson, writeJson } from '../../lib/storage'
 import { classifyMessageSignals } from '../../features/autonomy/emotionModel'
 
 type ChatController = ReturnType<typeof useChat>
 type ReminderTaskStore = ReturnType<typeof useReminderTaskStore>
-
-/**
- * Parse a comma-separated whitelist string into an array of validated values.
- * Caps the result length to prevent pathological configs (user typo or corrupt
- * sync) from producing enormous arrays.
- */
-const MAX_WHITELIST_ENTRIES = 256
-function parseIdList<T>(raw: string, project: (piece: string) => T, keep: (value: T) => boolean): T[] {
-  const out: T[] = []
-  for (const piece of raw.split(',')) {
-    const value = project(piece.trim())
-    if (keep(value)) out.push(value)
-    if (out.length >= MAX_WHITELIST_ENTRIES) break
-  }
-  return out
-}
 
 export function useAppController() {
   const [view, setView] = useState<WindowView>(() => getWindowViewSync())
@@ -77,65 +59,10 @@ export function useAppController() {
   const [isPinned, setIsPinned] = useState(() => loadPetWindowPreferences().isPinned)
   const [clickThrough, setClickThrough] = useState(() => loadPetWindowPreferences().clickThrough)
 
-  // Sync React state when settings change in storage (after save or external update)
-  useEffect(() => {
-    return subscribeToSettings((updated) => {
-      setSettings(updated)
-    })
-  }, [])
-
-  // Push budget config into CostTracker whenever relevant settings change.
-  useEffect(() => {
-    getCoreRuntime().refreshBudgetConfig({
-      dailyCapUsd: settings.budgetDailyCapUsd || undefined,
-      monthlyCapUsd: settings.budgetMonthlyCapUsd || undefined,
-      downgradeThresholdRatio: settings.budgetDowngradeRatio || undefined,
-      hardStop: settings.budgetHardStopEnabled,
-    })
-  }, [
-    settings.budgetDailyCapUsd,
-    settings.budgetMonthlyCapUsd,
-    settings.budgetDowngradeRatio,
-    settings.budgetHardStopEnabled,
-  ])
-
-  // Seed the core runtime's cross-channel broadcast targets from settings
-  // (the React gateway hooks own the actual bridge connections).
-  useEffect(() => {
-    const allowedChatIds = settings.telegramIntegrationEnabled
-      ? parseIdList(settings.telegramAllowedChatIds, Number, (n) => Number.isFinite(n) && n !== 0)
-      : []
-    setTelegramKnownChatIds(allowedChatIds)
-  }, [settings.telegramIntegrationEnabled, settings.telegramAllowedChatIds])
-
-  useEffect(() => {
-    const allowedChannelIds = settings.discordIntegrationEnabled
-      ? parseIdList(settings.discordAllowedChannelIds, (s) => s, (s) => s.length > 0)
-      : []
-    setDiscordKnownChannelIds(allowedChannelIds)
-  }, [settings.discordIntegrationEnabled, settings.discordAllowedChannelIds])
-
-  // Push the agent workspace root into the main process so the sandboxed
-  // fs tools (Read/Edit/Glob/Grep) know where they're allowed to operate.
-  useEffect(() => {
-    const root = settings.agentWorkspaceRoot.trim()
-    if (root) {
-      // Reject paths containing traversal segments
-      if (/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(root)) {
-        console.error('[workspaceRoot] Rejected: path must not contain ".." segments:', root)
-        setErrorRef.current?.('Workspace root must not contain ".." path segments.')
-        return
-      }
-      // On Windows, require a drive letter prefix (e.g. C:\)
-      const isWindows = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
-      if (isWindows && !/^[A-Za-z]:[\\/]/.test(root)) {
-        console.error('[workspaceRoot] Rejected: Windows path must start with a drive letter:', root)
-        setErrorRef.current?.('On Windows, workspace root must start with a drive letter (e.g. C:\\).')
-        return
-      }
-    }
-    void window.desktopPet?.workspaceSetRoot?.({ root })
-  }, [settings.agentWorkspaceRoot])
+  useSettingsSubscription(setSettings)
+  useBudgetConfigSync(settings)
+  useIntegrationWhitelists(settings)
+  useWorkspaceRootBridge(settings, (msg) => setErrorRef.current?.(msg))
 
   const [goals, setGoals] = useState<Goal[]>(() => readJson<Goal[]>(AUTONOMY_GOALS_STORAGE_KEY, []))
   const goalsRef = useRef(goals)
@@ -158,12 +85,6 @@ export function useAppController() {
   const setInputFnRef = useRef<ChatController['setInput']>(() => {})
   const appendSystemMessageRef = useRef<ChatController['appendSystemMessage']>(() => {})
   const sendMessageRef = useRef<ChatController['sendMessage']>(async () => false)
-
-  useEffect(() => {
-    initializeSettingsWithVault()
-      .then((hydrated) => setSettings(hydrated))
-      .catch(() => { /* vault unavailable — settings loaded without keys */ })
-  }, [])
 
   const reminderTaskStore = useReminderTaskStore()
   const debugConsole = useDebugConsole()
