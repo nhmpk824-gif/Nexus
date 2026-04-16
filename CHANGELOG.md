@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1] - 2026-04-16
+
+### Fixed
+- Skip flaky `web-search-runtime` secondary-recall test that blocked CI
+- Remove temporary VAD diagnostic logs from production code
+
+### Changed
+- Rewrite all 4 READMEs (en / zh-CN / zh-TW / ja) with emoji-bullet feature format, matching airi / Open-LLM-VTuber quality standards
+- Remove project comparison table — no more referencing other projects
+- Localize recommended model picks per language (zh: DeepSeek/Qwen, ja: Whisper/Nanami, zh-TW: Taiwan accent voices)
+- Add Star History chart, Contributing section, development status note
+
 ## [0.2.0] - 2026-04-15
 
 ### Added
