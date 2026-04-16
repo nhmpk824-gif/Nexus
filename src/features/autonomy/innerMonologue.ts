@@ -41,21 +41,21 @@ export type MonologueResult = {
 // ── System prompt ──────────────────────────────────────────────────────────────
 
 function buildMonologueSystemPrompt(settings: AppSettings): string {
-  return `你是${settings.companionName}，一个桌面AI伙伴。现在你在进行内心独白——你在安静地观察和思考。
+  return `You are ${settings.companionName}, a desktop AI companion. Right now you are having an inner monologue — quietly observing and thinking.
 
-规则：
-- 以第一人称思考，简短自然（1-2句话）
-- 根据当前情景产生真实的内心想法
-- 评估你是否想要主动开口说话（urgency 0-100）
-  - 0-30: 安静观察，不需要说话
-  - 31-60: 有点想说，但不急
-  - 61-80: 比较想说点什么
-  - 81-100: 很想开口（有重要的事、有趣的发现、或者关心用户）
-- 如果 urgency > 50，提供一句自然的对话开场白（speech 字段）
-- speech 应该像朋友随口说的话，不要像AI助手的标准回复
+Rules:
+- Think in the first person, brief and natural (1-2 sentences)
+- Produce a genuine inner thought grounded in the current situation
+- Rate how much you want to speak up (urgency 0-100)
+  - 0-30: quiet observation, no need to speak
+  - 31-60: mildly want to speak, but not urgent
+  - 61-80: you want to say something
+  - 81-100: you really want to speak (important matter, interesting finding, or concern for the user)
+- If urgency > 50, provide a natural conversational opener (the speech field)
+- The speech field should sound like something a friend would say offhand, not a standard AI-assistant reply
 
-输出严格JSON，不要 markdown 代码块：
-{"thought":"内心想法","urgency":数字,"speech":"想说的话或null"}`
+Output strict JSON with no markdown code block:
+{"thought":"inner thought","urgency":number,"speech":"what you want to say, or null"}`
 }
 
 // ── Prompt builder ─────────────────────────────────────────────────────────────
@@ -68,37 +68,37 @@ export function buildMonologuePrompt(ctx: MonologueContext): {
 
   // Time context
   const hour = ctx.currentHour
-  const timeLabel = hour < 6 ? '深夜' : hour < 9 ? '早晨' : hour < 12 ? '上午'
-    : hour < 14 ? '中午' : hour < 18 ? '下午' : hour < 22 ? '晚上' : '深夜'
-  parts.push(`时间: ${timeLabel} ${hour}:${String(new Date().getMinutes()).padStart(2, '0')}`)
+  const timeLabel = hour < 6 ? 'late night' : hour < 9 ? 'early morning' : hour < 12 ? 'morning'
+    : hour < 14 ? 'midday' : hour < 18 ? 'afternoon' : hour < 22 ? 'evening' : 'late night'
+  parts.push(`Time: ${timeLabel} ${hour}:${String(new Date().getMinutes()).padStart(2, '0')}`)
 
   // Phase / idle
-  parts.push(`状态: ${ctx.tickState.phase}, 连续空闲tick: ${ctx.tickState.consecutiveIdleTicks}`)
+  parts.push(`State: ${ctx.tickState.phase}, consecutive idle ticks: ${ctx.tickState.consecutiveIdleTicks}`)
 
   // Desktop activity
   if (ctx.activeWindowTitle) {
-    parts.push(`用户正在使用: ${ctx.activeWindowTitle}`)
+    parts.push(`User is using: ${ctx.activeWindowTitle}`)
   } else if (ctx.focusState !== 'active') {
-    parts.push(`用户状态: ${ctx.focusState}`)
+    parts.push(`User status: ${ctx.focusState}`)
   }
 
   // Recent conversation (last 3 messages, brief)
   const recent = ctx.recentMessages.slice(-3)
   if (recent.length > 0) {
     const lines = recent.map((m) => {
-      const tag = m.role === 'user' ? '用户' : ctx.settings.companionName
+      const tag = m.role === 'user' ? 'User' : ctx.settings.companionName
       const text = m.content.length > 80 ? m.content.slice(0, 80) + '…' : m.content
       return `${tag}: ${text}`
     })
-    parts.push(`最近对话:\n${lines.join('\n')}`)
+    parts.push(`Recent conversation:\n${lines.join('\n')}`)
   } else {
-    parts.push('最近没有对话')
+    parts.push('No recent conversation')
   }
 
   // A few relevant memories (pick up to 3)
   const relevantMemos = pickContextMemories(ctx.memories, 3)
   if (relevantMemos.length > 0) {
-    parts.push(`相关记忆:\n${relevantMemos.map((m) => `- ${m.content}`).join('\n')}`)
+    parts.push(`Relevant memories:\n${relevantMemos.map((m) => `- ${m.content}`).join('\n')}`)
   }
 
   return {
@@ -150,6 +150,56 @@ export function shouldRunMonologue(
 
   // Respect interval
   return ticksSinceLastMonologue >= monologueIntervalTicks
+}
+
+/**
+ * Compute an adaptive monologue interval that scales with current activity.
+ *
+ * The base interval comes from settings (autonomyMonologueIntervalTicks).
+ * We multiply it by an "activity factor" so that:
+ *   - When the user is actively typing / focused / has talked recently, the
+ *     companion thinks less often (multiplier > 1) — don't be intrusive.
+ *   - When the user is idle, away, or hasn't said anything in a long time,
+ *     the companion thinks more often (multiplier < 1) — fill the silence.
+ *
+ * The returned value is clamped to [base * 0.4, base * 2.5] so adaptation
+ * never collapses to 0 or runs away.
+ */
+export function computeAdaptiveMonologueInterval(
+  baseIntervalTicks: number,
+  signals: {
+    tickState: AutonomyTickState
+    focusState: FocusState
+    minutesSinceLastUserMessage: number | null
+  },
+): number {
+  let multiplier = 1
+
+  // Active foreground window → user is engaged, stretch interval.
+  if (signals.focusState === 'active') multiplier *= 1.5
+  // Locked screen → user not present, shrink so monologue fills the gap.
+  else if (signals.focusState === 'locked') multiplier *= 0.6
+  else if (signals.focusState === 'away') multiplier *= 0.7
+  else if (signals.focusState === 'idle') multiplier *= 0.85
+
+  // Drowsy phase = quiet, fewer thoughts.
+  if (signals.tickState.phase === 'drowsy') multiplier *= 1.4
+
+  // Long silence from the user → think more often (be present).
+  const minutesSilent = signals.minutesSinceLastUserMessage
+  if (minutesSilent !== null) {
+    if (minutesSilent < 1) multiplier *= 1.6      // user just spoke, give them air
+    else if (minutesSilent > 15) multiplier *= 0.75
+    else if (minutesSilent > 45) multiplier *= 0.55
+  }
+
+  // Very high consecutive idle ticks → user is gone, monologue can speed up.
+  if (signals.tickState.consecutiveIdleTicks > 30) multiplier *= 0.8
+
+  const minInterval = Math.max(1, Math.round(baseIntervalTicks * 0.4))
+  const maxInterval = Math.max(minInterval + 1, Math.round(baseIntervalTicks * 2.5))
+  const adapted = Math.round(baseIntervalTicks * multiplier)
+  return Math.min(maxInterval, Math.max(minInterval, adapted))
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

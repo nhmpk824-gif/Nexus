@@ -579,6 +579,7 @@ export type SettingsSectionId =
   | 'voice'
   | 'window'
   | 'integrations'
+  | 'tools'
   | 'autonomy'
 
 const SETTINGS_SECTION_DESCRIPTION_KEY_MAP: Record<SettingsSectionId, Parameters<typeof pickTranslatedUiText>[1]> = {
@@ -590,6 +591,7 @@ const SETTINGS_SECTION_DESCRIPTION_KEY_MAP: Record<SettingsSectionId, Parameters
   voice: 'settings.section_desc.voice',
   window: 'settings.section_desc.window',
   integrations: 'settings.section_desc.integrations',
+  tools: 'settings.section_desc.tools',
   autonomy: 'settings.section_desc.autonomy',
 }
 
@@ -602,6 +604,7 @@ const SETTINGS_SECTION_EYEBROW_KEY_MAP: Record<SettingsSectionId, Parameters<typ
   voice: 'settings.section_eyebrow.voice',
   window: 'settings.section_eyebrow.window',
   integrations: 'settings.section_eyebrow.integrations',
+  tools: 'settings.section_eyebrow.tools',
   autonomy: 'settings.section_eyebrow.autonomy',
 }
 
@@ -620,6 +623,7 @@ export function getSettingsSectionOptions(uiLanguage: UiLanguage): Array<{
     { id: 'voice', label: pickTranslatedUiText(uiLanguage, 'settings.section.voice') },
     { id: 'memory', label: pickTranslatedUiText(uiLanguage, 'settings.section.memory') },
     { id: 'window', label: pickTranslatedUiText(uiLanguage, 'settings.section.window') },
+    { id: 'tools', label: pickTranslatedUiText(uiLanguage, 'settings.section.tools') },
     { id: 'integrations', label: pickTranslatedUiText(uiLanguage, 'settings.section.integrations') },
     { id: 'history', label: pickTranslatedUiText(uiLanguage, 'settings.section.history') },
     { id: 'autonomy', label: pickTranslatedUiText(uiLanguage, 'settings.section.autonomy') },

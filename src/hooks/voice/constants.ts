@@ -9,9 +9,17 @@ export const SHERPA_STREAM_SILENCE_FINISH_MS = 1_800
 export const SHERPA_STREAM_ENDPOINT_FINALIZE_MS = 800
 export const SHERPA_STREAM_RISKY_ENDPOINT_FINALIZE_MS = 1200
 export const VOICE_TRANSCRIPT_DEDUP_WINDOW_MS = 6_000
-export const SPEECH_INTERRUPT_GRACE_MS = 600
-export const SPEECH_INTERRUPT_MIN_SPEECH_MS = 400
-export const SPEECH_INTERRUPT_RMS_THRESHOLD = 0.035
+export const SPEECH_INTERRUPT_GRACE_MS = 500
+export const SPEECH_INTERRUPT_MIN_SPEECH_MS = 320
+export const SPEECH_INTERRUPT_RMS_THRESHOLD = 0.05
+/**
+ * How aggressively the dynamic interrupt threshold scales with the current
+ * TTS playback level (0-1 normalized). Threshold = baseline + tts * gain.
+ * 0.10 means at peak TTS volume the threshold rises to ~0.15 — comfortably
+ * above any residual echo leak after WebRTC AEC, while still letting normal
+ * user speech (RMS ~0.10-0.20 from a 30cm mic) trigger an interrupt.
+ */
+export const SPEECH_INTERRUPT_TTS_LEVEL_GAIN = 0.10
 export const SPEECH_INTERRUPT_ANALYSER_FFT_SIZE = 1024
 export const MAX_VOICE_TRACE_ENTRIES = 8
 export const BROWSER_TTS_LIPSYNC_INTERVAL_MS = 88

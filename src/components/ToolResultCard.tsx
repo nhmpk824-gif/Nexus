@@ -9,6 +9,11 @@ import type {
 } from '../types'
 import { stripWeatherPeriodPrefix } from '../features/tools/weatherText.ts'
 
+function isSafeUrl(url: string): boolean {
+  const lower = String(url ?? '').trim().toLowerCase()
+  return lower.startsWith('http://') || lower.startsWith('https://')
+}
+
 type ToolResultCardProps = {
   toolResult: ChatToolResult
   variant?: 'chat' | 'pet'
@@ -151,16 +156,26 @@ function renderSourceList(sources: WebSearchDisplaySource[], limit = 3) {
   return (
     <div className="tool-result-card__sourceList">
       {visibleSources.map((source, index) => (
-        <a
-          key={`${source.url}-${index}`}
-          href={source.url}
-          target="_blank"
-          rel="noreferrer"
-          className="tool-result-card__sourceAnchor"
-          title={source.title}
-        >
-          {source.host || formatUrlHost(source.url)}
-        </a>
+        isSafeUrl(source.url) ? (
+          <a
+            key={`${source.url}-${index}`}
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            className="tool-result-card__sourceAnchor"
+            title={source.title}
+          >
+            {source.host || formatUrlHost(source.url)}
+          </a>
+        ) : (
+          <span
+            key={`${source.url}-${index}`}
+            className="tool-result-card__sourceAnchor"
+            title={source.title}
+          >
+            {source.host || formatUrlHost(source.url)}
+          </span>
+        )
       ))}
     </div>
   )
@@ -295,14 +310,20 @@ function renderChatSearchBody(result: WebSearchResponse) {
               <span>{formatUrlHost(item.url)}</span>
               {publishedAt ? <span>{publishedAt}</span> : null}
             </div>
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noreferrer"
-              className="tool-result-item__title"
-            >
-              {item.title}
-            </a>
+            {isSafeUrl(item.url) ? (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="tool-result-item__title"
+              >
+                {item.title}
+              </a>
+            ) : (
+              <span className="tool-result-item__title">
+                {item.title}
+              </span>
+            )}
             {preview ? <p className="tool-result-item__snippet">{preview}</p> : null}
           </article>
         )
@@ -385,14 +406,20 @@ export const ToolResultCard = memo(function ToolResultCard({ toolResult, variant
     return (
       <section className={className}>
         <div className="tool-result-card__eyebrow">外部链接</div>
-        <a
-          href={toolResult.result.url}
-          target="_blank"
-          rel="noreferrer"
-          className="tool-result-card__anchor"
-        >
-          {toolResult.result.url}
-        </a>
+        {isSafeUrl(toolResult.result.url) ? (
+          <a
+            href={toolResult.result.url}
+            target="_blank"
+            rel="noreferrer"
+            className="tool-result-card__anchor"
+          >
+            {toolResult.result.url}
+          </a>
+        ) : (
+          <span className="tool-result-card__anchor">
+            {toolResult.result.url}
+          </span>
+        )}
       </section>
     )
   }

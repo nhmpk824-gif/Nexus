@@ -1,0 +1,65 @@
+// Pure helpers for deciding how to break a TTS request's text into one or
+// more sub-requests before it reaches the provider.
+//
+// Kept dependency-free so both the renderer runtime (streamingSpeechOutput.ts)
+// and unit tests can import it without pulling in window-touching modules.
+
+// Per-provider soft cap on the single-request text length. Two providers have
+// real limits that silently truncate long inputs; everything else is fine at
+// 3000 chars which covers ~99% of real replies.
+//
+// - k2-fsa/OmniVoice (local, via scripts/omnivoice_server.py) is a diffusion
+//   TTS with a fixed audio-context window (~30s per generation). Long text
+//   inputs don't error — the Python side just returns `audios[0]` truncated
+//   to whatever fit, so the pet speaks the first few sentences and goes
+//   silent for the rest. ~80 chars ≈ 15–20s of speech leaves comfortable
+//   headroom.
+// - Volcengine /v1/tts `query` has a 1024-BYTE cap on the text field. UTF-8
+//   Chinese is 3 bytes/char, so ~340 chars fits, but mixed punctuation and
+//   ascii can push it over. 300 is the safe ceiling.
+//
+// When the reply exceeds the provider cap, the caller splits at sentence
+// boundaries and queues each segment as its own push_text. ttsStreamService
+// on the main side serializes them via session.chain (same requestId, same
+// pinned voice), and streamAudioPlayer smooths chunk boundaries, so the
+// user hears one continuous utterance.
+const DEFAULT_MAX_REQUEST_CHARS = 3000
+const PROVIDER_MAX_REQUEST_CHARS: Record<string, number> = {
+  'omnivoice-tts': 80,
+  'volcengine-tts': 300,
+}
+
+export function getMaxRequestCharsForProvider(providerId: string): number {
+  return PROVIDER_MAX_REQUEST_CHARS[providerId] ?? DEFAULT_MAX_REQUEST_CHARS
+}
+
+const SENTENCE_BOUNDARY_RE = /[。！？!?；;\n]/u
+
+export function splitLongTextAtSentences(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) {
+    return [text]
+  }
+
+  const parts: string[] = []
+  let remaining = text
+
+  while (remaining.length > maxLen) {
+    let cutIndex = -1
+    for (let i = maxLen; i >= Math.floor(maxLen / 2); i -= 1) {
+      if (SENTENCE_BOUNDARY_RE.test(remaining[i] ?? '')) {
+        cutIndex = i + 1
+        break
+      }
+    }
+    if (cutIndex <= 0) {
+      cutIndex = maxLen
+    }
+    parts.push(remaining.slice(0, cutIndex))
+    remaining = remaining.slice(cutIndex)
+  }
+
+  if (remaining.length) {
+    parts.push(remaining)
+  }
+  return parts
+}

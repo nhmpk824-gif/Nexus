@@ -17,6 +17,12 @@ export interface WebSearchRequest {
   displayQuery?: string
   keywords?: string[]
   candidateQueries?: string[]
+  subject?: string
+  facet?: string
+  matchProfile?: string
+  strictTerms?: string[]
+  softTerms?: string[]
+  phraseTerms?: string[]
   fallbackToBing?: boolean
   policy?: {
     enabled?: boolean
@@ -58,6 +64,18 @@ export interface WebSearchDisplay {
   sources?: WebSearchDisplaySource[]
 }
 
+export interface WebSearchProviderTraceEntry {
+  providerId: string
+  providerLabel: string
+  status: 'ok' | 'empty' | 'error'
+  role?: 'primary' | 'secondary'
+  itemCount?: number
+  answerLength?: number
+  matchConfidence?: 'high' | 'medium' | 'low'
+  matchScore?: number
+  errorMessage?: string
+}
+
 export interface WebSearchResponse {
   query: string
   items: WebSearchResultItem[]
@@ -66,8 +84,12 @@ export interface WebSearchResponse {
   extractedKeywords?: string[]
   rewrittenQueries?: string[]
   executedQuery?: string
+  matchConfidence?: 'high' | 'medium' | 'low'
+  matchScore?: number
   display?: WebSearchDisplay
   message: string
+  debugTrace?: WebSearchProviderTraceEntry[]
+  answer?: string
 }
 
 export interface WeatherLookupRequest {

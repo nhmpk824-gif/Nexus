@@ -1,9 +1,10 @@
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { formatReminderScheduleSummaryForUi } from '../../features/reminders/schedule'
 import { getMeterSnapshot } from '../../features/metering/contextMeter'
 import { getArchiveStats } from '../../features/memory/coldArchive'
 import { loadNarrative } from '../../features/memory/narrativeMemory'
-import { pickTranslatedUiText } from '../../lib/uiLanguage'
+import { pickTranslatedUiText, resolveLocalizedText } from '../../lib/uiLanguage'
+import { getCoreRuntime } from '../../lib/coreRuntime'
 import type {
   DebugConsoleEvent,
   ReminderTask,
@@ -21,6 +22,9 @@ import {
   formatVoicePipelineStepLabel,
   formatVoiceStateLabel,
 } from '../settingsDrawerSupport'
+import { UpdaterPanel } from './UpdaterPanel'
+import { AgentTracePanel } from '../AgentTracePanel'
+import { PlanPanel } from '../PlanPanel'
 
 type EmotionSnapshot = {
   energy: number
@@ -62,6 +66,8 @@ export const ConsoleSection = memo(function ConsoleSection({
   autonomyPhase,
 }: ConsoleSectionProps) {
   const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) => pickTranslatedUiText(uiLanguage, key)
+  const t = (zhCN: string, enUS: string) =>
+    resolveLocalizedText(uiLanguage, { 'zh-CN': zhCN, 'en-US': enUS })
   const enabledReminderCount = reminderTasks.filter((task) => task.enabled).length
   const nextReminderTask = reminderTasks.find((task) => task.enabled && task.nextRunAt)
   const voiceStateLabel = formatVoiceStateLabel(voiceState, uiLanguage)
@@ -73,6 +79,23 @@ export const ConsoleSection = memo(function ConsoleSection({
   const visibleReminderTasks = reminderTasks.slice(0, 6)
   const noValueLabel = ti('settings.console.none')
   const voicePipelineSummary = voicePipeline.detail || ti('settings.console.waiting_summary')
+  const budgetSnapshot = useMemo(() => {
+    const runtime = getCoreRuntime()
+    const status = runtime.costTracker.status()
+    const entries = runtime.costTracker.listEntries()
+    return {
+      daily: status.dailyUsedUsd,
+      monthly: status.monthlyUsedUsd,
+      dailyCap: status.dailyCapUsd,
+      monthlyCap: status.monthlyCapUsd,
+      shouldDowngrade: status.shouldDowngrade,
+      shouldHardStop: status.shouldHardStop,
+      turnCount: entries.length,
+    }
+  }, [debugConsoleEvents])
+  let budgetCapNote = ''
+  if (budgetSnapshot.shouldHardStop) budgetCapNote = ` · ${t('已达上限', 'Limit reached')}`
+  else if (budgetSnapshot.shouldDowngrade) budgetCapNote = ` · ${t('降级中', 'Downgraded')}`
   return (
     <section className={`settings-section ${active ? 'is-active' : 'is-hidden'}`}>
       <div className="settings-section__title-row">
@@ -89,6 +112,8 @@ export const ConsoleSection = memo(function ConsoleSection({
           {ti('settings.console.clear')}
         </button>
       </div>
+
+      <UpdaterPanel uiLanguage={uiLanguage} />
 
       <div className="settings-console-grid">
         <article className="settings-console-card settings-console-card--primary">
@@ -121,8 +146,28 @@ export const ConsoleSection = memo(function ConsoleSection({
           </div>
           <p>
             {nextReminderTask
-              ? `${formatReminderActionSummary(nextReminderTask, uiLanguage)} 路 ${formatReminderCenterNextLabel(nextReminderTask.nextRunAt, uiLanguage)}`
+              ? `${formatReminderActionSummary(nextReminderTask, uiLanguage)} ·${formatReminderCenterNextLabel(nextReminderTask.nextRunAt, uiLanguage)}`
               : ti('settings.console.reminder_empty')}
+          </p>
+        </article>
+
+        <article className="settings-console-card">
+          <div className="settings-console-card__header">
+            <span className="settings-console-badge">{ti('settings.console.api_usage_badge')}</span>
+            <span className="settings-console-card__meta">
+              {budgetSnapshot.turnCount} {ti('settings.console.api_calls')}
+            </span>
+          </div>
+          <div className="settings-console-card__headline">
+            <strong>
+              {ti('settings.console.today')} ${budgetSnapshot.daily.toFixed(4)}
+              {budgetSnapshot.dailyCap ? ` / $${budgetSnapshot.dailyCap.toFixed(2)}` : ''}
+            </strong>
+          </div>
+          <p>
+            {ti('settings.console.this_month')} ${budgetSnapshot.monthly.toFixed(4)}
+            {budgetSnapshot.monthlyCap ? ` / $${budgetSnapshot.monthlyCap.toFixed(2)}` : ''}
+            {budgetCapNote}
           </p>
         </article>
 
@@ -140,15 +185,16 @@ export const ConsoleSection = memo(function ConsoleSection({
         </article>
       </div>
 
+      {/* ── Collapsible detail sections ──────────────────────────────────── */}
       <div className="settings-console-sections">
-        <section className="settings-console-section">
-          <div className="settings-console-section__header">
+        <details className="settings-console-section" open>
+          <summary className="settings-console-section__header">
             <div>
               <h5>{ti('settings.console.recent_voice_turns')}</h5>
               <p className="settings-section__note">{ti('settings.console.voice_turns_note')}</p>
             </div>
             <span className="settings-console-section__meta">{visibleVoiceTrace.length || 0} {ti('settings.console.items')}</span>
-          </div>
+          </summary>
           <div className="settings-console-list">
             {visibleVoiceTrace.length ? visibleVoiceTrace.map((entry) => (
               <article
@@ -166,16 +212,16 @@ export const ConsoleSection = memo(function ConsoleSection({
               <p className="settings-console-list__empty">{ti('settings.console.voice_turns_empty')}</p>
             )}
           </div>
-        </section>
+        </details>
 
-        <section className="settings-console-section">
-          <div className="settings-console-section__header">
+        <details className="settings-console-section" open>
+          <summary className="settings-console-section__header">
             <div>
               <h5>{ti('settings.console.event_summaries')}</h5>
               <p className="settings-section__note">{ti('settings.console.event_summaries_note')}</p>
             </div>
             <span className="settings-console-section__meta">{consoleEventClusters.length || 0} {ti('settings.console.groups')}</span>
-          </div>
+          </summary>
           <div className="settings-console-list">
             {consoleEventClusters.length ? consoleEventClusters.map((cluster) => (
               <article
@@ -185,7 +231,7 @@ export const ConsoleSection = memo(function ConsoleSection({
                 <div className="settings-console-list__header">
                   <span className="settings-console-list__badge">{formatDebugEventSourceLabel(cluster.source, uiLanguage)}</span>
                   <span className="settings-console-list__meta">
-                    {cluster.count > 1 ? `${ti('settings.console.recent')} ${cluster.count} ${ti('settings.console.items')} 路 ` : ''}
+                    {cluster.count > 1 ? `${ti('settings.console.recent')} ${cluster.count} ${ti('settings.console.items')} · ` : ''}
                     {formatConsoleTimestamp(cluster.createdAt, uiLanguage)}
                   </span>
                 </div>
@@ -196,16 +242,16 @@ export const ConsoleSection = memo(function ConsoleSection({
               <p className="settings-console-list__empty">{ti('settings.console.events_empty')}</p>
             )}
           </div>
-        </section>
+        </details>
 
-        <section className="settings-console-section">
-          <div className="settings-console-section__header">
+        <details className="settings-console-section">
+          <summary className="settings-console-section__header">
             <div>
               <h5>{ti('settings.console.reminder_tasks')}</h5>
               <p className="settings-section__note">{ti('settings.console.reminder_tasks_note')}</p>
             </div>
             <span className="settings-console-section__meta">{visibleReminderTasks.length || 0} {ti('settings.console.items')}</span>
-          </div>
+          </summary>
           <div className="settings-console-list">
             {visibleReminderTasks.length ? visibleReminderTasks.map((task) => (
               <article
@@ -221,19 +267,76 @@ export const ConsoleSection = memo(function ConsoleSection({
                 <strong>{task.title}</strong>
                 <p>{formatReminderActionSummary(task, uiLanguage)}</p>
                 <p className="settings-console-list__secondary">
-                  {formatReminderScheduleSummaryForUi(task, uiLanguage)} 路 {ti('settings.console.last_trigger')} {formatConsoleTimestamp(task.lastTriggeredAt, uiLanguage)}
+                  {formatReminderScheduleSummaryForUi(task, uiLanguage)} · {ti('settings.console.last_trigger')} {formatConsoleTimestamp(task.lastTriggeredAt, uiLanguage)}
                 </p>
               </article>
             )) : (
               <p className="settings-console-list__empty">{ti('settings.console.reminders_empty')}</p>
             )}
           </div>
-        </section>
+        </details>
+
+        {/* ── Tool call history (filtered from debugConsoleEvents) ────── */}
+        <details className="settings-console-section">
+          <summary className="settings-console-section__header">
+            <div>
+              <h5>{t('工具调用记录', 'Tool call history')}</h5>
+              <p className="settings-section__note">{t('搜索、天气、MCP 工具等的调用记录和返回结果。', 'History of web search, weather, MCP tool calls, and their results.')}</p>
+            </div>
+            <span className="settings-console-section__meta">
+              {debugConsoleEvents.filter((e) => e.source === 'tool').length} {ti('settings.console.items')}
+            </span>
+          </summary>
+          <div className="settings-console-list">
+            {(() => {
+              const toolEvents = debugConsoleEvents
+                .filter((e) => e.source === 'tool')
+                .slice(0, 10)
+              if (!toolEvents.length) {
+                return <p className="settings-console-list__empty">{t('还没有工具调用记录。', 'No tool calls recorded yet.')}</p>
+              }
+              return toolEvents.map((event) => (
+                <article
+                  key={event.id}
+                  className={`settings-console-list__item${event.tone === 'success' ? ' is-success' : event.tone === 'error' ? ' is-error' : ''}`}
+                >
+                  <div className="settings-console-list__header">
+                    <span className="settings-console-list__badge">{formatDebugEventSourceLabel(event.source, uiLanguage)}</span>
+                    <span className="settings-console-list__meta">{formatConsoleTimestamp(event.createdAt, uiLanguage)}</span>
+                  </div>
+                  <strong>{event.title}</strong>
+                  <p>{event.detail}</p>
+                </article>
+              ))
+            })()}
+          </div>
+        </details>
+
+        <details className="settings-console-section">
+          <summary className="settings-console-section__header">
+            <div>
+              <h5>{ti('settings.console.plan_title')}</h5>
+              <p className="settings-section__note">{ti('settings.console.plan_note')}</p>
+            </div>
+          </summary>
+          <PlanPanel />
+        </details>
+
+        <details className="settings-console-section">
+          <summary className="settings-console-section__header">
+            <div>
+              <h5>{ti('settings.console.agent_trace_title')}</h5>
+              <p className="settings-section__note">{ti('settings.console.agent_trace_note')}</p>
+            </div>
+          </summary>
+          <AgentTracePanel />
+        </details>
 
         <ObservabilityPanel
           emotionState={emotionState}
           memoryCount={memoryCount}
           autonomyPhase={autonomyPhase}
+          uiLanguage={uiLanguage}
         />
       </div>
     </section>
@@ -246,21 +349,25 @@ function ObservabilityPanel({
   emotionState,
   memoryCount,
   autonomyPhase,
+  uiLanguage,
 }: {
   emotionState?: EmotionSnapshot
   memoryCount?: number
   autonomyPhase?: string
+  uiLanguage: UiLanguage
 }) {
+  const t = (zhCN: string, enUS: string) =>
+    resolveLocalizedText(uiLanguage, { 'zh-CN': zhCN, 'en-US': enUS })
   const meter = getMeterSnapshot()
   const archiveStats = getArchiveStats()
   const narrative = loadNarrative()
 
   const emotionBars = emotionState
     ? [
-        { label: '活力', value: emotionState.energy },
-        { label: '温暖', value: emotionState.warmth },
-        { label: '好奇', value: emotionState.curiosity },
-        { label: '关心', value: emotionState.concern },
+        { label: t('活力', 'Energy'), value: emotionState.energy },
+        { label: t('温暖', 'Warmth'), value: emotionState.warmth },
+        { label: t('好奇', 'Curiosity'), value: emotionState.curiosity },
+        { label: t('关心', 'Concern'), value: emotionState.concern },
       ]
     : null
 
@@ -270,8 +377,8 @@ function ObservabilityPanel({
     <section className="settings-console-section">
       <div className="settings-console-section__header">
         <div>
-          <h5>可观测性仪表盘</h5>
-          <p className="settings-section__note">情绪、记忆、Token 用量一览</p>
+          <h5>{t('可观测性仪表盘', 'Observability Dashboard')}</h5>
+          <p className="settings-section__note">{t('情绪、记忆、Token 用量一览', 'Emotions, memory, and token usage at a glance')}</p>
         </div>
         <span className="settings-console-section__meta">{autonomyPhase ?? 'idle'}</span>
       </div>
@@ -280,7 +387,7 @@ function ObservabilityPanel({
         {emotionBars && (
           <article className="settings-console-card">
             <div className="settings-console-card__header">
-              <span className="settings-console-badge">情绪状态</span>
+              <span className="settings-console-badge">{t('情绪状态', 'Emotions')}</span>
             </div>
             {emotionBars.map((bar) => (
               <div key={bar.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -304,28 +411,28 @@ function ObservabilityPanel({
 
         <article className="settings-console-card">
           <div className="settings-console-card__header">
-            <span className="settings-console-badge">记忆统计</span>
+            <span className="settings-console-badge">{t('记忆统计', 'Memory')}</span>
           </div>
           <div className="settings-console-card__headline">
-            <strong>{memoryCount ?? '—'} 条活跃记忆</strong>
+            <strong>{memoryCount ?? '—'} {t('条活跃记忆', 'active memories')}</strong>
           </div>
-          <p>归档 {archiveStats.count} 条 · 叙事线 {narrative.threads.length} 条</p>
+          <p>{t('归档', 'Archived')} {archiveStats.count} · {t('叙事线', 'Narratives')} {narrative.threads.length}</p>
         </article>
 
         <article className="settings-console-card">
           <div className="settings-console-card__header">
-            <span className="settings-console-badge">Token 用量</span>
+            <span className="settings-console-badge">{t('Token 用量', 'Token usage')}</span>
           </div>
           <div className="settings-console-card__headline">
-            <strong>今日 {formatTokens(meter.daily.totalInputTokens + meter.daily.totalOutputTokens)} tokens</strong>
+            <strong>{t('今日', 'Today')} {formatTokens(meter.daily.totalInputTokens + meter.daily.totalOutputTokens)} tokens</strong>
           </div>
           <p>
-            本轮 {formatTokens(meter.session.totalInputTokens + meter.session.totalOutputTokens)} ·
-            调用 {meter.daily.callCount} 次
+            {t('本轮', 'Session')} {formatTokens(meter.session.totalInputTokens + meter.session.totalOutputTokens)} ·
+            {meter.daily.callCount} {t('次调用', 'calls')}
           </p>
           <div className="settings-console-card__meta">
-            <span>输入 {formatTokens(meter.daily.totalInputTokens)}</span>
-            <span>输出 {formatTokens(meter.daily.totalOutputTokens)}</span>
+            <span>{t('输入', 'In')} {formatTokens(meter.daily.totalInputTokens)}</span>
+            <span>{t('输出', 'Out')} {formatTokens(meter.daily.totalOutputTokens)}</span>
           </div>
         </article>
       </div>
@@ -335,8 +442,8 @@ function ObservabilityPanel({
           {narrative.threads.slice(0, 5).map((thread) => (
             <article key={thread.id} className="settings-console-list__item">
               <div className="settings-console-list__header">
-                <span className="settings-console-list__badge">叙事线</span>
-                <span className="settings-console-list__meta">{thread.memoryIds.length} 条记忆</span>
+                <span className="settings-console-list__badge">{t('叙事线', 'Narrative')}</span>
+                <span className="settings-console-list__meta">{thread.memoryIds.length} {t('条记忆', 'memories')}</span>
               </div>
               <strong>{thread.title}</strong>
               <p>{thread.summary}</p>

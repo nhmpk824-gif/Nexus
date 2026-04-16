@@ -8,8 +8,12 @@ import {
   shouldAttemptLocalWhisperRescore,
 } from '../src/features/hearing/core.ts'
 import { applyVoiceHotwordCorrections } from '../src/features/hearing/hotwordCorrection.ts'
-import { segmentTextForSpeech } from '../src/features/voice/streamingTts.ts'
+import { segmentTextForSpeech, StreamingTtsChunker } from '../src/features/voice/streamingTts.ts'
 import { normalizeVoiceDedupText, prepareTextForTts } from '../src/features/voice/text.ts'
+import {
+  getMaxRequestCharsForProvider,
+  splitLongTextAtSentences,
+} from '../src/hooks/voice/speechTextSegmentation.ts'
 
 const WAKE_WORD = '\u661f\u7ed8'
 const WAKE_WORD_ALIAS = '\u661f\u4f1a'
@@ -278,4 +282,110 @@ test('segmentTextForSpeech allows a very short first chunk for local qwen lead-i
       '\u4e3b\u4eba\u3002',
     ],
   )
+})
+
+test('StreamingTtsChunker emits short intermediate sentences during pushText', () => {
+  // Default options: preferredEarlySplitLength=18, but a short sentence
+  // should still split mid-stream because sentence boundaries respect
+  // only absoluteMinChunkLength.
+  const chunker = new StreamingTtsChunker({
+    firstChunkMaxLength: 36,
+    firstChunkMinForcedChunkLength: 2,
+    firstChunkPreferredEarlySplitLength: 2,
+  })
+
+  // First delta: "\u597d\u7684\uff0c" (好的，) — first comma triggers immediately.
+  const firstChunks = chunker.pushText('\u597d\u7684\uff0c')
+  assert.deepEqual(firstChunks, ['\u597d\u7684\uff0c'])
+
+  // Second delta: "\u6211\u8d70\u4e86\u3002" (我走了。) — sentence boundary
+  // at index 3 (period); 4 chars total, well below preferredEarlySplitLength=18,
+  // but should still emit because absoluteMinChunkLength=2 is satisfied.
+  const secondChunks = chunker.pushText('\u6211\u8d70\u4e86\u3002')
+  assert.deepEqual(secondChunks, ['\u6211\u8d70\u4e86\u3002'])
+
+  // Third delta: a longer fragment with a comma followed by a sentence end —
+  // commas in non-first chunks still wait for the length threshold, so the
+  // whole "\u4f60\u4e5f\u8d70\u5427\u3002" (你也走吧。) should emit as one.
+  const thirdChunks = chunker.pushText('\u4f60\u4e5f\u8d70\u5427\u3002')
+  assert.deepEqual(thirdChunks, ['\u4f60\u4e5f\u8d70\u5427\u3002'])
+})
+
+test('StreamingTtsChunker first chunk splits at first comma even when delivered char-by-char', () => {
+  // Simulate provider streaming one token at a time.
+  const chunker = new StreamingTtsChunker({
+    firstChunkMaxLength: 36,
+    firstChunkMinForcedChunkLength: 2,
+    firstChunkPreferredEarlySplitLength: 2,
+  })
+
+  // "\u597d" "\u7684" — no boundary yet, nothing should emit.
+  assert.deepEqual(chunker.pushText('\u597d'), [])
+  assert.deepEqual(chunker.pushText('\u7684'), [])
+
+  // "\uff0c" — comma arrives, should emit "好的，" right away.
+  assert.deepEqual(chunker.pushText('\uff0c'), ['\u597d\u7684\uff0c'])
+
+  // Subsequent token "\u4e3b\u4eba" — no boundary yet.
+  assert.deepEqual(chunker.pushText('\u4e3b\u4eba'), [])
+
+  // "\u3002" (period) — should emit because sentence boundary respects only
+  // absoluteMinChunkLength.
+  assert.deepEqual(chunker.pushText('\u3002'), ['\u4e3b\u4eba\u3002'])
+})
+
+test('getMaxRequestCharsForProvider caps OmniVoice at 80 chars so the diffusion model does not silently truncate', () => {
+  // k2-fsa/OmniVoice has a fixed audio-context window (~30s of audio per
+  // generation). Long text inputs don't error — the Python wrapper returns
+  // `audios[0]` truncated to whatever fit, so the pet speaks the first few
+  // sentences and goes silent for the rest. 80 chars ≈ 15–20s of speech
+  // leaves comfortable headroom.
+  assert.equal(getMaxRequestCharsForProvider('omnivoice-tts'), 80)
+})
+
+test('getMaxRequestCharsForProvider caps Volcengine at 300 chars so the 1024-byte text limit is never hit', () => {
+  assert.equal(getMaxRequestCharsForProvider('volcengine-tts'), 300)
+})
+
+test('getMaxRequestCharsForProvider defaults to 3000 chars for unconstrained providers', () => {
+  assert.equal(getMaxRequestCharsForProvider('openai-tts'), 3000)
+  assert.equal(getMaxRequestCharsForProvider('elevenlabs-tts'), 3000)
+  assert.equal(getMaxRequestCharsForProvider('edge-tts'), 3000)
+})
+
+test('splitLongTextAtSentences returns the whole text as one segment when under cap', () => {
+  const text = '\u4f60\u597d\uff0c\u6211\u662f\u5c0f\u7c73\u3002'
+  assert.deepEqual(splitLongTextAtSentences(text, 80), [text])
+})
+
+test('splitLongTextAtSentences splits a 5-sentence reply for OmniVoice at sentence boundaries', () => {
+  // Five ~22-char sentences = ~110 chars total, exceeds the 80-char OmniVoice
+  // cap. Expect the splitter to cut between sentences (after 。) rather than
+  // hacking the text mid-character.
+  const s1 = '\u597d\u7684\u4e3b\u4eba\uff0c\u4eca\u5929\u4e0a\u6d77\u7684\u5929\u6c14\u662f\u6674\u8f6c\u591a\u4e91\u3002' // 18 chars
+  const s2 = '\u6700\u9ad8\u6e29\u5ea6\u56de\u5347\u5230\u4e8c\u5341\u4e03\u5ea6\uff0c\u5b9c\u4eba\u51fa\u95e8\u6563\u6b65\u3002' // 21 chars
+  const s3 = '\u665a\u95f4\u4f1a\u8f6c\u4e3a\u9634\u5929\uff0c\u5e26\u6709\u96f6\u661f\u5c0f\u96e8\u98d8\u843d\u3002' // 18 chars
+  const s4 = '\u660e\u540e\u5929\u6709\u5bd2\u6f6e\u5357\u4e0b\uff0c\u8bb0\u5f97\u52a0\u4e00\u4ef6\u5916\u5957\u3002' // 18 chars
+  const s5 = '\u5468\u672b\u5929\u6c14\u56de\u6696\uff0c\u9002\u5408\u4e00\u8d77\u53bb\u516c\u56ed\u8d70\u8d70\u3002' // 19 chars
+  const text = s1 + s2 + s3 + s4 + s5
+
+  const segments = splitLongTextAtSentences(text, 80)
+
+  // Should produce at least 2 segments, and joining them must preserve the
+  // original text byte-for-byte (no characters dropped during the split).
+  assert.ok(segments.length >= 2, `expected >= 2 segments, got ${segments.length}`)
+  assert.equal(segments.join(''), text)
+
+  // Every segment must end at a sentence boundary (。！？!?；;\n) except
+  // possibly the tail. This is the property that guarantees OmniVoice gets
+  // clean prosody per chunk instead of being asked to generate mid-clause.
+  for (let i = 0; i < segments.length - 1; i += 1) {
+    const segment = segments[i]!
+    const lastChar = segment[segment.length - 1]!
+    assert.match(
+      lastChar,
+      /[\u3002\uff01\uff1f!?\uff1b;\n]/u,
+      `segment ${i} ends with non-boundary char: ${JSON.stringify(lastChar)}`,
+    )
+  }
 })

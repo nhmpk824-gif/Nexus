@@ -16,7 +16,35 @@
 
 ## Overview
 
-Nexus is a desktop AI companion featuring Live2D character rendering, continuous voice conversation, long-term memory, desktop awareness, autonomous behavior, and multi-platform integrations. It supports 18+ LLM providers and can run fully local or with cloud models.
+**Nexus** is a desktop AI companion that **remembers**, **dreams**, and **lives on your screen**. Built with Electron + React + TypeScript, it pairs a Live2D character with a 4-tier memory architecture, autonomous inner monologue, native MCP tool calling, and streaming voice — designed to feel less like a chatbot and more like a presence.
+
+### What makes Nexus different
+
+- **Memory that thinks while you sleep** — three-tier hot / warm / cold memory store (in-prompt → on-demand vector recall → importance-decayed cold archive), plus a nightly *dream cycle* that clusters experiences into *narrative threads*. (airi's equivalent is still WIP; Open-LLM-VTuber currently has long-term memory removed.)
+- **MCP that works on any model** — native OpenAI function calling **and** a prompt-mode fallback (`<tool_call>` markers in plain text) so even models without a `tools` API can drive tools.
+- **Sentence-immediate streaming TTS** — the first audio chunk plays at the first comma, not after the first sentence. Tuned for sub-second perceived latency on the very first token.
+- **Multi-provider failover chain** — configure a chain of LLM / STT / TTS providers; when the primary fails, Nexus falls through transparently without interrupting the conversation.
+- **Echo-cancelled self-interrupt** — listens through the echo-cancelled audio stream so it never wakes itself up while talking back.
+
+### How Nexus compares
+
+| | Nexus | [airi][airi] | [Open-LLM-VTuber][olv] | [Soul of Waifu][sow] | [my-neuro][mn] |
+|---|---|---|---|---|---|
+| Stars | – | 37.8k | 6.8k | 592 | 1.2k |
+| Tech stack | TS + React + Electron | TS + Vue + Electron + Rust | Python | Python | Python + JS |
+| Live2D / VRM | ✓ / ✗ | ✓ / ✓ | ✓ / ✗ | ✓ / ✓ | ✓ / ✗ |
+| Long-term memory | **3-tier + dream cycle** | Alaya (WIP) | removed | Vector RAG + V2 cards | MemOS |
+| MCP / function calling | **native + prompt-mode** | game agents only | ✓ | ✗ | ✓ |
+| Failover chain | **✓** | ✗ | ✗ | ✗ | ✗ |
+| Self-interrupt | **echo-cancelled** | – | VAD | VAD | – |
+| Multi-language UI | zh / en / ja / ko | en | en / zh / ja | en | zh / en |
+
+See [docs/COMPARISON.md](docs/COMPARISON.md) for the full 10-project breakdown including TTS / ASR engine counts, vision support, and licensing.
+
+[airi]: https://github.com/moeru-ai/airi
+[olv]: https://github.com/Open-LLM-VTuber/Open-LLM-VTuber
+[sow]: https://github.com/jofizcd/Soul-of-Waifu
+[mn]: https://github.com/morettt/my-neuro
 
 ---
 
@@ -25,11 +53,12 @@ Nexus is a desktop AI companion featuring Live2D character rendering, continuous
 | Feature | Description |
 |---------|-------------|
 | **Pet + Panel dual-view** | Live2D character with expression, motion, and mood sync |
-| **Continuous voice chat** | Multi-engine STT / TTS with wake word, VAD, continuous conversation, speech interruption |
-| **Long-term memory** | Hybrid BM25 + vector search, auto daily diary, proactive recall, memory decay and archive |
+| **Continuous voice chat** | Multi-engine STT / TTS with wake word, VAD, continuous conversation, **sentence-immediate streaming TTS** (first audio at first comma), and **echo-cancelled self-interrupt** |
+| **Long-term memory** | Three-tier hot / warm / cold memory store with hybrid BM25 + vector search over long-term and daily layers, importance decay, cold archive of stale entries, auto daily diary, proactive recall, plus a nightly **dream cycle** that weaves experiences into **narrative threads** |
 | **Autonomous behavior** | Inner monologue, emotion model, intent prediction, relationship tracking, rhythm learning, skill distillation |
 | **Desktop awareness** | Clipboard, foreground window, screenshot OCR, context triggers |
-| **Tool calling** | Web search (auto content extraction), weather, reminders, MCP protocol |
+| **Tool calling** | Web search (auto content extraction), weather, reminders, **MCP protocol with both native function calling and a prompt-mode fallback** for models without a `tools` API |
+| **Provider failover** | Configure a chain of LLM / STT / TTS providers — when the primary fails, Nexus transparently falls through without interrupting the conversation |
 | **Multi-platform** | Discord / Telegram gateways, plugin system, skill store |
 | **Multilingual** | Simplified Chinese / Traditional Chinese / English / Japanese / Korean |
 
@@ -48,7 +77,7 @@ Nexus is a desktop AI companion featuring Live2D character rendering, continuous
 </tr>
 <tr>
 <td><b>TTS</b></td>
-<td>Edge TTS · CosyVoice · MiniMax · Volcengine · DashScope Qwen3-TTS · OmniVoice · OpenAI TTS · ElevenLabs · Custom OpenAI-compatible</td>
+<td>Edge TTS · MiniMax · Volcengine · DashScope Qwen3-TTS · OmniVoice · OpenAI TTS · ElevenLabs · Custom OpenAI-compatible</td>
 </tr>
 <tr>
 <td><b>Web Search</b></td>
@@ -195,7 +224,7 @@ scripts/                 Local model launch scripts (GLM-ASR · OmniVoice)
 | Frontend | React 19 · TypeScript · Vite 8 |
 | Character | PixiJS · pixi-live2d-display |
 | STT | Sherpa-onnx · SenseVoice · Paraformer · GLM-ASR-Nano · Zhipu ASR · Volcengine · OpenAI Whisper · ElevenLabs Scribe · Tencent ASR |
-| TTS | Edge TTS · MiniMax · Volcengine · CosyVoice · OmniVoice · DashScope Qwen3-TTS · OpenAI TTS · ElevenLabs |
+| TTS | Edge TTS · MiniMax · Volcengine · OmniVoice · DashScope Qwen3-TTS · OpenAI TTS · ElevenLabs |
 | LLM | OpenAI · Anthropic · Gemini · DeepSeek · Kimi · Qwen · GLM · Grok · Ollama + 18 more |
 | Web Search | DuckDuckGo · Bing · Brave · Tavily · Exa · Firecrawl · Gemini Grounding · Perplexity |
 | Local ML | onnxruntime-web · @huggingface/transformers |

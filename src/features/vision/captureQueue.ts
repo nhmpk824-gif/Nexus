@@ -46,7 +46,7 @@ function processNext() {
       job.resolve(text)
     })
     .catch((error) => {
-      job.reject(error instanceof Error ? error : new Error('OCR 识别失败。'))
+      job.reject(error instanceof Error ? error : new Error('OCR recognition failed.'))
     })
     .finally(() => {
       activeCount -= 1
@@ -63,7 +63,7 @@ export function enqueueScreenOcr(imageDataUrl: string, language: string): Promis
 
 export function clearCaptureQueue() {
   for (const job of queue) {
-    job.reject(new Error('OCR 队列已清空。'))
+    job.reject(new Error('OCR queue cleared.'))
   }
   queue.length = 0
 }

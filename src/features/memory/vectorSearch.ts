@@ -15,7 +15,7 @@ function setEmbeddingCache(key: string, value: Promise<number[]>): void {
   embeddingCache.set(key, value)
 }
 
-// 重新导出，确保外部使用 setEmbeddingCache
+// Re-exported so external callers go through setEmbeddingCache.
 
 function normalizeForEmbedding(text: string) {
   return text.toLowerCase().replace(/\s+/g, ' ').trim()

@@ -1,6 +1,5 @@
 import { memo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { clampPresenceIntervalMinutes } from '../../lib/settings'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type {
   AppSettings,
@@ -9,9 +8,19 @@ import type {
 } from '../../types'
 import {
   getVoiceTriggerModeOptions,
-  parseNumberInput,
   type ConnectionResult,
 } from '../settingsDrawerSupport'
+
+const CJK_CHAR_REGEX = /[\u3400-\u9fff]/
+const ASCII_LETTER_REGEX = /[A-Za-z]/
+
+function isWakeWordSupported(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return true
+  // Chinese: handled by pinyin-based keyword generation in main process.
+  // English: handled by runtime BPE encoding via sherpa-onnx's bpeVocab path.
+  return CJK_CHAR_REGEX.test(trimmed) || ASCII_LETTER_REGEX.test(trimmed)
+}
 
 type VoiceSectionProps = {
   active: boolean
@@ -57,6 +66,12 @@ export const VoiceSection = memo(function VoiceSection({
           {runningAudioSmoke ? ti('settings.voice.checking') : ti('settings.voice.audio_smoke_test')}
         </button>
       </div>
+
+      {audioSmokeStatus ? (
+        <div className={audioSmokeStatus.ok ? 'settings-test-result is-success' : 'settings-test-result is-error'}>
+          {audioSmokeStatus.message}
+        </div>
+      ) : null}
 
       <label className="settings-toggle">
         <span>{ti('settings.voice.enable_input')}</span>
@@ -132,7 +147,6 @@ export const VoiceSection = memo(function VoiceSection({
         <input
           type="checkbox"
           checked={draft.voiceInterruptionEnabled}
-          disabled
           onChange={(event) =>
             setDraft((prev) => ({
               ...prev,
@@ -142,15 +156,7 @@ export const VoiceSection = memo(function VoiceSection({
         />
       </label>
 
-      <p className="settings-drawer__hint">
-        {ti('settings.voice.note')}
-        {' '}
-        {uiLanguage === 'zh-CN'
-          ? '当前版本暂未启用语音打断，避免误把播报声音识别成用户输入。'
-          : uiLanguage === 'zh-TW'
-            ? '目前版本暫未啟用語音打斷，避免把播報聲音誤判成使用者輸入。'
-            : 'Speech interruption is temporarily unavailable to avoid false interrupts caused by TTS audio bleeding back into the microphone.'}
-      </p>
+      <p className="settings-drawer__hint">{ti('settings.voice.interrupt_hint')}</p>
 
       <label className="settings-toggle">
         <span>{ti('settings.voice.enable_stt_failover')}</span>
@@ -180,6 +186,42 @@ export const VoiceSection = memo(function VoiceSection({
         />
       </label>
 
+      <label className="settings-toggle">
+        <span>{ti('settings.voice.always_on_wakeword')}</span>
+        <input
+          type="checkbox"
+          checked={draft.wakewordAlwaysOn}
+          onChange={(event) =>
+            setDraft((prev) => ({
+              ...prev,
+              wakewordAlwaysOn: event.target.checked,
+            }))
+          }
+        />
+      </label>
+      <p className="settings-drawer__hint">{ti('settings.voice.always_on_wakeword_hint')}</p>
+
+      <label>
+        <span>{ti('settings.voice.session_idle_timeout')}</span>
+        <input
+          type="number"
+          min={3}
+          max={120}
+          step={1}
+          value={Math.round(draft.wakewordSessionIdleTimeoutMs / 1000)}
+          onChange={(event) => {
+            const seconds = Number(event.target.value)
+            if (!Number.isFinite(seconds)) return
+            const clamped = Math.max(3, Math.min(120, Math.round(seconds)))
+            setDraft((prev) => ({
+              ...prev,
+              wakewordSessionIdleTimeoutMs: clamped * 1000,
+            }))
+          }}
+        />
+      </label>
+      <p className="settings-drawer__hint">{ti('settings.voice.session_idle_timeout_hint')}</p>
+
       <label>
         <span>{ti('settings.voice.trigger_mode')}</span>
         <select
@@ -205,7 +247,6 @@ export const VoiceSection = memo(function VoiceSection({
         <span>{ti('settings.voice.wake_word')}</span>
         <input
           value={draft.wakeWord}
-          disabled={draft.voiceTriggerMode !== 'wake_word'}
           placeholder={ti('settings.voice.wake_word_placeholder')}
           onChange={(event) =>
             setDraft((prev) => ({
@@ -216,6 +257,15 @@ export const VoiceSection = memo(function VoiceSection({
         />
       </label>
 
+      {draft.voiceTriggerMode === 'wake_word' && !isWakeWordSupported(draft.wakeWord) ? (
+        <div
+          className="settings-test-result is-error"
+          style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}
+        >
+          {ti('settings.voice.wake_word_chinese_only')}
+        </div>
+      ) : null}
+
       <p className="settings-drawer__hint">
         {selectedVoiceTriggerMode.hint.trim()}
         {draft.voiceTriggerMode === 'wake_word'
@@ -223,50 +273,13 @@ export const VoiceSection = memo(function VoiceSection({
           : ''}
       </p>
 
+
       <p className="settings-drawer__hint">
         {draft.voiceActivityDetectionEnabled
           ? ti('settings.voice.vad_enabled_note')
           : ti('settings.voice.vad_legacy_note')}
       </p>
 
-      <label className="settings-toggle">
-        <span>{ti('settings.voice.enable_presence')}</span>
-        <input
-          type="checkbox"
-          checked={draft.proactivePresenceEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              proactivePresenceEnabled: event.target.checked,
-            }))
-          }
-        />
-      </label>
-
-      {audioSmokeStatus ? (
-        <div className={audioSmokeStatus.ok ? 'settings-test-result is-success' : 'settings-test-result is-error'}>
-          {audioSmokeStatus.message}
-        </div>
-      ) : null}
-
-      <label>
-        <span>{ti('settings.voice.presence_interval')}</span>
-        <input
-          type="number"
-          min="5"
-          max="120"
-          step="1"
-          value={draft.proactivePresenceIntervalMinutes}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              proactivePresenceIntervalMinutes: clampPresenceIntervalMinutes(
-                parseNumberInput(event.target.value, prev.proactivePresenceIntervalMinutes),
-              ),
-            }))
-          }
-        />
-      </label>
     </section>
   )
 })

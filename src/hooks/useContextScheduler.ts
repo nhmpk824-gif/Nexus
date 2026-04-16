@@ -67,7 +67,7 @@ export function useContextScheduler({
           includeActiveWindow: needsWindow,
           includeClipboard: needsClipboard,
         })
-        // 竞态条件防护：异步操作后验证设置是否变化
+        // Race condition guard: verify settings haven't changed after async op
         if (settingsRef.current !== settings) {
           return
         }

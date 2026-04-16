@@ -79,8 +79,8 @@ export function useMemoryDream({
 
     appendDebugConsoleEvent({
       source: 'autonomy',
-      title: '开始记忆整理（Dream）',
-      detail: `日记条目: ${dailyEntries.length}, 现有记忆: ${memoriesRef.current.length}`,
+      title: 'Starting memory consolidation (Dream)',
+      detail: `diary entries: ${dailyEntries.length}, existing memories: ${memoriesRef.current.length}`,
     })
 
     try {
@@ -123,7 +123,6 @@ export function useMemoryDream({
         const skillPrompt = buildSkillDistillationPrompt(
           dailyEntries,
           existingSkills,
-          settings,
         )
 
         if (skillPrompt) {
@@ -152,7 +151,7 @@ export function useMemoryDream({
       } catch (skillError) {
         appendDebugConsoleEvent({
           source: 'autonomy',
-          title: '技能提炼失败',
+          title: 'Skill distillation failed',
           detail: skillError instanceof Error ? skillError.message : String(skillError),
         })
       }
@@ -225,7 +224,7 @@ export function useMemoryDream({
         }
         for (const m of updated) {
           if (!clusterIdMap.has(m.id)) {
-            const bestId = findBestCluster(m, clusters, updated)
+            const bestId = findBestCluster(m, clusters)
             if (bestId) clusterIdMap.set(m.id, bestId)
           }
         }
@@ -242,7 +241,7 @@ export function useMemoryDream({
       })
 
       // ── Rebuild narrative threads from the actual updated memories ──
-      const narrativeSnapshot = rebuildNarrative(finalMemories, dreamLogRef.current.history)
+      const narrativeSnapshot = rebuildNarrative(finalMemories)
 
       const result: MemoryDreamResult = {
         mergedTopics: ops.updates.length,
@@ -256,13 +255,13 @@ export function useMemoryDream({
 
       appendDebugConsoleEvent({
         source: 'autonomy',
-        title: '记忆整理完成',
-        detail: `新增 ${ops.newMemories.length}, 更新 ${result.mergedTopics}, 清理 ${result.prunedEntries}${distilledSkillCount ? `, 技能 +${distilledSkillCount}` : ''}${clusterCount ? `, 聚类 ${clusterCount}` : ''}${archivedCount ? `, 归档 ${archivedCount}` : ''}${narrativeSnapshot.threads.length ? `, 叙事线 ${narrativeSnapshot.threads.length}` : ''}`,
+        title: 'Memory consolidation completed',
+        detail: `added ${ops.newMemories.length}, updated ${result.mergedTopics}, pruned ${result.prunedEntries}${distilledSkillCount ? `, skills +${distilledSkillCount}` : ''}${clusterCount ? `, clusters ${clusterCount}` : ''}${archivedCount ? `, archived ${archivedCount}` : ''}${narrativeSnapshot.threads.length ? `, narrative threads ${narrativeSnapshot.threads.length}` : ''}`,
       })
     } catch (error) {
       appendDebugConsoleEvent({
         source: 'autonomy',
-        title: '记忆整理失败',
+        title: 'Memory consolidation failed',
         detail: error instanceof Error ? error.message : String(error),
       })
     } finally {

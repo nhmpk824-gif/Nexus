@@ -26,6 +26,12 @@ export type WakewordRuntimeController = {
   getState: () => WakewordRuntimeState
   stop: () => void
   destroy: () => void
+  // Subscribe to the mic audio frames the wakeword listener is capturing.
+  // VAD sessions register here so they can run Silero on the exact same
+  // samples KWS is decoding — a single mic stream, no getUserMedia race.
+  subscribeMicFrames: (
+    subscriber: (samples: Float32Array, sampleRate: number) => void,
+  ) => () => void
 }
 
 type WakewordRuntimeOptions = {
@@ -143,7 +149,16 @@ export function createWakewordRuntime(
   let cooldownTimer: TimerHandle | null = null
   let disposed = false
   let generation = 0
+  let activeListenerId = 0
+  let currentActiveListenerId = 0
   let lastTriggeredAtMs = 0
+  // When "mic-released" the listener stays alive but its mic stream is
+  // released so a concurrent VAD getUserMedia call can grab the device.
+  // Main-process KWS engine state is preserved, so on mic reacquire the
+  // Zipformer hidden state is still hot — this avoids the "第一次能唤醒，
+  // 之后就不行" warmup regression. Also acts as a mute so queued detections
+  // during the transition window are swallowed.
+  let micReleased = false
 
   function emitState(patch: Partial<WakewordRuntimeState>) {
     const previousState = state
@@ -170,6 +185,7 @@ export function createWakewordRuntime(
   function stopListener() {
     const currentListener = listener
     listener = null
+    currentActiveListenerId = 0
     currentListener?.stop()
   }
 
@@ -212,6 +228,12 @@ export function createWakewordRuntime(
   }
 
   function handleKeywordDetected(keyword: string) {
+    if (micReleased) {
+      // Mic is released during voice session — any stale detection queued
+      // before the release gets dropped so TTS playback doesn't self-trigger.
+      return
+    }
+
     const normalizedKeyword = String(keyword ?? '').trim()
     const nowMs = now()
 
@@ -225,22 +247,26 @@ export function createWakewordRuntime(
 
     lastTriggeredAtMs = nowMs
     clearRetryTimer()
-    stopListener()
-
-    const cooldownUntilMs = nowMs + triggerCooldownMs
-    scheduleCooldown(cooldownUntilMs)
+    // Keep the listener running — feed() already called spotter.reset() to
+    // clear the decoder state, and shouldIgnoreWakewordTrigger debounces
+    // duplicate hits for triggerCooldownMs. Tearing down the listener here
+    // would force a full checkAvailability → startListener → new stream
+    // cycle on the next reconcile, which empties the Zipformer hidden state
+    // and makes the next utterance need ~1 "warmup" call before it fires.
+    // The actual mic hand-off to voice recording is handled by the
+    // suspended={voiceState !== 'idle'} path in useVoice.ts, not here.
 
     emitState({
       ...buildBaseStatePatch(config),
-      phase: 'cooldown',
-      active: false,
+      phase: 'listening',
+      active: true,
       available: true,
       reason: '唤醒词已命中，正在切入收音',
       error: '',
       retryCount: 0,
       lastKeyword: normalizedKeyword,
       lastTriggeredAt: toIso(nowMs),
-      cooldownUntil: toIso(cooldownUntilMs),
+      cooldownUntil: '',
     })
 
     options.onKeywordDetected?.(normalizedKeyword, state)
@@ -257,6 +283,7 @@ export function createWakewordRuntime(
     if (!currentConfig.enabled || !currentConfig.wakeWord) {
       clearRetryTimer()
       clearCooldownTimer()
+      micReleased = false
       stopListener()
       emitState({
         ...basePatch,
@@ -274,6 +301,26 @@ export function createWakewordRuntime(
 
     if (currentConfig.suspended) {
       clearRetryTimer()
+      // VAD and KWS now share the same underlying mic stream (the VAD
+      // starter clones the wakeword listener's MediaStream instead of
+      // calling getUserMedia a second time), so we don't tear anything
+      // down during suspend — just flip the mute flag so queued KWS hits
+      // are dropped while the user's in a voice turn. Keeps the KWS
+      // Zipformer hidden state hot for instant wake-word matching when
+      // the voice session ends. Wake word config changes still need a
+      // full rebuild, hence the listener+wakeword equality check.
+      if (listener && state.wakeWord === currentConfig.wakeWord) {
+        micReleased = true
+        emitState({
+          ...basePatch,
+          phase: 'paused',
+          active: false,
+          reason: currentConfig.suspendReason || '唤醒词监听已暂停',
+          error: '',
+        })
+        return
+      }
+      micReleased = false
       stopListener()
       emitState({
         ...basePatch,
@@ -284,6 +331,11 @@ export function createWakewordRuntime(
       })
       return
     }
+
+    // Leaving suspend — just un-mute, no mic reacquire needed because we
+    // never released it. Any stale detections queued during the voice turn
+    // were already dropped by the handleKeywordDetected mute check.
+    micReleased = false
 
     if (state.cooldownUntil) {
       const cooldownUntilMs = Date.parse(state.cooldownUntil)
@@ -306,7 +358,7 @@ export function createWakewordRuntime(
 
     if (
       listener
-      && state.phase === 'listening'
+      && (state.phase === 'listening' || state.phase === 'paused')
       && state.wakeWord === currentConfig.wakeWord
     ) {
       clearRetryTimer()
@@ -376,14 +428,16 @@ export function createWakewordRuntime(
       error: '',
     })
 
+    const myListenerId = ++activeListenerId
+
     try {
       const nextListener = await startListener({
         onKeywordDetected: (keyword) => {
-          if (disposed || nextGeneration !== generation) return
+          if (disposed || currentActiveListenerId !== myListenerId) return
           handleKeywordDetected(keyword)
         },
         onError: (message) => {
-          if (disposed || nextGeneration !== generation) return
+          if (disposed || currentActiveListenerId !== myListenerId) return
           handleRecoverableError(message, availability.modelKind ?? null)
         },
       }, {
@@ -396,6 +450,7 @@ export function createWakewordRuntime(
       }
 
       listener = nextListener
+      currentActiveListenerId = myListenerId
       clearRetryTimer()
       emitState({
         ...basePatch,
@@ -429,6 +484,7 @@ export function createWakewordRuntime(
       generation += 1
       clearRetryTimer()
       clearCooldownTimer()
+      micReleased = false
       stopListener()
       emitState({
         phase: 'disabled',
@@ -446,7 +502,12 @@ export function createWakewordRuntime(
       generation += 1
       clearRetryTimer()
       clearCooldownTimer()
+      micReleased = false
       stopListener()
+    },
+    subscribeMicFrames(subscriber) {
+      if (!listener) return () => undefined
+      return listener.subscribeFrames(subscriber)
     },
   }
 }

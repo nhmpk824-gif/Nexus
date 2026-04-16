@@ -1,11 +1,10 @@
-﻿/* eslint-disable react-hooks/refs -- useVoice is a ref-heavy voice infrastructure
+/* eslint-disable react-hooks/refs -- useVoice is a ref-heavy voice infrastructure
    hook that must bridge refs, state, and event bus during render.  The lint rule
    flags `settings` (a plain AppSettings value) because the context object that
    carries it also holds RefObjects; these are false positives. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createInitialWakewordRuntimeState,
-  hearingConfigFromSettings,
   HearingRuntime,
   type HearingPhase,
   type ParaformerStreamSession,
@@ -15,13 +14,9 @@ import {
 import type { TencentAsrStreamSession } from '../features/hearing/tencentAsr'
 import {
   createVoiceSessionState,
-  logVoiceEvent,
-  normalizeVoiceDedupText,
   type AudioPlaybackQueue,
   type SpeechLevelController,
   type StreamAudioPlayer,
-  type VoiceSessionEvent,
-  type VoiceSessionTransport,
 } from '../features/voice'
 import {
   createId,
@@ -31,85 +26,34 @@ import {
   saveVoicePipelineState,
   type BrowserSpeechRecognition,
 } from '../lib'
+import { clearPendingVoiceRestart as clearPendingVoiceRestartTimer } from './voice/continuousVoice'
+import { ensureSupportedSpeechInputSettingsRuntime } from './voice/providerFallbacks'
+import type { ParaformerConversationState } from './voice/paraformerConversation'
+import type { TencentConversationState } from './voice/tencentConversation'
+import type { SenseVoiceConversationState } from './voice/sensevoiceConversation'
 import {
-  canInterruptSpeech as canInterruptSpeechForSettings,
-  clearPendingVoiceRestart as clearPendingVoiceRestartTimer,
-  clearSpeechInterruptedFlag as clearSpeechInterruptedFlagForGeneration,
-  getNoSpeechRestartDelay as getNoSpeechRestartDelayForCount,
-  isSpeechInterrupted as isSpeechInterruptedForGeneration,
-  pauseContinuousVoice as pauseContinuousVoiceSession,
-  resetNoSpeechRestartCount as resetNoSpeechRestartCounter,
-  scheduleVoiceRestart as scheduleContinuousVoiceRestart,
-  shouldAutoRestartVoice as shouldAutoRestartVoiceForSettings,
-  shouldKeepContinuousVoiceSession as shouldKeepContinuousVoiceSessionForSettings,
-  startSpeechInterruptMonitor as startSpeechInterruptMonitorRuntime,
-  stopSpeechInterruptMonitor as stopSpeechInterruptMonitorSession,
-} from './voice/continuousVoice'
-import {
-  startVoiceConversationEntrypoint,
-  stopVoiceConversationEntrypoint,
-} from './voice/conversationEntrypoints'
-import {
-  probeSpeechOutputPlaybackStartRuntime,
-  runAudioSmokeTestRuntime,
-  testSpeechInputConnectionRuntime,
-  testSpeechInputReadinessRuntime,
-  testSpeechOutputReadinessRuntime,
-} from './voice/diagnostics'
-import {
-  applySpeechOutputProviderFallbackRuntime,
-  buildSpeechOutputFailoverCandidatesRuntime,
-  ensureSupportedSpeechInputSettingsRuntime,
-} from './voice/providerFallbacks'
-import {
-  startApiRecordingConversation,
-} from './voice/recordingConversations'
-import { startParaformerConversation, type ParaformerConversationState } from './voice/paraformerConversation'
-import { startTencentConversation, type TencentConversationState } from './voice/tencentConversation'
-import { startSenseVoiceConversation, type SenseVoiceConversationState } from './voice/sensevoiceConversation'
-import {
-  beginStreamingSpeechReplyRuntime,
-  speakAssistantReplyRuntime,
-} from './voice/speechReply'
-import { VoiceBus } from '../features/voice/bus'
-import type { BusEffect, VoicePhase } from '../features/voice/busReducer'
+  RESTART_RETRY_LIMIT,
+  evaluateRestartGuards,
+  getRestartDelay,
+} from '../features/voice/autoRestartPolicy'
+import { VoiceBus, type BusEffect } from '../features/voice/bus'
 import type { VoiceBusEvent } from '../features/voice/busEvents'
-import { startSpeechOutputRuntime } from './voice/speechOutputRuntime'
 import {
-  handleRecognizedVoiceTranscriptRuntime,
-  handleVoiceListeningFailureRuntime,
-} from './voice/transcriptHandling'
-import { startVadConversation } from './voice/vadConversation'
+  getGlobalVoiceTransitionLog,
+  installVoiceLogDevHooks,
+} from '../features/voice/voiceTransitionLog'
 import {
   acknowledgeWakewordAndStartListeningRuntime,
   cleanupVoiceRuntimeResources,
   createWakewordRuntimeBinding,
-  beginVoiceListeningSessionRuntime,
-  clearParaformerConversationStateRuntime,
-  clearTencentConversationStateRuntime,
-  clearSenseVoiceConversationStateRuntime,
-  destroyVadSessionRuntime,
-  dispatchVoiceSessionAndSyncRuntime,
-  dispatchVoiceSessionRuntime,
-  getAudioPlaybackQueueRuntime,
-  getSpeechLevelControllerRuntime,
-  getStreamAudioPlayerRuntime,
   handleWakewordKeywordDetectedRuntime,
   handleWakewordRuntimeStateChangeRuntime,
-  interruptSpeakingForVoiceInputRuntime,
-  setContinuousVoiceSessionRuntime,
-  setSpeechLevelValueRuntime,
-  stopActiveSpeechOutputRuntime,
-  stopApiRecordingRuntime,
-  stopSpeechTrackingRuntime,
-  stopVadListeningRuntime,
 } from './voice'
 import type {
-  AppSettings,
-  WakewordRuntimeState,
   VoiceTraceEntry,
   VoicePipelineState,
   VoiceState,
+  WakewordRuntimeState,
 } from '../types'
 import type {
   ApiRecordingSession,
@@ -120,6 +64,17 @@ import type {
   VadConversationSession,
   VoiceConversationOptions,
 } from './voice/types'
+import type {
+  Holder,
+  VoiceBindings,
+  VoiceEngines,
+  VoiceLifecycle,
+  VoiceRuntimeBag,
+} from './voice/voiceRuntimeBag'
+import { createVoiceBindings } from './voice/voiceBindings'
+import { createVoiceConversationStarters } from './voice/voiceConversationStarters'
+import { createVoiceLifecycleControls } from './voice/voiceLifecycleControls'
+import { createVoiceTestEntries } from './voice/voiceTestEntries'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -133,8 +88,6 @@ export type { UseVoiceContext } from './voice/types'
 
 export function useVoice(ctx: UseVoiceContext) {
   const settings = ctx.settings
-  const inputRef = ctx.inputRef
-  const setInput = ctx.setInput
   const view = ctx.view
   const [voiceState, setVoiceStateRaw] = useState<VoiceState>('idle')
   const [continuousVoiceActive, setContinuousVoiceActive] = useState(false)
@@ -206,25 +159,64 @@ export function useVoice(ctx: UseVoiceContext) {
 
   const setSettings = ctx.setSettings
 
+  // ── Late-binding holders ────────────────────────────────────────────────
+  // Bindings, engines, and lifecycle have circular dependencies (e.g.
+  // bindings.startSpeechInterruptMonitor → lifecycle.scheduleVoiceRestart;
+  // lifecycle.startVoiceConversation → engines.startParaformerVoiceConversation
+  // → bindings.handleRecognizedVoiceTranscript).  We resolve them by
+  // building each layer in order while passing shared holder slots, then
+  // populating the slots as the factories return.
+  const bindingsHolder: Holder<VoiceBindings> = { current: null }
+  const enginesHolder: Holder<VoiceEngines> = { current: null }
+  const lifecycleHolder: Holder<VoiceLifecycle> = { current: null }
+
   // ── Bus effect executor ────────────────────────────────────────────────
+  //
+  // Bus-driven restarts funnel through the same guard evaluation as the
+  // legacy scheduleVoiceRestart path (Phase 1-2) so bus-originated restarts
+  // don't drift from scheduler-originated ones. Retries reuse the policy
+  // module's backoff curve.
+  function scheduleBusRestart(delay: number, retryCount: number) {
+    window.setTimeout(() => {
+      const currentPhase = voiceBus.phase
+      if (currentPhase !== 'idle') {
+        console.log('[VoiceBus] restart_voice skipped — phase:', currentPhase)
+        return
+      }
+
+      const guard = evaluateRestartGuards({
+        hasActiveRecognition: Boolean(recognitionRef.current),
+        hasActiveVadSession: Boolean(vadSessionRef.current),
+        chatBusy: Boolean(ctx.busyRef.current),
+        voiceState: voiceStateRef.current,
+      })
+
+      if (!guard.ok) {
+        if (retryCount >= RESTART_RETRY_LIMIT) {
+          console.warn('[VoiceBus] restart gave up after', retryCount, 'retries — blocker:', guard.blocker)
+          showPetStatus('语音重启超时，请手动点击麦克风。', 4_000, 3_000)
+          return
+        }
+        console.log('[VoiceBus] restart blocked (retry', retryCount + 1, '), blocker:', guard.blocker)
+        scheduleBusRestart(getRestartDelay('retry'), retryCount + 1)
+        return
+      }
+
+      try {
+        console.log('[VoiceBus] restart_voice — starting voice conversation')
+        lifecycleHolder.current?.startVoiceConversation({ restart: true, passive: true })
+      } catch (err) {
+        console.warn('[VoiceBus] restart failed:', err)
+        showPetStatus('语音重启失败，请手动重试。', 4_000, 3_000)
+      }
+    }, delay)
+  }
+
   function executeBusEffects(effects: BusEffect[]) {
     for (const effect of effects) {
       switch (effect.type) {
         case 'restart_voice':
-          window.setTimeout(() => {
-            const currentPhase = voiceBus.phase
-            if (currentPhase !== 'idle') {
-              console.log('[VoiceBus] restart_voice skipped — phase:', currentPhase)
-              return
-            }
-            try {
-              console.log('[VoiceBus] restart_voice — starting voice conversation')
-              startVoiceConversation({ restart: true, passive: true })
-            } catch (err) {
-              console.warn('[VoiceBus] restart failed:', err)
-              showPetStatus('语音重启失败，请手动重试。', 4_000, 3_000)
-            }
-          }, effect.delay)
+          scheduleBusRestart(getRestartDelay('bus_effect', { requested: effect.delay }), 0)
           break
         case 'set_mood':
           ctx.setMood(effect.mood)
@@ -239,23 +231,15 @@ export function useVoice(ctx: UseVoiceContext) {
     }
   }
 
-  function voiceStateForBusPhase(phase: VoicePhase): VoiceState {
-    switch (phase) {
-      case 'listening': return 'listening'
-      case 'transcribing': return 'processing'
-      case 'speaking': return 'speaking'
-      default: return 'idle'
-    }
-  }
-
   function busEmit(event: VoiceBusEvent) {
-    const prevPhase = voiceBus.phase
+    const prevUiPhase = voiceBus.uiPhase
     const effects = voiceBus.emit(event)
-    const nextPhase = voiceBus.phase
-    // Sync voiceState when bus phase changes — replaces the legacy
-    // dispatchVoiceSessionAndSync → setVoiceState path for bus-driven events.
-    if (prevPhase !== nextPhase) {
-      setVoiceState(voiceStateForBusPhase(nextPhase))
+    const nextUiPhase = voiceBus.uiPhase
+    // Phase 2-3: UI state is derived directly from the internal 13-state
+    // machine via `toUiPhase`, so we no longer bounce through the legacy
+    // 4-phase `VoicePhase` surface here.
+    if (prevUiPhase !== nextUiPhase) {
+      setVoiceState(nextUiPhase)
     }
     executeBusEffects(effects)
   }
@@ -364,248 +348,9 @@ export function useVoice(ctx: UseVoiceContext) {
     ctx.updatePetStatus(text, duration)
   }, [ctx])
 
-  function dispatchVoiceSession(event: VoiceSessionEvent) {
-    return dispatchVoiceSessionRuntime({
-      voiceSessionRef,
-      event,
-    })
-  }
-
-  function dispatchVoiceSessionAndSync(event: VoiceSessionEvent) {
-    return dispatchVoiceSessionAndSyncRuntime({
-      voiceSessionRef,
-      voiceStateRef,
-      setVoiceState,
-      event,
-    })
-  }
-
-  function beginVoiceListeningSession(transport: VoiceSessionTransport) {
-    return beginVoiceListeningSessionRuntime({
-      voiceSessionRef,
-      voiceStateRef,
-      setVoiceState,
-      transport,
-    })
-  }
-
-  // ── Internal voice functions ───────────────────────────────────────────────
-
-  function setSpeechLevelValue(nextLevel: number) {
-    setSpeechLevelValueRuntime({
-      nextLevel,
-      speechLevelValueRef,
-      setSpeechLevel,
-    })
-  }
-
-  function getSpeechLevelController() {
-    return getSpeechLevelControllerRuntime({
-      speechLevelControllerRef,
-      onLevelChange: setSpeechLevelValue,
-      simulationIntervalMs: BROWSER_TTS_LIPSYNC_INTERVAL_MS,
-      analyserFftSize: AUDIO_TTS_ANALYSER_FFT_SIZE,
-    })
-  }
-
-  function stopSpeechTracking() {
-    stopSpeechTrackingRuntime({
-      getSpeechLevelController,
-    })
-  }
-
-  function setContinuousVoiceSession(active: boolean) {
-    setContinuousVoiceSessionRuntime({
-      active,
-      continuousVoiceActiveRef,
-      setContinuousVoiceActive,
-    })
-  }
-
-  function interruptSpeakingForVoiceInput() {
-    return interruptSpeakingForVoiceInputRuntime({
-      voiceStateRef,
-      canInterruptSpeech,
-      showPetStatus,
-      stopActiveSpeechOutput,
-      dispatchVoiceSessionAndSync,
-    })
-  }
-
-  function stopSpeechInterruptMonitor() {
-    stopSpeechInterruptMonitorSession(speechInterruptMonitorRef)
-  }
-
-  function stopApiRecording(cancel = false) {
-    stopApiRecordingRuntime({
-      apiRecordingRef,
-      cancel,
-    })
-  }
-
-  async function destroyVadSession(session: VadConversationSession | null) {
-    await destroyVadSessionRuntime({
-      session,
-      vadSessionRef,
-      setSpeechLevelValue,
-    })
-  }
-
-  async function stopVadListening(cancel = false) {
-    await stopVadListeningRuntime({
-      vadSessionRef,
-      destroyVadSession,
-      cancel,
-    })
-  }
-
-  function clearParaformerConversationState() {
-    clearParaformerConversationStateRuntime({
-      paraformerConversationRef,
-      setSpeechLevelValue,
-    })
-  }
-
-  function clearSenseVoiceConversationState() {
-    clearSenseVoiceConversationStateRuntime({
-      sensevoiceConversationRef,
-      setSpeechLevelValue,
-    })
-  }
-
-  function clearTencentConversationState() {
-    clearTencentConversationStateRuntime({
-      tencentConversationRef,
-      setSpeechLevelValue,
-    })
-  }
-
-  function stopActiveSpeechOutput() {
-    stopActiveSpeechOutputRuntime({
-      wakewordAcknowledgingRef,
-      stopSpeechInterruptMonitor,
-      stopSpeechTracking,
-      activeStreamingSpeechOutputRef,
-      streamAudioPlayerRef,
-      audioPlaybackQueueRef,
-    })
-  }
-
-  function getStreamAudioPlayer() {
-    return getStreamAudioPlayerRuntime({
-      streamAudioPlayerRef,
-      onLevel: setSpeechLevelValue,
-    })
-  }
-
-  function getAudioPlaybackQueue() {
-    return getAudioPlaybackQueueRuntime({
-      audioPlaybackQueueRef,
-      getSpeechLevelController,
-      stopSpeechTracking,
-    })
-  }
-
-  async function startSpeechOutput(
-    text: string,
-    speechSettings: AppSettings,
-    options?: {
-      onStart?: () => void
-      onEnd?: () => void
-      onError?: (message: string) => void
-    },
-  ) {
-    await startSpeechOutputRuntime({
-      text,
-      speechSettings,
-      runtime: {
-        getAudioPlaybackQueue,
-        stopSpeechTracking,
-      },
-      callbacks: options,
-      buildSpeechOutputFailoverCandidates,
-      applySpeechOutputProviderFallback,
-      appendVoiceTrace,
-    })
-  }
-
-  function resetNoSpeechRestartCount() {
-    resetNoSpeechRestartCounter(noSpeechRestartCountRef)
-  }
-
-  function getNoSpeechRestartDelay() {
-    return getNoSpeechRestartDelayForCount(noSpeechRestartCountRef)
-  }
-
   const clearPendingVoiceRestart = useCallback(() => {
     clearPendingVoiceRestartTimer(restartVoiceTimerRef)
   }, [])
-
-  function pauseContinuousVoice(message: string, statusText = message) {
-    pauseContinuousVoiceSession({
-      clearPendingVoiceRestart,
-      setContinuousVoiceSession,
-      resetNoSpeechRestartCount,
-      setError: ctx.setError,
-      showPetStatus,
-      message,
-      statusText,
-    })
-  }
-
-  function shouldAutoRestartVoice() {
-    return shouldAutoRestartVoiceForSettings({
-      continuousVoiceActiveRef,
-      settingsRef: ctx.settingsRef,
-    })
-  }
-
-  function shouldKeepContinuousVoiceSession() {
-    return shouldKeepContinuousVoiceSessionForSettings({
-      settingsRef: ctx.settingsRef,
-    })
-  }
-
-  function canInterruptSpeech() {
-    return canInterruptSpeechForSettings({
-      settingsRef: ctx.settingsRef,
-    })
-  }
-
-  function isSpeechInterrupted(speechGeneration: number) {
-    return isSpeechInterruptedForGeneration(interruptedSpeechGenerationRef, speechGeneration)
-  }
-
-  function clearSpeechInterruptedFlag(speechGeneration: number) {
-    clearSpeechInterruptedFlagForGeneration(interruptedSpeechGenerationRef, speechGeneration)
-  }
-
-  async function startSpeechInterruptMonitor(
-    speechGeneration: number,
-    shouldResumeContinuousVoice: boolean,
-  ) {
-    await startSpeechInterruptMonitorRuntime({
-      speechGeneration,
-      shouldResumeContinuousVoice,
-      speechInterruptMonitorRef,
-      assistantSpeechGenerationRef,
-      interruptedSpeechGenerationRef,
-      voiceStateRef,
-      continuousVoiceActiveRef,
-      settingsRef: ctx.settingsRef,
-      clearPendingVoiceRestart,
-      stopActiveSpeechOutput,
-      onInterrupted: () => {
-        logVoiceEvent('assistant speech interrupted by user speech')
-        dispatchVoiceSessionAndSync({ type: 'tts_interrupted' })
-      },
-      setMood: ctx.setMood,
-      showPetStatus,
-      scheduleVoiceRestart,
-    })
-  }
-
-  // ── Settings validation ────────────────────────────────────────────────────
 
   const ensureSupportedSpeechInputSettings = useCallback((announce = false) => {
     return ensureSupportedSpeechInputSettingsRuntime({
@@ -615,466 +360,92 @@ export function useVoice(ctx: UseVoiceContext) {
     })
   }, [ctx, showPetStatus])
 
-  function applySpeechOutputProviderFallback(providerId: string, statusText?: string) {
-    return applySpeechOutputProviderFallbackRuntime({
-      providerId,
-      statusText,
-      settingsRef: ctx.settingsRef,
-      showPetStatus,
-    })
-  }
-
-  function buildSpeechOutputFailoverCandidates(settings: AppSettings) {
-    return buildSpeechOutputFailoverCandidatesRuntime(settings)
-  }
-
-  const testSpeechInputReadiness = useCallback(async (draftSettings: AppSettings) => {
-    return testSpeechInputReadinessRuntime({
-      draftSettings,
-    })
-  }, [])
-
-  // ── Transcript handling ────────────────────────────────────────────────────
-
-  function fillComposerWithVoiceTranscript(transcript: string) {
-    const nextInput = inputRef.current.trim()
-      ? `${inputRef.current}\n${transcript}`
-      : transcript
-
-    inputRef.current = nextInput
-    setInput(nextInput)
-  }
-
-  function shouldIgnoreRepeatedVoiceContent(content: string) {
-    const normalizedContent = normalizeVoiceDedupText(content)
-    if (!normalizedContent) {
-      return false
-    }
-
-    const previous = lastSubmittedVoiceContentRef.current
-    return (
-      previous.content === normalizedContent
-      && Date.now() - previous.sentAt < VOICE_TRANSCRIPT_DEDUP_WINDOW_MS
-    )
-  }
-
-  function rememberSubmittedVoiceContent(content: string) {
-    const normalizedContent = normalizeVoiceDedupText(content)
-    if (!normalizedContent) {
-      return
-    }
-
-    lastSubmittedVoiceContentRef.current = {
-      content: normalizedContent,
-      sentAt: Date.now(),
-    }
-  }
-
-  async function handleRecognizedVoiceTranscript(
-    rawTranscript: string,
-    options?: {
-      traceId?: string
-    },
-  ) {
-    return handleRecognizedVoiceTranscriptRuntime({
-      rawTranscript,
-      traceId: options?.traceId,
-      hearingConfig: hearingConfigFromSettings(ctx.settingsRef.current),
-      activeVoiceConversationOptionsRef,
-      dispatchVoiceSessionAndSync,
-      setMood: ctx.setMood,
-      setError: ctx.setError,
-      setLiveTranscript,
-      updateVoicePipeline,
-      appendVoiceTrace,
-      openChatPanelForVoice: ctx.openChatPanelForVoice,
-      fillComposerWithVoiceTranscript,
-      showPetStatus,
-      shouldAutoRestartVoice,
-      scheduleVoiceRestart,
-      shouldIgnoreRepeatedVoiceContent,
-      rememberSubmittedVoiceContent,
-      sendMessage: (content, sendOptions) => ctx.sendMessageRef.current(content, sendOptions),
-    })
-  }
-
-  function handleVoiceListeningFailure(message: string, errorCode?: string) {
-    handleVoiceListeningFailureRuntime({
-      message,
-      errorCode,
-      activeVoiceConversationOptionsRef,
-      dispatchVoiceSessionAndSync,
-      setLiveTranscript,
-      setSpeechLevelValue,
-      setMood: ctx.setMood,
-      updateVoicePipeline,
-      appendVoiceTrace,
-      setError: ctx.setError,
-      shouldAutoRestartVoice,
-      noSpeechRestartCountRef,
-      maxContinuousNoSpeechRestarts: MAX_CONTINUOUS_NO_SPEECH_RESTARTS,
-      pauseContinuousVoice,
-      showPetStatus,
-      scheduleVoiceRestart,
-      getNoSpeechRestartDelay,
-      setContinuousVoiceSession,
-      resetNoSpeechRestartCount,
-    })
-  }
-
-  // ── Voice restart / TTS ────────────────────────────────────────────────────
-
-  function scheduleVoiceRestart(statusText = '我继续收音，你可以接着说。', delay = 520, force?: boolean) {
-    scheduleContinuousVoiceRestart({
-      restartVoiceTimerRef,
-      recognitionRef,
-      vadSessionRef,
-      busyRef: ctx.busyRef,
+  // ── Build the runtime bag and call factories in order ──────────────────
+  // Bindings → Engines → Lifecycle → TestEntries.  Each populates its
+  // holder slot so later factories can read it directly while earlier ones
+  // (which are already constructed) use the holder for late-bound calls.
+  const runtimeBag: VoiceRuntimeBag = {
+    ctx,
+    refs: {
       voiceStateRef,
-      shouldAutoRestartVoice,
-      showPetStatus,
-      startVoiceConversation,
-      statusText,
-      delay,
-      force,
-    })
-  }
-
-  async function speakAssistantReply(text: string, shouldResumeContinuousVoice: boolean) {
-    await speakAssistantReplyRuntime({
-      text,
-      speechGeneration: ++assistantSpeechGenerationRef.current,
-      shouldResumeContinuousVoice,
-      currentSettings: ctx.settingsRef.current,
-      startSpeechOutput,
-      setMood: ctx.setMood,
-      setError: ctx.setError,
-      busEmit,
-      startSpeechInterruptMonitor,
-      stopSpeechInterruptMonitor,
-      isSpeechInterrupted,
-      clearSpeechInterruptedFlag,
-    })
-  }
-
-  /**
-   * Creates a streaming TTS controller for use during AI streaming responses.
-   * Returns an object with pushDelta/finish/waitForCompletion methods.
-   * The caller feeds text deltas as they arrive from the AI, and audio starts
-   * playing as soon as the first sentence completes, no waiting for the full response.
-   */
-  function beginStreamingSpeechReply(shouldResumeContinuousVoice: boolean) {
-    return beginStreamingSpeechReplyRuntime({
-      speechGeneration: ++assistantSpeechGenerationRef.current,
-      shouldResumeContinuousVoice,
-      currentSettings: ctx.settingsRef.current,
-      setMood: ctx.setMood,
-      setError: ctx.setError,
-      busEmit,
-      startSpeechInterruptMonitor,
-      stopSpeechInterruptMonitor,
-      isSpeechInterrupted,
-      clearSpeechInterruptedFlag,
-      streamingRuntime: {
-        getPlayer: getStreamAudioPlayer,
-        setActiveController: (nextController) => {
-          activeStreamingSpeechOutputRef.current = nextController
-        },
-        resetPlayer: () => {
-          streamAudioPlayerRef.current = null
-        },
-      },
-    })
-  }
-
-  // ── VAD conversation ───────────────────────────────────────────────────────
-
-  async function startVadVoiceConversation(
-    transcribeMode: 'api' | 'local',
-    options?: VoiceConversationOptions,
-  ) {
-    hearingRuntime.activateEngine('vad')
-    await startVadConversation({
-      transcribeMode,
-      options,
-      currentSettings: ctx.settingsRef.current,
-      vadSessionRef,
-      voiceStateRef,
-      suppressVoiceReplyRef,
-      clearPendingVoiceRestart,
-      canInterruptSpeech,
-      interruptSpeakingForVoiceInput,
-      setContinuousVoiceSession,
-      shouldKeepContinuousVoiceSession,
-      resetNoSpeechRestartCount,
-      beginVoiceListeningSession,
-      dispatchVoiceSession,
-      dispatchVoiceSessionAndSync,
-      setVoiceState,
-      setMood: ctx.setMood,
-      setError: ctx.setError,
-      setLiveTranscript,
-      updateVoicePipeline,
-      appendVoiceTrace,
-      showPetStatus,
-      setSpeechLevelValue,
-      destroyVadSession,
-      handleRecognizedVoiceTranscript,
-      handleVoiceListeningFailure,
-      startFallbackConversation: startApiVoiceConversation,
-      shouldAutoRestartVoice,
-    })
-  }
-
-  // ── Paraformer streaming conversation ──────────────────────────────────────
-
-  async function startParaformerVoiceConversation(options?: VoiceConversationOptions) {
-    hearingRuntime.activateEngine('paraformer')
-    await startParaformerConversation({
-      options,
-      currentSettings: ctx.settingsRef.current,
-      voiceStateRef,
-      suppressVoiceReplyRef,
-      paraformerSessionRef,
-      paraformerConversationRef,
-      clearPendingVoiceRestart,
-      canInterruptSpeech,
-      interruptSpeakingForVoiceInput,
-      setContinuousVoiceSession,
-      shouldKeepContinuousVoiceSession,
-      resetNoSpeechRestartCount,
-      clearParaformerConversationState,
-      beginVoiceListeningSession,
-      dispatchVoiceSession,
-      dispatchVoiceSessionAndSync,
-      setVoiceState,
-      setMood: ctx.setMood,
-      setError: ctx.setError,
-      setLiveTranscript,
-      updateVoicePipeline,
-      appendVoiceTrace,
-      showPetStatus,
-      setSpeechLevelValue,
-      handleRecognizedVoiceTranscript,
-      handleVoiceListeningFailure,
-      shouldAutoRestartVoice,
-    })
-  }
-
-  // ── SenseVoice offline conversation ────────────────────────────────────────
-
-  async function startSenseVoiceVoiceConversation(options?: VoiceConversationOptions) {
-    hearingRuntime.activateEngine('sensevoice')
-    await startSenseVoiceConversation({
-      options,
-      currentSettings: ctx.settingsRef.current,
-      voiceStateRef,
-      suppressVoiceReplyRef,
-      sensevoiceSessionRef,
-      sensevoiceConversationRef,
-      clearPendingVoiceRestart,
-      canInterruptSpeech,
-      interruptSpeakingForVoiceInput,
-      setContinuousVoiceSession,
-      shouldKeepContinuousVoiceSession,
-      resetNoSpeechRestartCount,
-      clearSenseVoiceConversationState,
-      beginVoiceListeningSession,
-      dispatchVoiceSession,
-      dispatchVoiceSessionAndSync,
-      setVoiceState,
-      setMood: ctx.setMood,
-      setError: ctx.setError,
-      setLiveTranscript,
-      updateVoicePipeline,
-      appendVoiceTrace,
-      showPetStatus,
-      setSpeechLevelValue,
-      handleRecognizedVoiceTranscript,
-      handleVoiceListeningFailure,
-      shouldAutoRestartVoice,
-    })
-  }
-
-  // ── Tencent Cloud ASR streaming conversation ───────────────────────────────
-
-  async function startTencentAsrConversation(options?: VoiceConversationOptions) {
-    hearingRuntime.activateEngine('tencent-asr')
-    await startTencentConversation({
-      options,
-      currentSettings: ctx.settingsRef.current,
-      voiceStateRef,
-      suppressVoiceReplyRef,
-      tencentAsrSessionRef,
-      tencentConversationRef,
-      clearPendingVoiceRestart,
-      canInterruptSpeech,
-      interruptSpeakingForVoiceInput,
-      setContinuousVoiceSession,
-      shouldKeepContinuousVoiceSession,
-      resetNoSpeechRestartCount,
-      clearTencentConversationState,
-      beginVoiceListeningSession,
-      dispatchVoiceSession,
-      dispatchVoiceSessionAndSync,
-      setVoiceState,
-      setMood: ctx.setMood,
-      setError: ctx.setError,
-      setLiveTranscript,
-      updateVoicePipeline,
-      appendVoiceTrace,
-      showPetStatus,
-      setSpeechLevelValue,
-      handleRecognizedVoiceTranscript,
-      handleVoiceListeningFailure,
-      shouldAutoRestartVoice,
-    })
-  }
-
-  // ── API recording conversation ─────────────────────────────────────────────
-
-  async function startApiVoiceConversation(options?: VoiceConversationOptions) {
-    hearingRuntime.activateEngine('api-recording')
-    await startApiRecordingConversation({
-      options,
-      currentSettings: ctx.settingsRef.current,
-      apiRecordingRef,
-      voiceStateRef,
-      suppressVoiceReplyRef,
-      clearPendingVoiceRestart,
-      canInterruptSpeech,
-      interruptSpeakingForVoiceInput,
-      setContinuousVoiceSession,
-      shouldKeepContinuousVoiceSession,
-      resetNoSpeechRestartCount,
-      stopApiRecording,
-      beginVoiceListeningSession,
-      dispatchVoiceSessionAndSync,
-      setVoiceState,
-      setMood: ctx.setMood,
-      setError: ctx.setError,
-      setLiveTranscript,
-      updateVoicePipeline,
-      appendVoiceTrace,
-      showPetStatus,
-      handleRecognizedVoiceTranscript,
-      handleVoiceListeningFailure,
-      shouldAutoRestartVoice,
-    })
-  }
-
-  // ── Voice entry points ─────────────────────────────────────────────────────
-
-  function toggleVoiceConversation() {
-    ctx.markPresenceActivity()
-
-    if (continuousVoiceActiveRef.current || voiceStateRef.current === 'listening') {
-      stopVoiceConversation()
-      return
-    }
-
-    if (voiceStateRef.current === 'speaking') {
-      if (!canInterruptSpeech()) {
-        showPetStatus('当前关闭了语音打断，请等我说完。', 2_800, 3_200)
-        return
-      }
-
-      if (!interruptSpeakingForVoiceInput()) {
-        return
-      }
-      ctx.setMood('happy')
-      showPetStatus('先停下播报，你继续说。', 2_400, 3_200)
-    }
-
-    startVoiceConversation()
-  }
-
-  function startVoiceConversation(options?: VoiceConversationOptions) {
-    try {
-    startVoiceConversationEntrypoint({
-      options,
-      settingsRef: ctx.settingsRef,
-      busyRef: ctx.busyRef,
-      activeVoiceConversationOptionsRef,
-      voiceStateRef,
-      suppressVoiceReplyRef,
-      recognitionRef,
-      vadSessionRef,
-      paraformerSessionRef,
-      sensevoiceSessionRef,
-      tencentAsrSessionRef,
-      clearPendingVoiceRestart,
-      canInterruptSpeech,
-      interruptSpeakingForVoiceInput,
-      setContinuousVoiceSession,
-      shouldKeepContinuousVoiceSession,
-      resetNoSpeechRestartCount,
-      beginVoiceListeningSession,
-      dispatchVoiceSessionAndSync,
-      setMood: ctx.setMood,
-      setError: ctx.setError,
-      setLiveTranscript,
-      updateVoicePipeline,
-      showPetStatus,
-      handleRecognizedVoiceTranscript,
-      handleVoiceListeningFailure,
-      shouldAutoRestartVoice,
-      scheduleVoiceRestart,
-      ensureSupportedSpeechInputSettings,
-      startParaformerConversation: startParaformerVoiceConversation,
-      startSenseVoiceConversation: startSenseVoiceVoiceConversation,
-      startTencentAsrConversation,
-      startVadVoiceConversation,
-      startApiVoiceConversation,
-    })
-    } catch (err) {
-      console.error('[Voice] startVoiceConversation failed:', err)
-      ctx.setError(err instanceof Error ? err.message : '语音启动失败，请重试。')
-      setVoiceState('idle')
-    }
-  }
-
-  function stopVoiceConversation() {
-    hearingRuntime.clearEngine()
-    stopVoiceConversationEntrypoint({
+      voiceSessionRef,
       continuousVoiceActiveRef,
       suppressVoiceReplyRef,
+      restartVoiceTimerRef,
+      noSpeechRestartCountRef,
       recognitionRef,
+      apiRecordingRef,
+      vadSessionRef,
+      speechLevelControllerRef,
+      audioPlaybackQueueRef,
+      streamAudioPlayerRef,
+      activeStreamingSpeechOutputRef,
+      speechLevelValueRef,
       paraformerSessionRef,
+      paraformerConversationRef,
       sensevoiceSessionRef,
+      sensevoiceConversationRef,
       tencentAsrSessionRef,
-      clearPendingVoiceRestart,
-      setContinuousVoiceSession,
-      resetNoSpeechRestartCount,
-      clearParaformerConversationState,
-      clearSenseVoiceConversationState,
-      clearTencentConversationState,
-      stopApiRecording,
-      stopVadListening,
-      stopActiveSpeechOutput,
-      dispatchVoiceSessionAndSync,
-      busEmit,
+      tencentConversationRef,
+      speechInterruptMonitorRef,
+      wakewordRuntimeRef,
+      wakewordAcknowledgingRef,
+      activeVoiceConversationOptionsRef,
+      assistantSpeechGenerationRef,
+      interruptedSpeechGenerationRef,
+      lastSubmittedVoiceContentRef,
+    },
+    setters: {
+      setVoiceState,
+      setVoicePipeline,
+      setVoiceTrace,
+      setSpeechLevel,
+      setContinuousVoiceActive,
       setLiveTranscript,
-      setMood: ctx.setMood,
-      updateVoicePipeline,
+      setWakewordState,
+    },
+    hookCallbacks: {
       showPetStatus,
-    })
+      updateVoicePipeline,
+      appendVoiceTrace,
+      clearPendingVoiceRestart,
+      ensureSupportedSpeechInputSettings,
+      busEmit,
+    },
+    hearingRuntime,
+    voiceBus,
+    bindingsHolder,
+    enginesHolder,
+    lifecycleHolder,
+    tunables: {
+      voiceTranscriptDedupWindowMs: VOICE_TRANSCRIPT_DEDUP_WINDOW_MS,
+      maxContinuousNoSpeechRestarts: MAX_CONTINUOUS_NO_SPEECH_RESTARTS,
+      browserTtsLipsyncIntervalMs: BROWSER_TTS_LIPSYNC_INTERVAL_MS,
+      audioTtsAnalyserFftSize: AUDIO_TTS_ANALYSER_FFT_SIZE,
+    },
   }
+
+  bindingsHolder.current = createVoiceBindings(runtimeBag)
+  enginesHolder.current = createVoiceConversationStarters(runtimeBag)
+  lifecycleHolder.current = createVoiceLifecycleControls(runtimeBag)
+  const testEntries = createVoiceTestEntries(runtimeBag)
+
+  const bindings = bindingsHolder.current
+  const lifecycle = lifecycleHolder.current
 
   const acknowledgeWakewordAndStartListening = useCallback((keyword: string) => {
     acknowledgeWakewordAndStartListeningRuntime({
       keyword,
       wakewordAcknowledgingRef,
-      currentSettings: ctx.settingsRef.current,
       showPetStatus,
       updateVoicePipeline,
       startVoiceConversation: (options) => {
         startVoiceConversationRef.current(options)
       },
     })
-  }, [ctx.settingsRef, showPetStatus, updateVoicePipeline])
+  }, [showPetStatus, updateVoicePipeline])
 
-  // ── Update stable refs for cross-reference ─────────────────────────────────
+  // ── Wakeword runtime binding ───────────────────────────────────────────────
 
   const handleWakewordRuntimeStateChange = useCallback((
     nextState: WakewordRuntimeState,
@@ -1086,8 +457,9 @@ export function useVoice(ctx: UseVoiceContext) {
       setWakewordState,
       appendVoiceTrace,
       showPetStatus,
+      busEmit: (event) => voiceBus.emit(event),
     })
-  }, [appendVoiceTrace, showPetStatus])
+  }, [appendVoiceTrace, showPetStatus, voiceBus])
 
   const handleWakewordKeywordDetected = useCallback((keyword: string) => {
     handleWakewordKeywordDetectedRuntime({
@@ -1095,10 +467,16 @@ export function useVoice(ctx: UseVoiceContext) {
       voiceStateRef,
       busyRef: ctx.busyRef,
       wakewordAcknowledgingRef,
+      vadSessionRef,
+      recognitionRef,
+      paraformerSessionRef,
+      sensevoiceSessionRef,
+      tencentAsrSessionRef,
       appendVoiceTrace,
       acknowledgeWakewordAndStartListening,
+      busEmit: (event) => voiceBus.emit(event),
     })
-  }, [acknowledgeWakewordAndStartListening, appendVoiceTrace, ctx.busyRef])
+  }, [acknowledgeWakewordAndStartListening, appendVoiceTrace, ctx.busyRef, voiceBus])
 
   useEffect(() => {
     wakewordRuntimeStateChangeRef.current = handleWakewordRuntimeStateChange
@@ -1109,8 +487,9 @@ export function useVoice(ctx: UseVoiceContext) {
   }, [handleWakewordKeywordDetected])
 
   useEffect(() => {
-    // Only create wakeword runtime if speech input is enabled and trigger mode is wake_word
-    if (!settings.speechInputEnabled || settings.voiceTriggerMode !== 'wake_word') {
+    // Wakeword always-on listener is independent of the manual speech input toggle.
+    // It only depends on the dedicated wakewordAlwaysOn setting and a non-empty wake word.
+    if (!settings.wakewordAlwaysOn) {
       return
     }
 
@@ -1120,57 +499,14 @@ export function useVoice(ctx: UseVoiceContext) {
       wakewordKeywordDetectedRef,
       setWakewordState,
     })
-  }, [settings.speechInputEnabled, settings.voiceTriggerMode])  
+  }, [settings.wakewordAlwaysOn])
 
   // Keep refs current — intentionally no deps to capture latest closures.
   // Use a layout-time assignment instead of useEffect to avoid extra render cycles.
-  startVoiceConversationRef.current = startVoiceConversation
-  stopApiRecordingRef.current = stopApiRecording
-  stopVadListeningRef.current = stopVadListening
-  stopActiveSpeechOutputRef.current = stopActiveSpeechOutput
-
-  // ── Test functions ─────────────────────────────────────────────────────────
-
-  async function testSpeechInputConnection(draftSettings: AppSettings) {
-    return testSpeechInputConnectionRuntime({
-      draftSettings,
-      testSpeechInputReadiness,
-    })
-  }
-
-  async function probeSpeechOutputPlaybackStart(
-    draftSettings: AppSettings,
-    text: string,
-  ) {
-    await probeSpeechOutputPlaybackStartRuntime({
-      draftSettings,
-      text,
-      stopActiveSpeechOutput,
-      startSpeechOutput,
-    })
-  }
-
-  async function testSpeechOutputReadiness(
-    draftSettings: AppSettings,
-    options?: {
-      playSample?: boolean
-      sampleText?: string
-    },
-  ) {
-    return testSpeechOutputReadinessRuntime({
-      draftSettings,
-      options,
-      probeSpeechOutputPlaybackStart,
-    })
-  }
-
-  async function runAudioSmokeTest(draftSettings: AppSettings) {
-    return runAudioSmokeTestRuntime({
-      draftSettings,
-      testSpeechInputConnection,
-      testSpeechOutputReadiness,
-    })
-  }
+  startVoiceConversationRef.current = lifecycle.startVoiceConversation
+  stopApiRecordingRef.current = bindings.stopApiRecording
+  stopVadListeningRef.current = bindings.stopVadListening
+  stopActiveSpeechOutputRef.current = bindings.stopActiveSpeechOutput
 
   // ── Effects ────────────────────────────────────────────────────────────────
 
@@ -1184,8 +520,8 @@ export function useVoice(ctx: UseVoiceContext) {
     if (settings.continuousVoiceModeEnabled || !continuousVoiceActiveRef.current) return
 
     clearPendingVoiceRestart()
-    setContinuousVoiceSession(false)
-  }, [settings.continuousVoiceModeEnabled, clearPendingVoiceRestart])
+    bindings.setContinuousVoiceSession(false)
+  }, [settings.continuousVoiceModeEnabled, clearPendingVoiceRestart, bindings])
 
   // If runtime continuous voice is already active on startup, keep the saved setting aligned.
   useEffect(() => {
@@ -1224,8 +560,7 @@ export function useVoice(ctx: UseVoiceContext) {
     const configuredWakeWord = settings.wakeWord.trim()
 
     const wakewordEnabled = (
-      settings.speechInputEnabled
-      && settings.voiceTriggerMode === 'wake_word'
+      settings.wakewordAlwaysOn
       && Boolean(configuredWakeWord)
       && view === 'pet'
     )
@@ -1245,7 +580,12 @@ export function useVoice(ctx: UseVoiceContext) {
       suspended,
       suspendReason,
     })
-  })
+  }, [
+    settings.wakewordAlwaysOn,
+    settings.wakeWord,
+    view,
+    voiceState,
+  ])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1267,10 +607,21 @@ export function useVoice(ctx: UseVoiceContext) {
 
   useEffect(() => {
     return () => {
+      voiceBus.reset()
       voiceBus.destroy()
       hearingRuntime.dispose()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Phase 1-1 observability: mirror every bus transition into the log.
+  // The log is a pure observer — it never blocks or mutates events.
+  useEffect(() => {
+    const log = getGlobalVoiceTransitionLog()
+    installVoiceLogDevHooks()
+    return voiceBus.onTransition((event, prevPhase, nextPhase) => {
+      log.record({ event, prevPhase, nextPhase })
+    })
+  }, [voiceBus])
 
   return {
     // State
@@ -1298,29 +649,29 @@ export function useVoice(ctx: UseVoiceContext) {
     appendVoiceTrace,
 
     // Voice control
-    toggleVoiceConversation,
-    startVoiceConversation,
-    stopVoiceConversation,
-    speakAssistantReply,
-    beginStreamingSpeechReply,
-    scheduleVoiceRestart,
+    toggleVoiceConversation: lifecycle.toggleVoiceConversation,
+    startVoiceConversation: lifecycle.startVoiceConversation,
+    stopVoiceConversation: lifecycle.stopVoiceConversation,
+    speakAssistantReply: lifecycle.speakAssistantReply,
+    beginStreamingSpeechReply: lifecycle.beginStreamingSpeechReply,
+    scheduleVoiceRestart: lifecycle.scheduleVoiceRestart,
     voiceBus,
     hearingRuntime,
     busEmit,
-    shouldAutoRestartVoice,
+    shouldAutoRestartVoice: bindings.shouldAutoRestartVoice,
     clearPendingVoiceRestart,
-    resetNoSpeechRestartCount,
-    setContinuousVoiceSession,
-    fillComposerWithVoiceTranscript,
-    stopActiveSpeechOutput,
+    resetNoSpeechRestartCount: bindings.resetNoSpeechRestartCount,
+    setContinuousVoiceSession: bindings.setContinuousVoiceSession,
+    fillComposerWithVoiceTranscript: bindings.fillComposerWithVoiceTranscript,
+    stopActiveSpeechOutput: bindings.stopActiveSpeechOutput,
 
     // Test functions
-    testSpeechInputConnection,
-    testSpeechOutputReadiness,
-    runAudioSmokeTest,
+    testSpeechInputConnection: testEntries.testSpeechInputConnection,
+    testSpeechOutputReadiness: testEntries.testSpeechOutputReadiness,
+    runAudioSmokeTest: testEntries.runAudioSmokeTest,
     ensureSupportedSpeechInputSettings,
 
     // Low-level speech output (for settings preview)
-    startSpeechOutput,
+    startSpeechOutput: bindings.startSpeechOutput,
   }
 }

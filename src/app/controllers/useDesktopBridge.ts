@@ -394,7 +394,7 @@ export function useDesktopBridge({
       })
       cleanup?.catch(() => undefined)
     }
-  }, [chat.assistantActivity, reminderTasks, settingsOpen, view, voice.continuousVoiceActive, voice.voiceState, voice.wakewordState])
+  }, [chat.assistantActivity, reminderTasks, settingsOpen, view, voice.continuousVoiceActive, voice.hearingRuntime, voice.voiceState, voice.wakewordState])
 
   useEffect(() => {
     const applyPetWindowState = (state: import('../../types').PetWindowState) => {

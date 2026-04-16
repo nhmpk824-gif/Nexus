@@ -7,6 +7,7 @@ import {
   extractChatResponseFinishReason,
   extractChatResponseToolCalls,
   extractChatStreamingDeltaContent,
+  extractChatStreamingDeltaToolCalls,
   isChatStreamingPayloadTerminal,
   normalizeChatProviderId,
   trimRepeatedStreamingDelta as trimChatStreamingDelta,
@@ -169,10 +170,30 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
     }
 
     let fullContent = ''
+    const toolCallAccumulator = new Map()
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let sseBuffer = ''
     let streamCompleted = false
+
+    const mergeToolCallFragments = (fragments) => {
+      for (const frag of fragments) {
+        const key = Number.isFinite(frag?.index) ? frag.index : 0
+        const existing = toolCallAccumulator.get(key) ?? {
+          id: '',
+          type: 'function',
+          function: { name: '', arguments: '' },
+        }
+        if (frag.id) existing.id = frag.id
+        if (frag.type) existing.type = frag.type
+        if (frag.function?.name) existing.function.name = frag.function.name
+        if (typeof frag.function?.arguments === 'string') {
+          existing.function.arguments =
+            (existing.function.arguments ?? '') + frag.function.arguments
+        }
+        toolCallAccumulator.set(key, existing)
+      }
+    }
 
     const processSseLine = (line) => {
       const trimmed = line.trim()
@@ -201,6 +222,15 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
             event.sender.send('chat:stream-delta', { requestId, delta })
           }
         }
+
+        const toolCallFragments = extractChatStreamingDeltaToolCalls(
+          requestSpec.protocol,
+          parsed,
+        )
+        if (toolCallFragments?.length) {
+          mergeToolCallFragments(toolCallFragments)
+        }
+
         return isChatStreamingPayloadTerminal(requestSpec.protocol, parsed)
       } catch (err) {
         console.error('[chat:stream] delta extraction error:', err?.message)
@@ -238,17 +268,36 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
     }
 
     const content = extractChatResponseContent(requestSpec.protocol, { content: fullContent })
-    if (!content) {
+
+    const toolCalls = toolCallAccumulator.size > 0
+      ? [...toolCallAccumulator.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([, tc]) => ({
+            id: tc.id || `call_${Math.random().toString(36).slice(2, 10)}`,
+            type: tc.type || 'function',
+            function: {
+              name: tc.function.name || '',
+              arguments: tc.function.arguments || '',
+            },
+          }))
+          .filter((tc) => tc.function.name)
+      : null
+
+    if (!content && !(toolCalls && toolCalls.length)) {
       throw new Error('模型返回了空内容，请检查接口兼容性。')
     }
 
     console.info('[chat:stream] success', {
       requestId,
       model: chatPayload.model,
-      contentLength: content.length,
+      contentLength: (content || '').length,
+      toolCallCount: toolCalls?.length ?? 0,
     })
 
-    return { content }
+    return {
+      content: content || '',
+      ...(toolCalls && toolCalls.length ? { tool_calls: toolCalls } : {}),
+    }
   })
 
   ipcMain.handle('chat:abort-stream', async (event, payload = {}) => {

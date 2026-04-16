@@ -155,9 +155,9 @@ export function formatGoalsForPrompt(goals: Goal[]): string {
 
   const lines = active.map((g) => {
     const progress = g.subtasks.length > 0 ? ` (${g.progress}%)` : ''
-    const deadline = g.deadline ? ` 截止: ${new Date(g.deadline).toLocaleDateString('zh-CN')}` : ''
+    const deadline = g.deadline ? ` due: ${new Date(g.deadline).toLocaleDateString('zh-CN')}` : ''
     return `- ${g.title}${progress}${deadline}`
   })
 
-  return `## 用户当前目标\n${lines.join('\n')}`
+  return `## User's current goals\n${lines.join('\n')}`
 }

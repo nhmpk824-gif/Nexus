@@ -178,64 +178,64 @@ describe('createNumericEvaluation', () => {
 // ── Constraints ──
 
 describe('applyConstraints', () => {
-  type Payload = { voice: string; clonedVoiceId: string }
+  type Payload = { voice: string; customField: string }
 
   it('applies matching domain constraints', () => {
     const set = createConstraintSet<Payload>('speech-output', [
       {
-        key: 'clonedVoiceId',
+        key: 'customField',
         apply: (p, candidateId) =>
-          candidateId === 'elevenlabs-tts' ? p : { ...p, clonedVoiceId: '' },
+          candidateId === 'elevenlabs-tts' ? p : { ...p, customField: '' },
       },
     ])
 
     const result = applyConstraints(
-      { voice: 'alice', clonedVoiceId: 'clone-123' },
+      { voice: 'alice', customField: 'value-123' },
       'minimax-tts',
       'speech-output',
       [set],
     )
 
-    assert.equal(result.payload.clonedVoiceId, '')
-    assert.deepEqual(result.applied, ['clonedVoiceId'])
+    assert.equal(result.payload.customField, '')
+    assert.deepEqual(result.applied, ['customField'])
   })
 
-  it('preserves clonedVoiceId for elevenlabs', () => {
+  it('preserves customField for elevenlabs', () => {
     const set = createConstraintSet<Payload>('speech-output', [
       {
-        key: 'clonedVoiceId',
+        key: 'customField',
         apply: (p, candidateId) =>
-          candidateId === 'elevenlabs-tts' ? p : { ...p, clonedVoiceId: '' },
+          candidateId === 'elevenlabs-tts' ? p : { ...p, customField: '' },
       },
     ])
 
     const result = applyConstraints(
-      { voice: 'alice', clonedVoiceId: 'clone-123' },
+      { voice: 'alice', customField: 'value-123' },
       'elevenlabs-tts',
       'speech-output',
       [set],
     )
 
-    assert.equal(result.payload.clonedVoiceId, 'clone-123')
+    assert.equal(result.payload.customField, 'value-123')
     assert.deepEqual(result.applied, [])
   })
 
   it('skips constraints from non-matching domains', () => {
     const set = createConstraintSet<Payload>('chat', [
       {
-        key: 'clonedVoiceId',
-        apply: (p) => ({ ...p, clonedVoiceId: 'SHOULD_NOT_APPLY' }),
+        key: 'customField',
+        apply: (p) => ({ ...p, customField: 'SHOULD_NOT_APPLY' }),
       },
     ])
 
     const result = applyConstraints(
-      { voice: 'alice', clonedVoiceId: 'original' },
+      { voice: 'alice', customField: 'original' },
       'minimax-tts',
       'speech-output',
       [set],
     )
 
-    assert.equal(result.payload.clonedVoiceId, 'original')
+    assert.equal(result.payload.customField, 'original')
     assert.deepEqual(result.applied, [])
   })
 })

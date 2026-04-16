@@ -3,16 +3,21 @@ import {
   createWakewordRuntime,
   type WakewordRuntimeController,
 } from '../../features/hearing/wakewordRuntime.ts'
-import { clamp } from '../../lib/common'
-import { speakText as speakBrowserText } from '../../lib/voice'
+import type { VoiceBusEvent } from '../../features/voice/busEvents'
+import { VoiceReasonCodes } from '../../features/voice/voiceReasonCodes'
 import type {
-  AppSettings,
   VoicePipelineState,
   VoiceState,
   VoiceTraceEntry,
   WakewordRuntimeState,
 } from '../../types'
-import type { VoiceConversationOptions } from './types'
+import type { BrowserSpeechRecognition } from '../../lib/voice'
+import type { ParaformerStreamSession } from '../../features/hearing/localParaformer.ts'
+import type { SenseVoiceStreamSession } from '../../features/hearing/localSenseVoice.ts'
+import type { TencentAsrStreamSession } from '../../features/hearing/tencentAsr.ts'
+import type { VadConversationSession, VoiceConversationOptions } from './types'
+
+type BusEmit = (event: VoiceBusEvent) => void
 
 type ShowPetStatus = (
   message: string,
@@ -23,7 +28,6 @@ type ShowPetStatus = (
 export type AcknowledgeWakewordAndStartListeningRuntimeOptions = {
   keyword: string
   wakewordAcknowledgingRef: MutableRefObject<boolean>
-  currentSettings: AppSettings
   showPetStatus: ShowPetStatus
   updateVoicePipeline: (
     step: VoicePipelineState['step'],
@@ -43,6 +47,7 @@ export type HandleWakewordRuntimeStateChangeRuntimeOptions = {
     tone?: VoiceTraceEntry['tone'],
   ) => void
   showPetStatus: ShowPetStatus
+  busEmit?: BusEmit
 }
 
 export type HandleWakewordKeywordDetectedRuntimeOptions = {
@@ -50,12 +55,23 @@ export type HandleWakewordKeywordDetectedRuntimeOptions = {
   voiceStateRef: MutableRefObject<VoiceState>
   busyRef: RefObject<boolean>
   wakewordAcknowledgingRef: MutableRefObject<boolean>
+  // Concrete session refs — the guard checks these directly instead of
+  // trusting voiceStateRef, which can drift between the old session
+  // machine and the new voice bus (they both write it, and the old
+  // machine never fires `session_completed` in the direct_send success
+  // path, leaving the ref stuck at 'processing' after a turn).
+  vadSessionRef: MutableRefObject<VadConversationSession | null>
+  recognitionRef: MutableRefObject<BrowserSpeechRecognition | null>
+  paraformerSessionRef: MutableRefObject<ParaformerStreamSession | null>
+  sensevoiceSessionRef: MutableRefObject<SenseVoiceStreamSession | null>
+  tencentAsrSessionRef: MutableRefObject<TencentAsrStreamSession | null>
   appendVoiceTrace: (
     title: string,
     detail: string,
     tone?: VoiceTraceEntry['tone'],
   ) => void
   acknowledgeWakewordAndStartListening: (keyword: string) => void
+  busEmit?: BusEmit
 }
 
 export type CreateWakewordRuntimeBindingOptions = {
@@ -68,21 +84,31 @@ export type CreateWakewordRuntimeBindingOptions = {
   setWakewordState: (state: WakewordRuntimeState) => void
 }
 
-const WAKEWORD_ACK_PHRASES = [
-  { speech: '我在', status: '我在。' },
-  { speech: '在的', status: '在的～' },
-  { speech: '我在听', status: '我在听。' },
-  { speech: '你说', status: '你说～' },
-  { speech: '嗯？', status: '嗯？' },
-  { speech: '来了', status: '来了来了～' },
-  { speech: '我在呢', status: '我在呢。' },
-  { speech: '诶', status: '诶？什么事～' },
-  { speech: '好的，说吧', status: '好的，说吧。' },
-  { speech: '随时待命', status: '随时待命。' },
+const WAKEWORD_ACK_STATUS_PHRASES = [
+  '我在。',
+  '在的～',
+  '我在听。',
+  '你说～',
+  '嗯？',
+  '来了来了～',
+  '我在呢。',
+  '诶？什么事～',
+  '好的，说吧。',
+  '随时待命。',
 ]
 
-function pickAckPhrase() {
-  return WAKEWORD_ACK_PHRASES[Math.floor(Math.random() * WAKEWORD_ACK_PHRASES.length)]
+// Grace window between wake-word detection and VAD subscription start.
+// The old 420 ms value was chosen to hide a short browser-TTS ack that's
+// since been removed. With the new main-process VAD, any speech the user
+// produces during this window is lost (VAD doesn't buffer pre-subscribe
+// audio), so keep it as short as possible — just enough for the renderer
+// to set up the subscription before the next ScriptProcessor frame.
+const WAKEWORD_ACK_DELAY_MS = 120
+
+function pickAckStatus() {
+  return WAKEWORD_ACK_STATUS_PHRASES[
+    Math.floor(Math.random() * WAKEWORD_ACK_STATUS_PHRASES.length)
+  ]
 }
 
 export function acknowledgeWakewordAndStartListeningRuntime(
@@ -93,56 +119,14 @@ export function acknowledgeWakewordAndStartListeningRuntime(
   }
 
   options.wakewordAcknowledgingRef.current = true
-  let settled = false
-  let fallbackTimerId: number | null = null
 
-  const finish = () => {
-    if (settled) {
-      return
-    }
-
-    settled = true
-    options.wakewordAcknowledgingRef.current = false
-    if (fallbackTimerId !== null) {
-      window.clearTimeout(fallbackTimerId)
-    }
-    options.startVoiceConversation({ wakewordTriggered: true })
-  }
-
-  const ack = pickAckPhrase()
-  options.showPetStatus(ack.status, 1_600, 1_000)
+  options.showPetStatus(pickAckStatus(), 1_600, 1_000)
   options.updateVoicePipeline('recognized', `检测到唤醒词”${options.keyword}”，正在进入收音`)
 
-  const utterance = speakBrowserText({
-    text: ack.speech,
-    lang: options.currentSettings.speechSynthesisLang || 'zh-CN',
-    rate: clamp(
-      Number.isFinite(options.currentSettings.speechRate)
-        ? options.currentSettings.speechRate * 1.08
-        : 1.08,
-      0.9,
-      1.6,
-    ),
-    pitch: 1,
-    volume: clamp(
-      Number.isFinite(options.currentSettings.speechVolume)
-        ? Math.max(options.currentSettings.speechVolume, 0.72)
-        : 0.82,
-      0.4,
-      1,
-    ),
-    onEnd: finish,
-    onError: () => finish(),
-  })
-
-  if (!utterance) {
-    finish()
-    return
-  }
-
-  fallbackTimerId = window.setTimeout(() => {
-    finish()
-  }, 1_200)
+  window.setTimeout(() => {
+    options.wakewordAcknowledgingRef.current = false
+    options.startVoiceConversation({ wakewordTriggered: true })
+  }, WAKEWORD_ACK_DELAY_MS)
 }
 
 export function handleWakewordRuntimeStateChangeRuntime(
@@ -160,7 +144,34 @@ export function handleWakewordRuntimeStateChangeRuntime(
     && options.nextState.phase === 'listening'
     && options.nextState.wakeWord
   ) {
-    options.appendVoiceTrace('唤醒词监听已启动', `正在等待“${options.nextState.wakeWord}”`)
+    options.appendVoiceTrace('Wake word listener started', `waiting for "${options.nextState.wakeWord}"`)
+    options.busEmit?.({
+      type: 'wake:armed',
+      wakeWord: options.nextState.wakeWord,
+      reason: VoiceReasonCodes.WAKE_ARMED,
+    })
+    return
+  }
+
+  if (
+    (phaseChanged || wakeWordChanged) && options.nextState.phase === 'paused'
+  ) {
+    options.busEmit?.({
+      type: 'wake:suspended',
+      suspendReason: options.nextState.suspendReason || options.nextState.reason || '',
+      reason: VoiceReasonCodes.WAKE_SUSPENDED,
+    })
+    return
+  }
+
+  if (
+    (phaseChanged || wakeWordChanged) && options.nextState.phase === 'cooldown'
+  ) {
+    options.busEmit?.({
+      type: 'wake:cooldown',
+      cooldownUntil: options.nextState.cooldownUntil ?? '',
+      reason: VoiceReasonCodes.WAKE_COOLDOWN,
+    })
     return
   }
 
@@ -171,11 +182,16 @@ export function handleWakewordRuntimeStateChangeRuntime(
   ) {
     console.warn('[Voice] Wake word unavailable:', options.nextState.reason)
     options.appendVoiceTrace(
-      '唤醒词不可用',
-      `唤醒词“${options.nextState.wakeWord || '未设置'}”不可用：${options.nextState.reason}`,
+      'Wake word unavailable',
+      `wake word "${options.nextState.wakeWord || '(unset)'}" unavailable: ${options.nextState.reason}`,
       'error',
     )
     options.showPetStatus(`唤醒词不可用：${options.nextState.reason}`, 4_200, 4_500)
+    options.busEmit?.({
+      type: 'wake:error',
+      message: options.nextState.reason,
+      reason: VoiceReasonCodes.WAKE_UNAVAILABLE,
+    })
     return
   }
 
@@ -185,24 +201,79 @@ export function handleWakewordRuntimeStateChangeRuntime(
     && (phaseChanged || errorChanged)
   ) {
     console.warn('[Voice] Wake word listener error:', options.nextState.error)
-    options.appendVoiceTrace('唤醒词监听异常', options.nextState.error, 'error')
+    options.appendVoiceTrace('Wake word listener error', options.nextState.error, 'error')
     options.showPetStatus(`唤醒词监听异常：${options.nextState.error}`, 4_200, 4_500)
+    options.busEmit?.({
+      type: 'wake:error',
+      message: options.nextState.error,
+      reason: VoiceReasonCodes.WAKE_RUNTIME_ERROR,
+      meta: { retryCount: options.nextState.retryCount },
+    })
   }
 }
 
 export function handleWakewordKeywordDetectedRuntime(
   options: HandleWakewordKeywordDetectedRuntimeOptions,
 ) {
-  if (
-    options.voiceStateRef.current !== 'idle'
-    || options.busyRef.current
-    || options.wakewordAcknowledgingRef.current
-  ) {
+  // Guard against re-triggering *while an actual session is running*.
+  // We intentionally do NOT check `voiceStateRef` — both the legacy
+  // `reduceVoiceSessionState` and the new VoiceBus state machine write
+  // it, and the legacy machine never dispatches `session_completed` in
+  // the direct_send success path, so voiceStateRef can stay at
+  // 'processing' after a fully-completed turn and permanently debounce
+  // every subsequent wakeword hit.
+  //
+  // Instead, inspect the concrete session refs — if they're all null,
+  // there is no in-flight VAD/STT session and the wake is safe to fire
+  // regardless of what the legacy state machine thinks. busy + ack are
+  // kept as short-window guards (chat turn in flight, ack delay pending).
+  const hasActiveSession = Boolean(
+    options.vadSessionRef.current
+    || options.recognitionRef.current
+    || options.paraformerSessionRef.current
+    || options.sensevoiceSessionRef.current
+    || options.tencentAsrSessionRef.current,
+  )
+  const debouncedBusy = options.busyRef.current
+  const debouncedAck = options.wakewordAcknowledgingRef.current
+
+  // `speaking` is the one voiceState where we really do want to debounce —
+  // mid-TTS wake-word hits are usually self-triggers from the playback
+  // bleeding into the mic. Any other voiceState value (idle / listening /
+  // processing) is allowed through so long as no session is actually live.
+  const isSpeaking = options.voiceStateRef.current === 'speaking'
+
+  if (hasActiveSession || debouncedBusy || debouncedAck || isSpeaking) {
+    console.warn('[Wake] keyword debounced — guards:', {
+      hasActiveSession,
+      busy: debouncedBusy,
+      acknowledging: debouncedAck,
+      speaking: isSpeaking,
+      voiceState: options.voiceStateRef.current,
+      keyword: options.keyword,
+    })
+    options.busEmit?.({
+      type: 'wake:debounced',
+      wakeWord: options.keyword,
+      keyword: options.keyword,
+      reason: VoiceReasonCodes.WAKE_DEBOUNCED,
+      meta: {
+        voiceState: options.voiceStateRef.current,
+        busy: debouncedBusy,
+        acknowledging: debouncedAck,
+      },
+    })
     return
   }
 
   console.info('[Voice] Wake word detected:', options.keyword)
-  options.appendVoiceTrace('唤醒词已触发', `检测到“${options.keyword}”，开始打开语音会话`)
+  options.appendVoiceTrace('Wake word triggered', `detected "${options.keyword}", opening voice session`)
+  options.busEmit?.({
+    type: 'wake:detected',
+    wakeWord: options.keyword,
+    keyword: options.keyword,
+    reason: VoiceReasonCodes.WAKE_MATCH,
+  })
   options.acknowledgeWakewordAndStartListening(options.keyword)
 }
 

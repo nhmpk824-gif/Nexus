@@ -9,8 +9,9 @@ const SETTINGS_KEY_FIELDS: readonly (keyof AppSettings)[] = [
   'apiKey',
   'speechInputApiKey',
   'speechOutputApiKey',
-  'voiceCloneApiKey',
   'toolWebSearchApiKey',
+  'telegramBotToken',
+  'discordBotToken',
 ] as const
 
 const VAULT_SLOT_PREFIX = 'settings:'

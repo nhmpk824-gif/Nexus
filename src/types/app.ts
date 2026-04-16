@@ -78,7 +78,29 @@ export interface TextProviderSettings {
   apiKey: string
   model: string
   chatFailoverEnabled: boolean
+  /**
+   * Use prompt-mode MCP for providers that don't support native function
+   * calling. When true, MCP tool catalog is injected into the system prompt
+   * and the model invokes tools by emitting `<tool_call>...</tool_call>`
+   * markers in plain text instead of populating the OpenAI `tools` field.
+   */
+  mcpPromptModeEnabled: boolean
   textProviderProfiles: Record<string, TextProviderProfile>
+  smartModelRoutingEnabled: boolean
+  modelCheap: string
+  modelStandard: string
+  modelHeavy: string
+  budgetDailyCapUsd: number
+  budgetMonthlyCapUsd: number
+  budgetHardStopEnabled: boolean
+  budgetDowngradeRatio: number
+  /**
+   * Absolute path that the agent loop's built-in fs tools (Read/Edit/Glob/
+   * Grep) are sandboxed to. Empty string disables the fs tools entirely.
+   */
+  agentWorkspaceRoot: string
+  /** Maximum agent loop iterations before forced abort. */
+  agentMaxIterations: number
 }
 
 export interface SpeechInputSettings {
@@ -117,13 +139,8 @@ export interface VoiceControlSettings {
   voiceTriggerMode: VoiceTriggerMode
   wakeWordEnabled: boolean
   wakeWord: string
-}
-
-export interface VoiceCloneSettings {
-  voiceCloneProviderId: string
-  voiceCloneApiBaseUrl: string
-  voiceCloneApiKey: string
-  clonedVoiceId: string
+  wakewordAlwaysOn: boolean
+  wakewordSessionIdleTimeoutMs: number
 }
 
 export interface MemorySettings {
@@ -197,10 +214,12 @@ export interface IntegrationSettings {
   telegramIntegrationEnabled: boolean
   telegramBotToken: string
   telegramAllowedChatIds: string
+  ownerTelegramChatIds: string
   telegramPermissionMode: IntegrationPermissionMode
   discordIntegrationEnabled: boolean
   discordBotToken: string
   discordAllowedChannelIds: string
+  ownerDiscordUserIds: string
   discordPermissionMode: IntegrationPermissionMode
   mcpPermissionMode: IntegrationPermissionMode
 }
@@ -217,7 +236,6 @@ export type AppSettings =
   & SpeechInputSettings
   & SpeechOutputSettings
   & VoiceControlSettings
-  & VoiceCloneSettings
   & MemorySettings
   & ContextSettings
   & ToolSettings

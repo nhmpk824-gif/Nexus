@@ -7,6 +7,7 @@ import {
   saveTextFileWithFallback,
   shorten,
 } from '../lib'
+import { getCoreRuntime } from '../lib/coreRuntime'
 import { parseChatHistoryArchive, serializeChatHistoryArchive } from '../features/chat'
 import {
   createDailyMemoryEntry,
@@ -14,15 +15,14 @@ import {
   markRecalled,
   mergeMemories,
 } from '../features/memory'
-import { planToolIntent, type ToolPlannerContext } from '../features/tools'
 import { formatTraceLabel, logVoiceEvent } from '../features/voice'
 import {
   createAssistantReplyRunner,
-  createBackgroundWebSearchRunner,
   createLocalReminderActionRunner,
   createPendingReminderDraft,
-  createToolIntentHandler,
+  executeAssistantTurn,
   getFreshPendingReminderDraft,
+  handleSlashCommand,
   PENDING_REMINDER_DRAFT_TTL_MS,
   getSpeechOutputErrorMessage,
   resolveReminderIntentWithPendingDraft,
@@ -38,6 +38,7 @@ import type {
   ChatMessageTone,
   DailyMemoryEntry,
   PetDialogBubbleState,
+  PetThoughtBubbleState,
 } from '../types'
 
 export type { UseChatContext } from './chat'
@@ -62,19 +63,22 @@ export function useChat(ctx: UseChatContext) {
     }
   }, [])
   const [petDialogBubble, setPetDialogBubble] = useState<PetDialogBubbleState | null>(null)
+  const [petThoughtBubble, setPetThoughtBubble] = useState<PetThoughtBubbleState | null>(null)
   const [assistantActivity, setAssistantActivity] = useState<AssistantRuntimeActivity>('idle')
+  const [pendingImage, setPendingImageState] = useState<string | null>(null)
 
   const messagesRef = useRef<ChatMessage[]>(messages)
   const inputRef = useRef('')
+  const pendingImageRef = useRef<string | null>(null)
   const busyRef = useRef(false)
-  const backgroundSearchCountRef = useRef(0)
   const activeTurnIdRef = useRef(0)
   const activeStreamAbortRef = useRef<(() => Promise<void>) | null>(null)
   const pendingReminderDraftRef = useRef<PendingReminderDraft | null>(null)
-  const toolPlannerContextRef = useRef<ToolPlannerContext | null>(null)
   const petDialogHideTimerRef = useRef<number | null>(null)
+  const petThoughtHideTimerRef = useRef<number | null>(null)
   const deferredCompanionNoticesRef = useRef<CompanionNoticePayload[]>([])
   const flushingDeferredCompanionNoticesRef = useRef(false)
+  const recentCompanionNoticesRef = useRef<Map<string, number>>(new Map())
   const messagesSaveSkipRef = useRef(true)
 
   useEffect(() => {
@@ -85,14 +89,18 @@ export function useChat(ctx: UseChatContext) {
     inputRef.current = input
   }, [input])
 
+  const setPendingImage = useCallback((dataUrl: string | null) => {
+    pendingImageRef.current = dataUrl
+    setPendingImageState(dataUrl)
+  }, [])
+
   useEffect(() => {
     busyRef.current = busy
-    if (backgroundSearchCountRef.current > 0) {
-      setAssistantActivity('searching')
-    } else {
-      setAssistantActivity(busy ? 'thinking' : 'idle')
-    }
+    setAssistantActivity(busy ? 'thinking' : 'idle')
   }, [busy])
+
+  const sessionIdRef = useRef<string | null>(null)
+  const mirroredMessageIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (messagesSaveSkipRef.current) {
@@ -100,6 +108,26 @@ export function useChat(ctx: UseChatContext) {
       return
     }
     saveChatMessages(messages)
+
+    const { sessionStore } = getCoreRuntime()
+    if (!sessionIdRef.current) {
+      const session = sessionStore.createSession('local-chat', 'Companion chat')
+      sessionIdRef.current = session.id
+    }
+    const mirrored = mirroredMessageIdsRef.current
+    for (const msg of messages) {
+      if (mirrored.has(msg.id)) continue
+      if (msg.role !== 'user' && msg.role !== 'assistant') {
+        mirrored.add(msg.id)
+        continue
+      }
+      sessionStore.appendMessage(sessionIdRef.current!, {
+        role: msg.role,
+        content: msg.content,
+        timestamp: Date.parse(msg.createdAt) || Date.now(),
+      })
+      mirrored.add(msg.id)
+    }
   }, [messages])
 
   const clearPetDialogHideTimer = useCallback(() => {
@@ -136,10 +164,44 @@ export function useChat(ctx: UseChatContext) {
     clearPetDialogHideTimer()
   }, [clearPetDialogHideTimer])
 
+  const clearPetThoughtHideTimer = useCallback(() => {
+    if (petThoughtHideTimerRef.current) {
+      window.clearTimeout(petThoughtHideTimerRef.current)
+      petThoughtHideTimerRef.current = null
+    }
+  }, [])
+
+  const pushInnerThought = useCallback((thought: string, urgency: number, autoHideMs = 8_000) => {
+    const trimmed = thought.trim()
+    if (!trimmed) return
+    clearPetThoughtHideTimer()
+    setPetThoughtBubble({
+      thought: trimmed,
+      urgency: Math.max(0, Math.min(100, Math.round(urgency))),
+      createdAt: new Date().toISOString(),
+    })
+    if (autoHideMs > 0) {
+      petThoughtHideTimerRef.current = window.setTimeout(() => {
+        petThoughtHideTimerRef.current = null
+        setPetThoughtBubble(null)
+      }, autoHideMs)
+    }
+  }, [clearPetThoughtHideTimer])
+
+  const hideInnerThought = useCallback(() => {
+    clearPetThoughtHideTimer()
+    setPetThoughtBubble(null)
+  }, [clearPetThoughtHideTimer])
+
+  useEffect(() => () => {
+    clearPetThoughtHideTimer()
+  }, [clearPetThoughtHideTimer])
+
   useEffect(() => () => {
     if (errorTimerRef.current) {
       window.clearTimeout(errorTimerRef.current)
     }
+    activeStreamAbortRef.current?.()
   }, [])
 
   const appendChatMessage = useCallback((message: ChatMessage) => {
@@ -165,6 +227,23 @@ export function useChat(ctx: UseChatContext) {
     const bubbleContent = (options.bubbleContent ?? chatContent).trim()
     const speechContent = options.speechContent?.trim() ?? ''
     const createdAt = new Date().toISOString()
+
+    // Dedupe gate: drop identical broadcasts within 90s. StrictMode double-mount
+    // and race conditions between autonomy tick paths can otherwise produce
+    // twin 【早报】/【自主】 notices with the same content.
+    const dedupeKey = chatContent || bubbleContent || speechContent
+    if (dedupeKey) {
+      const now = Date.now()
+      const recent = recentCompanionNoticesRef.current
+      for (const [key, ts] of recent) {
+        if (now - ts > 90_000) recent.delete(key)
+      }
+      const lastTs = recent.get(dedupeKey)
+      if (lastTs !== undefined && now - lastTs < 90_000) {
+        return
+      }
+      recent.set(dedupeKey, now)
+    }
 
     if (chatContent) {
       appendChatMessage({
@@ -230,11 +309,6 @@ export function useChat(ctx: UseChatContext) {
     }
   }, [canDeliverDeferredCompanionNotice, pushCompanionNotice])
 
-  const enqueueDeferredCompanionNotice = useCallback((notice: CompanionNoticePayload) => {
-    deferredCompanionNoticesRef.current.push(notice)
-    void flushDeferredCompanionNotices()
-  }, [flushDeferredCompanionNotices])
-
   function getPendingReminderDraft() {
     const draft = getFreshPendingReminderDraft(
       pendingReminderDraftRef.current,
@@ -257,24 +331,10 @@ export function useChat(ctx: UseChatContext) {
     pendingReminderDraftRef.current = null
   }, [])
 
-  const beginBackgroundSearchActivity = useCallback(() => {
-    backgroundSearchCountRef.current += 1
-    setAssistantActivity('searching')
-  }, [])
-
-  const endBackgroundSearchActivity = useCallback(() => {
-    backgroundSearchCountRef.current = Math.max(0, backgroundSearchCountRef.current - 1)
-    if (backgroundSearchCountRef.current > 0) {
-      setAssistantActivity('searching')
-    } else {
-      setAssistantActivity(busyRef.current ? 'thinking' : 'idle')
-    }
-  }, [])
-
   const handleSpeechPlaybackFailure = useCallback((speechError: unknown, options: {
     traceId?: string
     traceLabel?: string
-    source: 'text' | 'voice'
+    source: 'text' | 'voice' | 'telegram' | 'discord'
     fromVoice: boolean
     shouldResumeContinuousVoice: boolean
   }) => {
@@ -300,39 +360,17 @@ export function useChat(ctx: UseChatContext) {
   }, [ctx, setError])
 
   const syncAssistantActivity = useCallback(() => {
-    if (backgroundSearchCountRef.current > 0) {
-      setAssistantActivity('searching')
-    } else {
-      setAssistantActivity(busyRef.current ? 'thinking' : 'idle')
-    }
+    setAssistantActivity(busyRef.current ? 'thinking' : 'idle')
   }, [])
-
-  const runBackgroundWebSearch = useMemo(() => createBackgroundWebSearchRunner({
-      ctx,
-      beginBackgroundSearchActivity,
-      endBackgroundSearchActivity,
-      enqueueDeferredCompanionNotice,
-      setAssistantActivity,
-    }), [beginBackgroundSearchActivity, ctx, endBackgroundSearchActivity, enqueueDeferredCompanionNotice])
 
   const runLocalReminderAction = useMemo(() => createLocalReminderActionRunner({
       ctx,
       clearPendingReminderDraft,
       pushCompanionNotice,
-      resetToolPlannerContext: () => {
-        toolPlannerContextRef.current = null
-      },
       setAssistantActivity,
       setPendingReminderDraft,
       syncAssistantActivity,
     }), [clearPendingReminderDraft, ctx, pushCompanionNotice, setPendingReminderDraft, syncAssistantActivity])
-
-  const handleToolIntent = useMemo(() => createToolIntentHandler({
-      ctx,
-      pushCompanionNotice,
-      runBackgroundWebSearch,
-      flushDeferredCompanionNotices,
-    }), [ctx, flushDeferredCompanionNotices, pushCompanionNotice, runBackgroundWebSearch])
 
   const runAssistantReplyTurn = useMemo(() => createAssistantReplyRunner({
       ctx,
@@ -341,8 +379,17 @@ export function useChat(ctx: UseChatContext) {
       presentPetDialogBubble,
       handleSpeechPlaybackFailure,
       setError,
-      setActiveStreamAbort: (abort) => {
-        activeStreamAbortRef.current = abort
+      setActiveStreamAbort: (abortOrUpdater) => {
+        if (typeof abortOrUpdater === 'function' && abortOrUpdater.length > 0) {
+          // Updater form: (current) => newValue
+          const updater = abortOrUpdater as (
+            current: (() => Promise<void>) | null,
+          ) => (() => Promise<void>) | null
+          activeStreamAbortRef.current = updater(activeStreamAbortRef.current)
+        } else {
+          // Direct value form (null or an abort fn with 0 params)
+          activeStreamAbortRef.current = abortOrUpdater as (() => Promise<void>) | null
+        }
       },
       onMemoryRecalled: (recalledIds) => {
         const idSet = new Set(recalledIds)
@@ -405,7 +452,7 @@ export function useChat(ctx: UseChatContext) {
   async function sendMessage(
     rawContent?: string,
     options?: {
-      source?: 'text' | 'voice'
+      source?: 'text' | 'voice' | 'telegram' | 'discord'
       traceId?: string
     },
   ) {
@@ -415,14 +462,27 @@ export function useChat(ctx: UseChatContext) {
     const traceId = fromVoice ? (options?.traceId ?? createId('voice')) : ''
     const traceLabel = traceId ? formatTraceLabel(traceId) : ''
     const content = (rawContent ?? inputRef.current).trim()
+    // Capture the pending image once at the top — we don't want it to disappear
+    // mid-flight if the user clears it during send. Voice turns ignore images
+    // (they go through the STT pipeline with no composer attachment).
+    const attachedImage = !fromVoice && !rawContent ? pendingImageRef.current : null
 
-    if (!content) {
+    if (!content && !attachedImage) {
       if (fromVoice) {
         logVoiceEvent('voice transcript was empty, nothing was sent', { traceId })
         ctx.updateVoicePipeline('idle', '没有可发送的语音文本')
         ctx.appendVoiceTrace('发送取消', `#${traceLabel} 识别文本为空`, 'error')
       }
       return false
+    }
+
+    const slashResult = await handleSlashCommand(content)
+    if (slashResult.handled) {
+      if (slashResult.messages) {
+        setMessages((prev) => [...prev, ...slashResult.messages!])
+      }
+      setInput('')
+      return true
     }
 
     if (busyRef.current) {
@@ -437,6 +497,11 @@ export function useChat(ctx: UseChatContext) {
       return false
     }
 
+    // Resume the voice loop after TTS for ALL voice-originated turns. Even
+    // in wake-word mode, this gives the user a brief VAD window to speak
+    // again immediately after the companion replies, without re-waking.
+    // If they don't speak, the noSpeechTimer (4.8s) closes the session
+    // and the wake word listener takes over normally.
     const shouldResumeContinuousVoice = fromVoice
 
     if (ctx.voiceStateRef.current === 'speaking') {
@@ -462,6 +527,14 @@ export function useChat(ctx: UseChatContext) {
       role: 'user',
       content,
       createdAt: new Date().toISOString(),
+      ...(attachedImage ? { images: [attachedImage] } : {}),
+    }
+
+    // Consume the pending image as soon as it's attached to the outgoing
+    // message — both the ref (for reentrancy) and React state (for the UI chip).
+    if (attachedImage) {
+      pendingImageRef.current = null
+      setPendingImageState(null)
     }
 
     const nextMessages = [...messagesRef.current, userMessage]
@@ -507,7 +580,7 @@ export function useChat(ctx: UseChatContext) {
         setError(errorMessage)
         ctx.appendDebugConsoleEvent({
           source: 'reminder',
-          title: '本地提醒处理失败',
+          title: 'Local reminder handling failed',
           detail: errorMessage,
           tone: 'error',
         })
@@ -520,83 +593,30 @@ export function useChat(ctx: UseChatContext) {
       }
     }
 
-    const toolIntentPlan = planToolIntent(content, toolPlannerContextRef.current, currentSettings)
-    toolPlannerContextRef.current = toolIntentPlan.nextContext
-
-    if (await handleToolIntent({
-      toolIntentPlan,
-      currentSettings,
-      content,
-      fromVoice,
-      traceLabel,
-      shouldResumeContinuousVoice,
-    })) {
-      return true
-    }
-
-    busyRef.current = true
-    setBusy(true)
-    ctx.clearPetPerformanceCue()
-    ctx.setMood('thinking')
-    ctx.setVoiceState('processing')
-    ctx.busEmit({ type: 'chat:busy_changed', busy: true })
-    setError(null)
-    ctx.setLiveTranscript('')
-    const turnId = ++activeTurnIdRef.current
-    void activeStreamAbortRef.current?.().catch(() => undefined)
-    activeStreamAbortRef.current = null
-
-    if (fromVoice) {
-      ctx.updateVoicePipeline('sending', '识别文本已进入聊天，正在请求大模型。', content)
-      ctx.appendVoiceTrace('请求大模型', `#${traceLabel} 已调用聊天接口，等待模型返回`)
-    }
-
-    ctx.updatePetStatus(
-      fromVoice ? '我收到了，正在整理这句话的重点。' : '我在整理这条消息，马上回你。',
+    return executeAssistantTurn(
+      {
+        ctx,
+        setBusy,
+        setError,
+        busyRef,
+        activeTurnIdRef,
+        activeStreamAbortRef,
+        runAssistantReplyTurn,
+        flushDeferredCompanionNotices,
+      },
+      {
+        currentSettings,
+        nextMessages,
+        nextMemories,
+        nextDailyMemories,
+        content,
+        source,
+        fromVoice,
+        traceId,
+        traceLabel,
+        shouldResumeContinuousVoice,
+      },
     )
-
-    let sendSucceeded = false
-    const TURN_HARD_TIMEOUT_MS = 90_000
-    let hardTimeoutTimer: number | null = null
-    try {
-      sendSucceeded = await Promise.race([
-        runAssistantReplyTurn({
-          currentSettings,
-          nextMessages,
-          nextMemories,
-          nextDailyMemories,
-          content,
-          source,
-          fromVoice,
-          traceId,
-          traceLabel,
-          shouldResumeContinuousVoice,
-          toolIntentPlan,
-          turnId,
-          isLatestTurn: () => activeTurnIdRef.current === turnId,
-        }),
-        new Promise<boolean>((resolve) => {
-          hardTimeoutTimer = window.setTimeout(() => {
-            hardTimeoutTimer = null
-            console.warn('[Chat] Turn hard timeout — forcing busy=false')
-            void activeStreamAbortRef.current?.().catch(() => undefined)
-            activeStreamAbortRef.current = null
-            resolve(false)
-          }, TURN_HARD_TIMEOUT_MS)
-        }),
-      ])
-    } finally {
-      if (hardTimeoutTimer != null) {
-        window.clearTimeout(hardTimeoutTimer)
-        hardTimeoutTimer = null
-      }
-      busyRef.current = false
-      setBusy(false)
-      activeStreamAbortRef.current = null
-      void flushDeferredCompanionNotices()
-    }
-
-    return sendSucceeded
   }
 
   const sendMessageRef = useRef(sendMessage)
@@ -617,6 +637,8 @@ export function useChat(ctx: UseChatContext) {
     error,
     assistantActivity,
     petDialogBubble,
+    petThoughtBubble,
+    pendingImage,
     messagesRef,
     inputRef,
     busyRef,
@@ -625,9 +647,12 @@ export function useChat(ctx: UseChatContext) {
     setInput,
     setBusy,
     setError,
+    setPendingImage,
     appendChatMessage,
     appendSystemMessage,
     pushCompanionNotice,
+    pushInnerThought,
+    hideInnerThought,
     replaceChatHistory,
     exportChatHistory,
     importChatHistory,

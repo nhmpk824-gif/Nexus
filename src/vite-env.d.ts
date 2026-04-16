@@ -41,8 +41,6 @@ import type {
   TtsStreamPushTextRequest,
   TtsStreamStartRequest,
   TtsStreamStartResponse,
-  VoiceCloneRequest,
-  VoiceCloneResponse,
 } from './types'
 
 
@@ -237,7 +235,6 @@ declare global {
       subscribeTtsStream: (
         listener: (event: TtsStreamEvent) => void,
       ) => () => void
-      cloneVoice: (payload: VoiceCloneRequest) => Promise<VoiceCloneResponse>
       getDesktopContext: (request?: DesktopContextRequest) => Promise<DesktopContextSnapshot>
       getSystemMediaSession: () => Promise<MediaSessionSnapshot>
       controlSystemMediaSession: (payload: MediaSessionControlRequest) => Promise<MediaSessionControlResponse>
@@ -408,6 +405,15 @@ declare global {
       personaOpenDir: () => Promise<{ ok: boolean }>
       personaInit: (payload: { defaultSoul: string }) => Promise<{ personaDir: string; soulPath: string; memoryPath: string }>
 
+      // Sandboxed workspace fs (agent loop tools)
+      workspaceSetRoot: (payload: { root: string }) => Promise<{ ok: boolean; root: string }>
+      workspaceGetRoot: () => Promise<{ root: string }>
+      workspaceRead: (payload: { path: string }) => Promise<{ path: string; content: string; truncated: boolean; bytes: number }>
+      workspaceWrite: (payload: { path: string; content: string }) => Promise<{ path: string; bytes: number }>
+      workspaceEdit: (payload: { path: string; oldString: string; newString: string }) => Promise<{ path: string; bytes: number; occurrences: number }>
+      workspaceGlob: (payload: { pattern: string }) => Promise<{ pattern: string; matches: string[]; totalMatched: number; visited: number; hitLimit: boolean }>
+      workspaceGrep: (payload: { query: string; caseSensitive?: boolean; maxResults?: number }) => Promise<{ query: string; matches: Array<{ path: string; line: number; text: string }>; visited: number; hitLimit: boolean }>
+
       // SenseVoice offline ASR (sherpa-onnx OfflineRecognizer)
       sensevoiceStatus: () => Promise<{ installed: boolean; modelFound: boolean; modelsDir: string; currentModelId: string | null }>
       sensevoiceStart: () => Promise<{ ok: boolean; sampleRate: number }>
@@ -450,6 +456,24 @@ declare global {
       ) => Promise<{ keyword: string | null }>
       kwsStop: () => Promise<{ ok: boolean }>
 
+      vadStatus: () => Promise<{ installed: boolean; modelFound: boolean; active: boolean }>
+      vadStart: (payload?: {
+        threshold?: number
+        minSilenceDuration?: number
+        minSpeechDuration?: number
+        maxSpeechDuration?: number
+      }) => Promise<{ ok: boolean; sampleRate?: number; reason?: string }>
+      vadFeed: (
+        payload: { samples: number[] | Float32Array },
+      ) => Promise<{
+        speechDetected: boolean
+        speechStarted: boolean
+        speechEnded: boolean
+        segments: Float32Array[]
+      }>
+      vadFlush: () => Promise<{ segments: Float32Array[] }>
+      vadStop: () => Promise<{ ok: boolean }>
+
       // Realtime Voice (OpenAI Realtime API)
       realtimeStart: (payload: RealtimeSessionOptions) => Promise<{ sessionId: string }>
       realtimeStop: () => Promise<void>
@@ -479,6 +503,21 @@ declare global {
       vaultListSlots: () => Promise<string[]>
       vaultStoreMany: (entries: Record<string, string>) => Promise<void>
       vaultRetrieveMany: (slots: string[]) => Promise<Record<string, string>>
+
+      // Auto-updater (electron-updater + GitHub Releases)
+      updaterCheck: () => Promise<{
+        ok: boolean
+        currentVersion: string
+        latestVersion?: string | null
+        reason?: string
+      }>
+      updaterStatus: () => Promise<{
+        currentVersion: string
+        isPackaged: boolean
+        last: import('./features/updater').UpdaterEvent
+      }>
+      updaterInstall: () => Promise<boolean>
+      subscribeUpdaterEvent: (listener: (event: import('./features/updater').UpdaterEvent) => void) => () => void
     }
   }
 }

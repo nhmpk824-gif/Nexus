@@ -100,11 +100,31 @@ async def audio_speech(request: Request):
     response_format = str(body.get("response_format", "wav")).strip().lower()
     instructions = str(body.get("instructions", "")).strip()
 
+    # Nexus sends a stable `seed` derived from the streaming session's
+    # requestId so every segment in a multi-sentence reply pins the same
+    # diffusion initial noise — otherwise the speaker latent re-rolls on every
+    # call and users hear the voice switch between sentences. Missing/invalid
+    # seed falls back to the previous non-deterministic behaviour.
+    seed_raw = body.get("seed")
+    seed: int | None = None
+    if seed_raw is not None:
+        try:
+            seed = int(seed_raw) & 0x7FFFFFFF
+        except (TypeError, ValueError):
+            seed = None
+
     instruct = parse_instruct(instructions) or parse_instruct(voice)
 
-    logger.info(f"TTS request: text={text[:60]}... speed={speed} voice={voice} instruct={instruct}")
+    logger.info(
+        f"TTS request: text={text[:60]}... speed={speed} voice={voice} "
+        f"instruct={instruct} seed={seed}"
+    )
 
     with model_lock:
+        if seed is not None:
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
         audios = model.generate(
             text=text,
             instruct=instruct,

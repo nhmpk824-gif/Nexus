@@ -29,6 +29,12 @@ export interface ChatMessage {
   createdAt: string
   tone?: ChatMessageTone
   toolResult?: ChatToolResult
+  /**
+   * Optional inline image data URLs attached to a user message. Stripped before
+   * persisting to localStorage to keep the chat history small. The LLM request
+   * builder folds these into multimodal `image_url` content parts.
+   */
+  images?: string[]
 }
 
 export interface PetDialogBubbleState {
@@ -36,6 +42,13 @@ export interface PetDialogBubbleState {
   toolResult?: ChatToolResult
   streaming?: boolean
   createdAt?: string
+}
+
+export interface PetThoughtBubbleState {
+  thought: string
+  /** 0-100 — controls visual intensity of the bubble. */
+  urgency: number
+  createdAt: string
 }
 
 export type ChatMessageContent = string | Array<

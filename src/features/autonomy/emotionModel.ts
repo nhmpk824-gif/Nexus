@@ -84,14 +84,39 @@ export function decayEmotion(state: EmotionState): EmotionState {
 
 // ── Mood mapping ────────────────────────────────────────────────────────────
 
-/** Map the multi-dimensional emotion to a discrete PetMood for Live2D. */
+/**
+ * Map the multi-dimensional emotion to a discrete PetMood for Live2D.
+ *
+ * Order of checks matters — the most distinctive states are checked first so
+ * stronger feelings dominate weaker ones (e.g., high concern wins over high
+ * curiosity even if both are above their thresholds).
+ *
+ * Available PetMoods: idle | thinking | happy | sleepy | surprised | confused | embarrassed
+ */
 export function emotionToPetMood(state: EmotionState): PetMood {
-  if (state.concern > 0.7) return 'confused'
-  if (state.energy < 0.25) return 'sleepy'
-  if (state.warmth > 0.7 && state.energy > 0.5) return 'happy'
-  if (state.curiosity > 0.7) return 'surprised'
-  if (state.energy > 0.7) return 'happy'
-  if (state.warmth < 0.3) return 'idle'
+  // Severe states first.
+  if (state.concern > 0.75) return 'confused'
+  if (state.energy < 0.2) return 'sleepy'
+
+  // Embarrassed = high warmth + high concern (flustered affection).
+  if (state.warmth > 0.7 && state.concern > 0.5) return 'embarrassed'
+
+  // Surprised = strong curiosity spike.
+  if (state.curiosity > 0.75) return 'surprised'
+
+  // Happy = warmth and energy together — low energy + warmth feels affectionate
+  // but tired, so we require both.
+  if (state.warmth > 0.65 && state.energy > 0.5) return 'happy'
+
+  // Thinking = curious but not energetic — mid-curiosity with low/mid energy.
+  if (state.curiosity > 0.55 && state.energy < 0.6) return 'thinking'
+
+  // Mild lift from energy alone still reads as happy.
+  if (state.energy > 0.75 && state.warmth > 0.4) return 'happy'
+
+  // Persistent moderate concern without other strong signals → confused.
+  if (state.concern > 0.5 && state.energy < 0.5) return 'confused'
+
   return 'idle'
 }
 
@@ -127,15 +152,15 @@ export function classifyMessageSignals(text: string): EmotionSignal[] {
 export function formatEmotionForPrompt(state: EmotionState): string {
   const toneWords: string[] = []
 
-  if (state.energy > 0.7) toneWords.push('充满活力')
-  else if (state.energy < 0.3) toneWords.push('有些疲惫')
+  if (state.energy > 0.7) toneWords.push('full of energy')
+  else if (state.energy < 0.3) toneWords.push('a little tired')
 
-  if (state.warmth > 0.7) toneWords.push('格外亲切')
-  else if (state.warmth < 0.3) toneWords.push('稍显克制')
+  if (state.warmth > 0.7) toneWords.push('especially warm')
+  else if (state.warmth < 0.3) toneWords.push('somewhat reserved')
 
-  if (state.curiosity > 0.7) toneWords.push('充满好奇')
-  if (state.concern > 0.6) toneWords.push('有些担心')
+  if (state.curiosity > 0.7) toneWords.push('full of curiosity')
+  if (state.concern > 0.6) toneWords.push('a little worried')
 
   if (toneWords.length === 0) return ''
-  return `当前情绪状态：${toneWords.join('、')}。请在回复中自然体现这种情绪。`
+  return `Current emotional state: ${toneWords.join(', ')}. Let this emotion come through naturally in your reply.`
 }

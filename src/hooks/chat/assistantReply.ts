@@ -1,4 +1,6 @@
-import { requestAssistantReplyStreaming } from '../../features/chat/runtime'
+import { PromptModeStreamFilter } from '../../features/chat/promptModeMcp'
+import { selectToolDeliveryMode } from '../../features/chat/systemPromptBuilder'
+import { requestAssistantReplyStreaming } from '../../core/agent'
 import { recordUsage } from '../../features/metering/contextMeter'
 import { formatGameContext, loadGameContext } from '../../features/context/gameContext'
 import {
@@ -6,12 +8,10 @@ import {
 } from '../../features/memory/memory'
 import { buildMemoryRecallContext } from '../../features/memory/recall'
 import { loadRelevantSkills, shouldGenerateSkill, generateAndSaveSkill } from '../../features/skills/autoSkillGenerator'
+import { matchCoreSkills } from '../../lib/coreRuntime'
 import { parseAssistantPerformanceContent } from '../../features/pet/performance'
-import { buildBuiltInToolSpeechSummary } from '../../features/tools/assistant.ts'
-import type { ToolIntentPlan } from '../../features/tools/planner.ts'
-import { resolveAssistantPresentation } from '../../features/tools/presentation.ts'
-import { maybeRunMatchedBuiltInTool } from '../../features/tools/router'
-import { toChatToolResult } from '../../features/tools/toolTypes.ts'
+import { buildBuiltInToolDescriptors } from '../../features/tools/builtInToolSchemas'
+import { toChatToolResult, type BuiltInToolResult } from '../../features/tools/toolTypes.ts'
 import { logVoiceEvent } from '../../features/voice/shared'
 import { shorten } from '../../lib/common'
 import { createId } from '../../lib'
@@ -23,46 +23,54 @@ import type {
   PetDialogBubbleState,
 } from '../../types'
 import { getSpeechOutputErrorMessage } from './support'
-import { bindStreamingAbort } from './streamAbort'
+import { bindStreamingAbort, type AbortSetter } from './streamAbort'
 import type { UseChatContext } from './types'
 
-async function loadAvailableMcpTools() {
+async function loadAvailableTools(settings: AppSettings) {
+  const builtInDescriptors = buildBuiltInToolDescriptors(settings)
+
+  let mcpDescriptors: ReturnType<typeof buildBuiltInToolDescriptors> = []
   try {
     const tools = await window.desktopPet?.mcpListTools?.()
-    if (!Array.isArray(tools) || !tools.length) return undefined
-
-    // Load skill guides from running plugins
-    const pluginSkillGuides = new Map<string, string>()
-    try {
-      const plugins = await window.desktopPet?.pluginList?.()
-      if (Array.isArray(plugins)) {
-        for (const plugin of plugins) {
-          if (plugin.running && plugin.skillGuide) {
-            const pluginServerId = `plugin:${plugin.id}`
-            pluginSkillGuides.set(pluginServerId, plugin.skillGuide)
+    if (Array.isArray(tools) && tools.length) {
+      const pluginSkillGuides = new Map<string, string>()
+      try {
+        const plugins = await window.desktopPet?.pluginList?.()
+        if (Array.isArray(plugins)) {
+          for (const plugin of plugins) {
+            if (plugin.running && plugin.skillGuide) {
+              const pluginServerId = `plugin:${plugin.id}`
+              pluginSkillGuides.set(pluginServerId, plugin.skillGuide)
+            }
           }
         }
+      } catch {
+        // Plugin list unavailable — proceed without skill guides
       }
-    } catch {
-      // Plugin list unavailable — proceed without skill guides
-    }
 
-    return tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      serverId: tool.serverId ?? '',
-      inputSchema: tool.inputSchema,
-      skillGuide: pluginSkillGuides.get(tool.serverId ?? '') || '',
-    }))
+      const builtInNames = new Set(builtInDescriptors.map((t) => t.name))
+      mcpDescriptors = tools
+        .filter((tool) => !builtInNames.has(tool.name))
+        .map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          serverId: tool.serverId ?? '',
+          inputSchema: tool.inputSchema,
+          skillGuide: pluginSkillGuides.get(tool.serverId ?? '') || '',
+        }))
+    }
   } catch {
-    return undefined
+    // MCP bridge unavailable — proceed with built-ins only
   }
+
+  const combined = [...builtInDescriptors, ...mcpDescriptors]
+  return combined.length ? combined : undefined
 }
 
 type SpeechPlaybackFailureOptions = {
   traceId?: string
   traceLabel?: string
-  source: 'text' | 'voice'
+  source: 'text' | 'voice' | 'telegram' | 'discord'
   fromVoice: boolean
   shouldResumeContinuousVoice: boolean
 }
@@ -73,12 +81,11 @@ export type AssistantReplyRunnerOptions = {
   nextMemories: MemoryItem[]
   nextDailyMemories: DailyMemoryStore
   content: string
-  source: 'text' | 'voice'
+  source: 'text' | 'voice' | 'telegram' | 'discord'
   fromVoice: boolean
   traceId: string
   traceLabel: string
   shouldResumeContinuousVoice: boolean
-  toolIntentPlan: ToolIntentPlan
   turnId: number
   isLatestTurn: () => boolean
 }
@@ -93,6 +100,9 @@ type AssistantReplyRunnerDependencies = {
     | 'beginStreamingSpeechReply'
     | 'busEmit'
     | 'clearPendingVoiceRestart'
+    | 'getEmotionPromptText'
+    | 'getRelationshipPromptText'
+    | 'getRhythmPromptText'
     | 'loadDesktopContextSnapshot'
     | 'queuePetPerformanceCue'
     | 'resetNoSpeechRestartCount'
@@ -115,20 +125,9 @@ type AssistantReplyRunnerDependencies = {
     options: SpeechPlaybackFailureOptions,
   ) => void
   setError: (error: string | null) => void
-  setActiveStreamAbort: (abort: (() => Promise<void>) | null) => void
+  setActiveStreamAbort: AbortSetter
   /** Called after memory recall to update importance scores via decay feedback. */
   onMemoryRecalled?: (recalledIds: string[]) => void
-}
-
-function buildToolFailurePromptContext(toolExecutionErrorMessage: string) {
-  if (!toolExecutionErrorMessage) {
-    return ''
-  }
-
-  return [
-    `内置工具执行失败：${toolExecutionErrorMessage}`,
-    '如果用户还在问天气、搜索或链接结果，请直接说明这次工具没有成功拿到结果，必要时补问缺失信息，不要假装已经拿到了工具结果。',
-  ].join('\n')
 }
 
 export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDependencies) {
@@ -144,7 +143,6 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
       traceId,
       traceLabel,
       shouldResumeContinuousVoice,
-      toolIntentPlan,
       turnId,
       isLatestTurn,
     } = options
@@ -158,39 +156,21 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
     })
 
     try {
-      let builtInToolResult: Awaited<ReturnType<typeof maybeRunMatchedBuiltInTool>> = null
-      let toolExecutionErrorMessage = ''
+      // Built-in tool results now arrive via the tool-call loop callback
+      // instead of running before the model call. The callback mutates
+      // `chatToolResult` so the streaming bubble and the final chat card
+      // both pick up the card as soon as the model's tool round completes.
+      let chatToolResult: ReturnType<typeof toChatToolResult> | undefined
+      const builtInToolCallNames: string[] = []
+      const handleBuiltInToolResult = (result: BuiltInToolResult) => {
+        if (!isLatestTurn()) return
 
-      try {
-        builtInToolResult = await maybeRunMatchedBuiltInTool(
-          toolIntentPlan.matchedTool,
-          currentSettings,
-        )
-      } catch (toolError) {
-        toolExecutionErrorMessage = toolError instanceof Error
-          ? toolError.message
-          : 'Built-in tool execution failed.'
-        logVoiceEvent('built-in tool execution failed', {
-          traceId: traceId || undefined,
-          source,
-          toolId: toolIntentPlan.matchedTool?.id,
-          error: toolExecutionErrorMessage,
-        })
-      }
-
-      const chatToolResult = builtInToolResult
-        ? toChatToolResult(builtInToolResult)
-        : undefined
-      const toolSpeechOutput = builtInToolResult
-        ? buildBuiltInToolSpeechSummary(builtInToolResult)
-        : ''
-      const resolvedToolFailurePromptContext = buildToolFailurePromptContext(toolExecutionErrorMessage)
-
-      if (builtInToolResult) {
+        chatToolResult = toChatToolResult(result)
+        builtInToolCallNames.push(result.kind)
         dependencies.appendChatMessage({
           id: createId('msg'),
           role: 'system',
-          content: builtInToolResult.systemMessage,
+          content: result.systemMessage,
           toolResult: chatToolResult,
           createdAt: new Date().toISOString(),
         })
@@ -202,9 +182,9 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
       }
 
       // Run all independent context-loading tasks in parallel
-      const [desktopContext, mcpTools, gameContext, memoryContext, autoSkillContext] = await Promise.all([
+      const [desktopContext, mcpTools, gameContext, memoryContext, pluginSkillContext] = await Promise.all([
         dependencies.ctx.loadDesktopContextSnapshot(),
-        loadAvailableMcpTools(),
+        loadAvailableTools(currentSettings),
         loadGameContext().then(formatGameContext).catch(() => ''),
         buildMemoryRecallContext({
           query: content,
@@ -220,28 +200,51 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
         loadRelevantSkills(content).catch(() => ''),
       ])
 
+      const coreSkillContext = (() => {
+        try {
+          return matchCoreSkills(content, nextMessages.length)
+        } catch {
+          return ''
+        }
+      })()
+      const autoSkillContext = [pluginSkillContext, coreSkillContext].filter(Boolean).join('\n')
+
       // Fire recall feedback — boost importance of memories that were actually used
       if (memoryContext.recalledLongTermIds?.length && dependencies.onMemoryRecalled) {
         dependencies.onMemoryRecalled(memoryContext.recalledLongTermIds)
       }
 
-      const shouldDecoupleSpeechFromDisplay = Boolean(chatToolResult)
+      // Tool calls now flow through native function calling, which means the
+      // model itself speaks about the tool result in the final text round.
+      // No need to decouple speech from display like the pre-LLM planner did.
       const wantStreamingTts = currentSettings.speechOutputEnabled
         && !(fromVoice && dependencies.ctx.suppressVoiceReplyRef.current)
-        && !shouldDecoupleSpeechFromDisplay
       const streamingTtsController = wantStreamingTts
         ? dependencies.ctx.beginStreamingSpeechReply(shouldResumeContinuousVoice)
         : null
 
       let streamedReplyContent = ''
+      // In prompt-mode MCP the model emits `<tool_call>...</tool_call>`
+      // markers in plain text. The filter strips them from streaming
+      // bubble/TTS so the user never sees raw JSON, while runToolCallLoop
+      // still extracts them from the final response and runs the tools.
+      const promptModeStreamFilter = selectToolDeliveryMode(currentSettings) === 'prompt'
+        ? new PromptModeStreamFilter()
+        : null
       const request = bindStreamingAbort(
         requestAssistantReplyStreaming(
         currentSettings,
         nextMessages,
         memoryContext,
         (delta, done) => {
-          if (delta) {
-            streamedReplyContent += delta
+          if (!isLatestTurn()) return
+
+          const visibleDelta = promptModeStreamFilter
+            ? promptModeStreamFilter.push(delta) + (done ? promptModeStreamFilter.flush() : '')
+            : delta
+
+          if (visibleDelta) {
+            streamedReplyContent += visibleDelta
             const streamedPerformance = parseAssistantPerformanceContent(streamedReplyContent)
             const streamedDisplayContent = streamedPerformance.displayContent
 
@@ -254,7 +257,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
             }
 
             if (streamingTtsController) {
-              streamingTtsController.pushDelta(delta)
+              streamingTtsController.pushDelta(visibleDelta)
             }
           }
 
@@ -267,13 +270,17 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           traceId: traceId || undefined,
           requestId: traceId || undefined,
           desktopContext,
-          intentContext: [toolIntentPlan.promptContext, resolvedToolFailurePromptContext]
-            .filter(Boolean)
-            .join('\n'),
-          toolContext: builtInToolResult?.promptContext,
           mcpTools,
           gameContext,
           autoSkillContext,
+          onBuiltInToolResult: handleBuiltInToolResult,
+          // Current emotion/relationship/rhythm awareness — the latest values
+          // come from useAutonomyController via a ref wrapper. These getters
+          // are wired up in useAppController; when unset they return an empty
+          // string which is filtered out by systemPromptBuilder's .filter(Boolean).
+          emotionPromptText: dependencies.ctx.getEmotionPromptText?.(),
+          relationshipPromptText: dependencies.ctx.getRelationshipPromptText?.(),
+          rhythmPromptText: dependencies.ctx.getRhythmPromptText?.(),
         },
         ),
         (abort) => {
@@ -297,7 +304,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
         }))
         dependencies.ctx.appendDebugConsoleEvent({
           source: 'system',
-          title: '聊天模型已自动回退',
+          title: 'Chat model auto-failover applied',
           detail: `${currentSettings.apiProviderId} -> ${response.providerId}`,
           tone: 'warning',
         })
@@ -317,13 +324,6 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
         || assistantMessageContent
         || '刚刚做了一个动作'
 
-      const assistantPresentation = resolveAssistantPresentation({
-        builtInToolResult,
-        hasToolResultCard: Boolean(chatToolResult),
-        assistantDisplayContent: assistantMessageContent,
-        assistantSpokenContent: assistantPerformance.spokenContent,
-        toolSpeechOutput,
-      })
       if (!isLatestTurn()) {
         logVoiceEvent('assistant reply ignored because a newer turn is active', {
           traceId: traceId || undefined,
@@ -332,14 +332,14 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
         })
         return false
       }
-      const finalAssistantMessageContent = assistantPresentation.chatContent
-      const finalAssistantReplyForStatus = assistantPresentation.statusContent || assistantReplyForStatus
-      const assistantSpeechOutput = assistantPresentation.speechContent
+      const finalAssistantMessageContent = assistantMessageContent
+      const finalAssistantReplyForStatus = assistantReplyForStatus
+      const assistantSpeechOutput = assistantPerformance.spokenContent || assistantMessageContent
 
       if (assistantMessageContent || chatToolResult) {
         dependencies.presentPetDialogBubble(
           {
-            content: assistantPresentation.bubbleContent,
+            content: assistantMessageContent,
             toolResult: chatToolResult,
             streaming: false,
           },
@@ -365,7 +365,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
 
       // Auto-generate skill document if the response was complex enough
       const toolCallNames = [
-        ...(builtInToolResult ? [toolIntentPlan.matchedTool?.id ?? 'built-in'] : []),
+        ...builtInToolCallNames,
         ...(mcpTools ?? []).filter((t) => response.response.tool_calls?.some((tc) => tc.function.name === t.name)).map((t) => t.name),
       ]
       if (shouldGenerateSkill({ userQuery: content, assistantReply: response.response.content, toolCallNames, settings: currentSettings })) {
@@ -377,7 +377,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
         dependencies.ctx.appendVoiceTrace('模型已返回', `#${traceLabel} ${shorten(finalAssistantReplyForStatus, 32)}`, 'success')
       }
 
-      if (!assistantPresentation.bubbleContent && !chatToolResult && finalAssistantReplyForStatus) {
+      if (!assistantMessageContent && !chatToolResult && finalAssistantReplyForStatus) {
         dependencies.ctx.updatePetStatus(shorten(finalAssistantReplyForStatus, 24), 2_400)
       }
 
@@ -525,15 +525,23 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
 
       dependencies.setError(fromVoice ? `本句发送失败：${errorMessage}` : errorMessage)
       // Bus drives voiceState → 'idle'
-      dependencies.ctx.busEmit({ type: 'session:aborted', reason: errorMessage })
+      dependencies.ctx.busEmit({
+        type: 'session:aborted',
+        reason: 'session_aborted',
+        abortReason: errorMessage,
+      })
       if (shouldResumeContinuousVoice) {
         dependencies.ctx.clearPendingVoiceRestart()
         dependencies.ctx.resetNoSpeechRestartCount()
         dependencies.ctx.updatePetStatus('本句发送失败，当前连续语音已暂停。', 3200)
+        // Longer delay so the user has time to read the error bubble before
+        // the mic re-opens — otherwise the no-speech toast stacks on top of
+        // the error and it looks like the UI is thrashing.
         dependencies.ctx.busEmit({
           type: 'voice:restart_requested',
-          reason: 'error_recovery',
+          restartReason: 'error_recovery',
           force: true,
+          delayMs: 3200,
         })
       } else if (fromVoice) {
         dependencies.ctx.updatePetStatus('本句发送失败，请稍后再试。', 3200)

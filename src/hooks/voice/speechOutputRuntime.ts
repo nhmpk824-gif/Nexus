@@ -1,14 +1,11 @@
-import type { AudioPlaybackQueue } from '../../features/voice/audioQueue'
-import {
-  getCachedTtsResult,
-  setCachedTtsResult,
-} from '../../features/voice/runtimeSupport'
-import { segmentTextForSpeech } from '../../features/voice/streamingTts'
+import type { VoiceBusEvent } from '../../features/voice/busEvents'
+import type { StreamAudioPlayer } from '../../features/voice/streamAudioPlayer'
 import { prepareTextForTts } from '../../features/voice/text'
 import { shorten } from '../../lib/common'
 import { executeWithFailover, type FailoverCandidate } from '../../features/failover/orchestrator.ts'
-import type { AppSettings, AudioSynthesisRequest, VoiceTraceEntry } from '../../types'
-import type { SpeechSegmentMeta } from './types'
+import type { AppSettings, VoiceTraceEntry } from '../../types'
+import { createStreamingSpeechOutputController } from './streamingSpeechOutput'
+import type { StreamingSpeechOutputController } from './types'
 
 type SpeechOutputCallbacks = {
   onStart?: () => void
@@ -16,8 +13,15 @@ type SpeechOutputCallbacks = {
   onError?: (message: string) => void
 }
 
+type TelemetryHooks = {
+  busEmit?: (event: VoiceBusEvent) => void
+  speechGeneration?: number
+}
+
 export type SpeechOutputPlaybackRuntime = {
-  getAudioPlaybackQueue: () => AudioPlaybackQueue<SpeechSegmentMeta>
+  getStreamAudioPlayer: () => StreamAudioPlayer
+  setActiveController?: (controller: StreamingSpeechOutputController | null) => void
+  resetPlayer?: () => void
   stopSpeechTracking: () => void
 }
 
@@ -33,6 +37,7 @@ export type StartSpeechOutputRuntimeOptions = {
     detail: string,
     tone?: VoiceTraceEntry['tone'],
   ) => void
+  telemetry?: TelemetryHooks
 }
 
 export async function playSpeechOutputWithSettingsRuntime(
@@ -40,6 +45,7 @@ export async function playSpeechOutputWithSettingsRuntime(
   speechSettings: AppSettings,
   runtime: SpeechOutputPlaybackRuntime,
   callbacks?: SpeechOutputCallbacks,
+  telemetry?: TelemetryHooks,
 ) {
   const content = prepareTextForTts(text)
 
@@ -51,75 +57,32 @@ export async function playSpeechOutputWithSettingsRuntime(
     throw new Error('没有可播报的文本内容。')
   }
 
-  if (!window.desktopPet?.synthesizeAudio) {
+  if (!window.desktopPet?.ttsStreamStart) {
     throw new Error('当前环境未连接桌面客户端，无法使用内置语音播报。')
   }
 
-  const segments = segmentTextForSpeech(content)
-  if (!segments.length) {
-    throw new Error('没有可播报的文本内容。')
-  }
+  // Drive the streaming TTS controller with the full text so all segments
+  // share a single TTS session. The electron side pins the resolved voice
+  // and cluster after the first chunk, which prevents timbre drift across
+  // segments on long sentences (Volcengine etc. may otherwise re-walk the
+  // fallback chain per segment and land on different voice backends).
+  const controller = createStreamingSpeechOutputController(
+    speechSettings,
+    {
+      getPlayer: runtime.getStreamAudioPlayer,
+      setActiveController: runtime.setActiveController,
+      resetPlayer: runtime.resetPlayer,
+    },
+    {
+      ...callbacks,
+      busEmit: telemetry?.busEmit,
+      speechGeneration: telemetry?.speechGeneration,
+    },
+  )
 
-  // Voice cloning disabled — always use the provider's configured voice.
-  const effectiveVoice = speechSettings.speechOutputVoice
-  const playbackQueue = runtime.getAudioPlaybackQueue()
-  let started = false
-
-  const basePayload: Omit<AudioSynthesisRequest, 'text'> = {
-    providerId: speechSettings.speechOutputProviderId,
-    baseUrl: speechSettings.speechOutputApiBaseUrl,
-    apiKey: speechSettings.speechOutputApiKey,
-    model: speechSettings.speechOutputModel,
-    voice: effectiveVoice,
-    instructions: speechSettings.speechOutputInstructions,
-    language: speechSettings.speechSynthesisLang,
-    rate: speechSettings.speechRate,
-    pitch: speechSettings.speechPitch,
-    volume: speechSettings.speechVolume,
-  }
-
-  const synthPromises = segments.map((segment) => {
-    const payload: AudioSynthesisRequest = { ...basePayload, text: segment }
-    const cached = getCachedTtsResult(payload)
-    if (cached) {
-      return Promise.resolve(cached)
-    }
-
-    return window.desktopPet!.synthesizeAudio(payload).then((result) => {
-      setCachedTtsResult(payload, {
-        audioBase64: result.audioBase64,
-        mimeType: result.mimeType,
-      })
-      return result
-    })
-  })
-
-  for (let index = 0; index < segments.length; index += 1) {
-    const result = await synthPromises[index]
-    if (!started) {
-      started = true
-      callbacks?.onStart?.()
-    }
-
-    await playbackQueue.enqueue({
-      audioBase64: result.audioBase64,
-      mimeType: result.mimeType,
-      meta: {
-        text: segments[index],
-        rate: speechSettings.speechRate,
-      },
-    }).catch((error) => {
-      const message = error instanceof Error
-        ? error.message
-        : '语音播放失败，请检查本地音频输出设备。'
-      callbacks?.onError?.(message)
-      throw error instanceof Error ? error : new Error(message)
-    })
-
-    if (index === segments.length - 1) {
-      callbacks?.onEnd?.()
-    }
-  }
+  controller.pushDelta(content)
+  controller.finish()
+  await controller.waitForCompletion()
 }
 
 export async function startSpeechOutputRuntime(
@@ -148,13 +111,14 @@ export async function startSpeechOutputRuntime(
         candidate.payload,
         options.runtime,
         options.callbacks,
+        options.telemetry,
       )
     },
     onEvent: (event) => {
       if (event.type === 'failure' && event.isPrimary) {
         options.appendVoiceTrace(
-          '语音播报主链路异常',
-          `${options.speechSettings.speechOutputProviderId}：${shorten(event.error, 80)}`,
+          'Speech output primary chain error',
+          `${options.speechSettings.speechOutputProviderId}: ${shorten(event.error, 80)}`,
           'error',
         )
       }
@@ -167,8 +131,8 @@ export async function startSpeechOutputRuntime(
     // meaning all subsequent responses would use a different provider/voice
     // even if the primary provider recovered on the very next request.
     options.appendVoiceTrace(
-      '语音播报本次回退',
-      `${options.speechSettings.speechOutputProviderId} -> ${result.candidateId}（仅本次，不改变设置）`,
+      'Speech output fallback (this turn only)',
+      `${options.speechSettings.speechOutputProviderId} -> ${result.candidateId} (this turn only, settings unchanged)`,
       'success',
     )
   }

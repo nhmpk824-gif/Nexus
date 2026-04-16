@@ -1,6 +1,17 @@
 import { performNetworkRequest, readJsonSafe, extractResponseErrorMessage, readTextSafe } from '../net.js'
 import { collectSearchContentBodyLines, extractPagePreviewFromHtml } from '../searchContentExtract.js'
 import { tryLookupLyricsSearch } from '../lyricsSearch.js'
+import {
+  buildAnswerDisplaySummary,
+  buildSearchPlanSignals,
+  computeCoverageScore,
+  computeFacetSatisfactionScore,
+  computePhraseMatchScore,
+  computeSoftTermScore,
+  dedupeSearchItems,
+  resolveSearchEvidenceQuery,
+  shouldFetchSearchPreviews,
+} from '../webSearchSignals.js'
 import { runWebSearchWithProviders } from '../webSearchRuntime.js'
 
 const TOOL_SEARCH_TIMEOUT_MS = 12_000
@@ -95,13 +106,32 @@ export function buildCandidateSearchQueries(query) {
   return [...queries].filter(Boolean).slice(0, 4)
 }
 
-export function scoreSearchResultItem(item, query) {
+function detectQueryFacet(query) {
+  const normalized = String(query ?? '')
+  if (/(?:官网|官方网站|网址|链接|official\s+site)/iu.test(normalized)) return 'official'
+  if (/(?:最新|最近|新消息|新动态|latest\s+news)/iu.test(normalized)) return 'latest'
+  if (/(?:歌词|歌詞|lyrics?|lyric)/iu.test(normalized)) return 'lyrics'
+  return ''
+}
+
+function looksLikeOfficialResult(item) {
+  const haystack = `${item.title} ${item.snippet} ${item.url}`
+  return /(?:官网|官方网站|official|mi\.com|xiaomi\.com|apple\.com|microsoft\.com)/iu.test(haystack)
+}
+
+function looksLikeLatestResult(item) {
+  const haystack = `${item.title} ${item.snippet} ${item.publishedAt ?? ''}`
+  return /(?:最新|最近|刚刚|今日|本周|today|latest|new)/iu.test(haystack)
+}
+
+export function scoreSearchResultItem(item, query, options = {}) {
   const normalizedTitle = normalizeSearchableText(item.title)
   const normalizedSnippet = normalizeSearchableText(item.snippet)
   const normalizedUrl = normalizeSearchableText(item.url)
   const normalizedQuery = normalizeSearchableText(query)
   const compactQuery = normalizedQuery.replace(/\s+/g, '')
   const isLyricsQuery = isLyricsLikeSearchQuery(query)
+  const queryFacet = detectQueryFacet(options.facet || query)
   const tokens = buildSearchTokens(query)
   const hasTokenHit = tokens.some((token) => (
     normalizedTitle.includes(token)
@@ -126,6 +156,18 @@ export function scoreSearchResultItem(item, query) {
     score += 4
   }
 
+  if (queryFacet === 'official') {
+    if (looksLikeOfficialResult(item)) score += 12
+    if (/(?:论坛|讨论|问答|百科|知乎|贴吧|blog|blogspot)/iu.test(`${item.title} ${item.snippet}`)) score -= 10
+    if (/(?:forum|tieba|zhihu|baike)/iu.test(item.url)) score -= 6
+  }
+
+  if (queryFacet === 'latest') {
+    if (looksLikeLatestResult(item)) score += 8
+    if (/(?:历史|回顾|旧闻|archive)/iu.test(`${item.title} ${item.snippet} ${item.url}`)) score -= 10
+    if (/(?:news|press|release|announcement|blog)/iu.test(item.url)) score += 2
+  }
+
   if (isLyricsQuery) {
     if (/(?:歌词|歌詞|lyrics?|lyric)/iu.test(item.title)) score += 10
     if (/(?:歌词|歌詞|lyrics?|lyric)/iu.test(item.snippet)) score += 6
@@ -136,6 +178,34 @@ export function scoreSearchResultItem(item, query) {
 
   if (tokens.length && !hasTokenHit) {
     score -= isLyricsQuery ? 8 : 3
+  }
+
+  const coverageScore = computeCoverageScore(item, options.signals)
+  if (coverageScore < 0.5) {
+    score -= 8
+  } else if (coverageScore >= 1) {
+    score += 4
+  } else {
+    score += coverageScore * 3
+  }
+
+  const phraseMatchScore = computePhraseMatchScore(item, options.signals)
+  if (phraseMatchScore >= 1) {
+    score += 5
+  } else if (phraseMatchScore > 0) {
+    score += phraseMatchScore * 3
+  }
+
+  const softTermScore = computeSoftTermScore(item, options.signals)
+  if (softTermScore > 0) {
+    score += softTermScore * 2.5
+  }
+
+  const facetSatisfactionScore = computeFacetSatisfactionScore(item, options.signals)
+  if (facetSatisfactionScore > 0) {
+    score += facetSatisfactionScore * 6
+  } else if (queryFacet === 'official' || queryFacet === 'latest' || queryFacet === 'lyrics') {
+    score -= 4
   }
 
   if (!/(?:support|contact|account|help|客服|帮助)/iu.test(query)) {
@@ -204,60 +274,79 @@ function isInternalUrl(urlString) {
   }
 }
 
-async function enrichSearchItemsWithPreview(items, query) {
-  const enrichedItems = await Promise.all(items.map(async (item, index) => {
-    if (index >= 4) {
-      return item
-    }
-
-    // SSRF防护：验证URL
-    if (!isValidHttpUrl(item.url) || isInternalUrl(item.url)) {
-      return item
-    }
-
-    try {
-      const response = await performNetworkRequest(item.url, {
-        method: 'GET',
-        timeoutMs: Math.min(TOOL_SEARCH_TIMEOUT_MS, 5000),
-        timeoutMessage: '正文抓取超时。',
-        headers: {
-          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        },
-      })
-
-      if (!response.ok) {
-        return item
-      }
-
-      const contentType = String(response.headers.get('content-type') ?? '')
-      if (!/html|xml/i.test(contentType)) {
-        return item
-      }
-
-      const html = await readTextSafe(response)
-      const contentPreview = extractPagePreviewFromHtml(html, query)
-      return contentPreview
-        ? {
-            ...item,
-            contentPreview,
-          }
-        : item
-    } catch {
-      return item
-    }
-  }))
-
-  return enrichedItems
+function rerankSearchItems(items, query, options = {}) {
+  return items
     .map((item, index) => ({
       item,
       index,
       score: scoreSearchResultItem({
         ...item,
         snippet: [item.contentPreview, item.snippet].filter(Boolean).join(' '),
-      }, query),
+      }, query, options),
     }))
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .map((entry) => entry.item)
+}
+
+
+async function fetchSearchPreviewForItem(item, query) {
+  if (!isValidHttpUrl(item.url) || isInternalUrl(item.url)) {
+    return item
+  }
+
+  try {
+    const response = await performNetworkRequest(item.url, {
+      method: 'GET',
+      timeoutMs: Math.min(TOOL_SEARCH_TIMEOUT_MS, 5000),
+      timeoutMessage: '正文抓取超时。',
+      headers: {
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      },
+    })
+
+    if (!response.ok) {
+      return item
+    }
+
+    const contentType = String(response.headers.get('content-type') ?? '')
+    if (!/html|xml/i.test(contentType)) {
+      return item
+    }
+
+    const html = await readTextSafe(response)
+    const contentPreview = extractPagePreviewFromHtml(html, query)
+    return contentPreview
+      ? {
+          ...item,
+          contentPreview,
+        }
+      : item
+  } catch {
+    return item
+  }
+}
+
+async function enrichSearchItemsWithPreview(items, query, options = {}) {
+  const shouldFetch = shouldFetchSearchPreviews({
+    query,
+    facet: options.facet,
+    matchConfidence: options.matchConfidence ?? 'medium',
+  })
+  if (!shouldFetch) {
+    return rerankSearchItems(items, query, options)
+  }
+
+  const rankedItems = rerankSearchItems(items, query, options)
+  const previewLimit = detectQueryFacet(options.facet || query) ? 3 : 2
+  const evidenceQuery = resolveSearchEvidenceQuery(query, options.subject, options.facet)
+  const enrichedItems = await Promise.all(rankedItems.map(async (item, index) => {
+    if (index >= previewLimit) {
+      return item
+    }
+    return fetchSearchPreviewForItem(item, evidenceQuery)
+  }))
+
+  return rerankSearchItems(enrichedItems, query, options)
 }
 
 function normalizeSearchDisplayText(text) {
@@ -399,9 +488,12 @@ function buildSearchDisplay(query, items, options = {}) {
     return {
       mode: 'answer',
       title: leadPanel.title || query,
-      summary: summaryOverride || (bodyLines[0]
-        ? `我已经自动打开前几条候选页，并提取出最相关的正文内容。`
-        : `最相关的结果提到：${truncateSearchDisplayText(leadPanel.body, 110)}`),
+      summary: summaryOverride || buildAnswerDisplaySummary({
+        query,
+        topTitle: leadPanel.title || items[0]?.title || '',
+        leadBody: bodyLines[0] || leadPanel.body || '',
+        matchConfidence: options.matchConfidence ?? 'medium',
+      }),
       bodyLines,
       panels,
       sources,
@@ -431,6 +523,18 @@ export async function searchWeb(payload = {}) {
   const extractedKeywords = Array.isArray(payload?.keywords)
     ? payload.keywords.map((keyword) => String(keyword ?? '').trim()).filter(Boolean)
     : []
+  const subject = String(payload?.subject ?? '').trim()
+  const facet = String(payload?.facet ?? '').trim()
+  const signals = buildSearchPlanSignals({
+    query: trimmedQuery,
+    subject,
+    facet,
+    keywords: extractedKeywords,
+    matchProfile: payload?.matchProfile,
+    strictTerms: payload?.strictTerms,
+    softTerms: payload?.softTerms,
+    phraseTerms: payload?.phraseTerms,
+  })
 
   const lyricsSearchResult = await tryLookupLyricsSearch({
     query: trimmedQuery,
@@ -451,6 +555,8 @@ export async function searchWeb(payload = {}) {
       extractedKeywords,
       rewrittenQueries: lyricsSearchResult.rewrittenQueries,
       executedQuery: trimmedQuery,
+      matchConfidence: 'high',
+      matchScore: 20,
       display: lyricsSearchResult.display,
       message: lyricsSearchResult.message,
     }
@@ -463,6 +569,13 @@ export async function searchWeb(payload = {}) {
     baseUrl: payload?.baseUrl,
     apiKey: payload?.apiKey,
     candidateQueries,
+    subject,
+    facet,
+    matchProfile: signals.matchProfile,
+    strictTerms: signals.strictTerms,
+    softTerms: signals.softTerms,
+    phraseTerms: signals.phraseTerms,
+    signals,
     fallbackToBing: payload?.fallbackToBing,
   }, {
     timeoutMs: TOOL_SEARCH_TIMEOUT_MS,
@@ -474,14 +587,46 @@ export async function searchWeb(payload = {}) {
     scoreSearchResultItem,
   })
 
-  if (!searchResult.items.length) {
+  const providerAnswer = typeof searchResult.answer === 'string' ? searchResult.answer.trim() : ''
+  if (!searchResult.items.length && !providerAnswer) {
     throw new Error('没有找到可用的网页结果。')
   }
 
-  const enrichedItems = await enrichSearchItemsWithPreview(searchResult.items, trimmedQuery)
+  const dedupedItems = dedupeSearchItems(searchResult.items)
+  const enrichedItems = await enrichSearchItemsWithPreview(
+    dedupedItems,
+    trimmedQuery,
+    {
+      subject,
+      facet,
+      signals,
+      matchConfidence: searchResult.matchConfidence,
+    },
+  )
+  const topRerankedScore = enrichedItems[0]
+    ? scoreSearchResultItem({
+        ...enrichedItems[0],
+        snippet: [enrichedItems[0].contentPreview, enrichedItems[0].snippet].filter(Boolean).join(' '),
+      }, trimmedQuery, { subject, facet, signals })
+    : 0
+  const scoreBasedConfidence = topRerankedScore >= (isLyricsLikeSearchQuery(trimmedQuery) ? 12 : 10)
+    ? 'high'
+    : topRerankedScore >= (isLyricsLikeSearchQuery(trimmedQuery) ? 7 : 4)
+      ? 'medium'
+      : 'low'
+  // A paid provider that returned its own synthesized answer is authoritative:
+  // trust it over the keyword reranker's score when no items remain to rank.
+  const boostedConfidence = enrichedItems.length === 0 && providerAnswer
+    ? 'high'
+    : scoreBasedConfidence
   const display = buildSearchDisplay(displayQuery, enrichedItems, {
     summaryOverride: searchResult.answer,
+    matchConfidence: boostedConfidence,
   })
+
+  const message = enrichedItems.length
+    ? `已通过 ${searchResult.providerLabel} 找到 ${enrichedItems.length} 条网页结果。`
+    : `已通过 ${searchResult.providerLabel} 得到直接答复。`
 
   return {
     query: displayQuery,
@@ -491,7 +636,11 @@ export async function searchWeb(payload = {}) {
     extractedKeywords,
     rewrittenQueries: searchResult.rewrittenQueries,
     executedQuery: trimmedQuery,
+    matchConfidence: boostedConfidence,
+    matchScore: Math.max(searchResult.matchScore ?? 0, topRerankedScore),
     display,
-    message: `已通过 ${searchResult.providerLabel} 找到 ${enrichedItems.length} 条网页结果。`,
+    message,
+    debugTrace: Array.isArray(searchResult.debugTrace) ? searchResult.debugTrace : [],
+    answer: searchResult.answer ?? '',
   }
 }

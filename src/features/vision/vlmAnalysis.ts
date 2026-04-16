@@ -1,4 +1,4 @@
-const VLM_SYSTEM_PROMPT = '你是一个桌面屏幕分析助手。请简明描述截图中的主要内容：用户正在使用什么应用、屏幕上显示了什么关键信息。只输出客观描述，不超过 150 字。'
+const VLM_SYSTEM_PROMPT = 'You are a desktop screen analysis assistant. Concisely describe the main content of the screenshot: which application the user is using, and what key information is shown on screen. Output only an objective description, no more than 150 characters. Reply in the user\'s language.'
 
 const VLM_MAX_RESPONSE_TOKENS = 200
 const VLM_TEMPERATURE = 0.3
@@ -33,7 +33,7 @@ export async function analyzeScreenWithVlm(
         role: 'user',
         content: [
           { type: 'image_url', image_url: { url: screenshotDataUrl, detail: 'low' } },
-          { type: 'text', text: '请描述这个屏幕截图的主要内容。' },
+          { type: 'text', text: 'Describe the main content of this screenshot.' },
         ],
       },
     ],

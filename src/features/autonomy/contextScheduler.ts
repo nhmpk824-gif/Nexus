@@ -42,6 +42,9 @@ export function evaluateCondition(
       ) return false
       if (!condition.pattern) return true
       try {
+        if (condition.pattern.length > 200) return false
+        // Reject patterns with nested quantifiers that cause catastrophic backtracking
+        if (/(\+\)\+|\*\)\*|\+\}\+|\*\}\*)/.test(condition.pattern)) return false
         return new RegExp(condition.pattern, 'i').test(snapshot.clipboardText)
       } catch {
         // Invalid regex pattern — treat as non-matching rather than crashing
@@ -110,6 +113,12 @@ export function createContextTriggeredTask(input: {
 }): ContextTriggeredTask {
   // Validate regex pattern at creation time to catch errors early
   if (input.condition.kind === 'clipboard_changed' && input.condition.pattern) {
+    if (input.condition.pattern.length > 200) {
+      throw new Error(`Regex pattern too long (max 200 chars): ${input.condition.pattern.slice(0, 40)}...`)
+    }
+    if (/(\+\)\+|\*\)\*|\+\}\+|\*\}\*)/.test(input.condition.pattern)) {
+      throw new Error(`Regex pattern contains potentially catastrophic backtracking constructs: ${input.condition.pattern.slice(0, 40)}`)
+    }
     try {
       new RegExp(input.condition.pattern, 'i')
     } catch {

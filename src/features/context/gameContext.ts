@@ -26,15 +26,15 @@ export function formatGameContext(ctx: GameContextSnapshot | null | undefined): 
 
   const sections: string[] = []
 
-  sections.push(`当前已连接游戏：${ctx.game}（服务器 ${ctx.address}${ctx.username ? `，玩家 ${ctx.username}` : ''}）`)
+  sections.push(`Currently connected game: ${ctx.game} (server ${ctx.address}${ctx.username ? `, player ${ctx.username}` : ''})`)
 
   if (ctx.recentChat?.length) {
     const chatLines = ctx.recentChat.slice(-6).join('\n')
-    sections.push(`最近聊天：\n${shorten(chatLines, MAX_GAME_CONTEXT_LENGTH)}`)
+    sections.push(`Recent chat:\n${shorten(chatLines, MAX_GAME_CONTEXT_LENGTH)}`)
   }
 
   if (ctx.recentPlayerEvents?.length) {
-    sections.push(`最近玩家事件：${ctx.recentPlayerEvents.slice(-4).join('、')}`)
+    sections.push(`Recent player events: ${ctx.recentPlayerEvents.slice(-4).join(', ')}`)
   }
 
   if (ctx.recentCommands?.length) {
@@ -42,13 +42,13 @@ export function formatGameContext(ctx: GameContextSnapshot | null | undefined): 
       .slice(-4)
       .map((c) => `> ${c.command} → ${c.response}`)
       .join('\n')
-    sections.push(`最近指令：\n${shorten(cmdLines, MAX_GAME_CONTEXT_LENGTH)}`)
+    sections.push(`Recent commands:\n${shorten(cmdLines, MAX_GAME_CONTEXT_LENGTH)}`)
   }
 
   return [
-    `以下是当前游戏上下文（${ctx.game}），用户可能在和你聊游戏相关话题：`,
+    `Below is the current game context (${ctx.game}). The user may be chatting about game-related topics:`,
     sections.join('\n\n'),
-    '你可以根据游戏事件自然地回应，比如有人加入游戏或者有聊天消息。用户也可能让你执行游戏指令。',
+    'You can respond naturally to game events, like someone joining the game or a chat message. The user may also ask you to run game commands. Reply in the user\'s language.',
   ].join('\n\n')
 }
 

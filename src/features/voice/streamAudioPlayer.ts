@@ -236,7 +236,7 @@ export class StreamAudioPlayer {
     this.keepaliveOsc = null
 
     const context = this.audioContext
-    // 先关闭 context，再清除引用
+    // Close the context first, then clear the references
     if (context) {
       try {
         void context.close().catch(() => undefined)

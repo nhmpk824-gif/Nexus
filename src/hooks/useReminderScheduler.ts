@@ -17,7 +17,7 @@ type UseReminderSchedulerOptions = {
 function formatSchedulerTime(value?: string) {
   const timestamp = Date.parse(value ?? '')
   if (Number.isNaN(timestamp)) {
-    return '暂无'
+    return 'none'
   }
 
   return new Intl.DateTimeFormat('zh-CN', {
@@ -73,8 +73,8 @@ export function useReminderScheduler({
       if (!unchanged) {
         onEventRef.current?.({
           source: 'scheduler',
-          title: '已刷新提醒计划',
-          detail: `当前共 ${normalized.length} 个任务，已重新计算下一次触发时间`,
+          title: 'Reminder schedule refreshed',
+          detail: `${normalized.length} total tasks; next run times recomputed`,
           tone: 'info',
         })
       }
@@ -122,7 +122,7 @@ export function useReminderScheduler({
       scheduledTaskSignatureRef.current = nextSignature
       onEventRef.current?.({
         source: 'scheduler',
-        title: '已安排下一次提醒',
+        title: 'Next reminder scheduled',
         detail: `${nextTask.task.title} / ${formatSchedulerTime(nextTask.task.nextRunAt)}`,
         tone: 'info',
         relatedTaskId: nextTask.task.id,
@@ -153,7 +153,7 @@ export function useReminderScheduler({
         for (const task of triggeredTasks) {
           onEventRef.current?.({
             source: 'scheduler',
-            title: '提醒已到触发时间',
+            title: 'Reminder trigger time reached',
             detail: `${task.title} / ${formatSchedulerTime(task.nextRunAt)}`,
             tone: 'success',
             relatedTaskId: task.id,

@@ -1,4 +1,6 @@
 import { memo } from 'react'
+import { resolveLocalizedText } from '../../lib/uiLanguage'
+import type { UiLanguage } from '../../types'
 
 type StatusMessage = {
   ok: boolean
@@ -7,6 +9,7 @@ type StatusMessage = {
 
 type HistorySectionProps = {
   active: boolean
+  uiLanguage: UiLanguage
   chatMessageCount: number
   chatBusy: boolean
   exportingChatHistory: boolean
@@ -20,6 +23,7 @@ type HistorySectionProps = {
 
 export const HistorySection = memo(function HistorySection({
   active,
+  uiLanguage,
   chatMessageCount,
   chatBusy,
   exportingChatHistory,
@@ -30,31 +34,43 @@ export const HistorySection = memo(function HistorySection({
   onImportChatHistory,
   onClearChatHistory,
 }: HistorySectionProps) {
+  const t = (zhCN: string, enUS: string) =>
+    resolveLocalizedText(uiLanguage, { 'zh-CN': zhCN, 'en-US': enUS })
+
   return (
     <section className={`settings-section ${active ? 'is-active' : 'is-hidden'}`}>
       <div className="settings-section__title-row">
         <div>
-          <h4>聊天记录</h4>
+          <h4>{t('聊天记录', 'Chat history')}</h4>
           <p className="settings-drawer__hint">
-            这里管理当前会话的导出、导入和清空，不会改动长期记忆。
+            {t(
+              '这里管理当前会话的导出、导入和清空，不会改动长期记忆。',
+              'Export, import, or clear the current chat session here. Long-term memory is untouched.',
+            )}
           </p>
         </div>
       </div>
 
       <div className="settings-grid">
         <label>
-          <span>当前消息数</span>
+          <span>{t('当前消息数', 'Message count')}</span>
           <input value={String(chatMessageCount)} readOnly />
         </label>
 
         <label>
-          <span>当前状态</span>
-          <input value={chatBusy ? '回复处理中' : '待机'} readOnly />
+          <span>{t('当前状态', 'Current status')}</span>
+          <input
+            value={chatBusy ? t('回复处理中', 'Replying...') : t('待机', 'Idle')}
+            readOnly
+          />
         </label>
       </div>
 
       <p className="settings-drawer__hint">
-        导入会替换当前聊天记录；导出文件为 JSON，后面也可以作为多会话功能的基础。
+        {t(
+          '导出会把当前所有聊天消息存成一个 JSON 文件。导入会替换当前聊天（原来的消息会被覆盖）。清空不可撤销——清掉之后就没了，长期记忆不受影响。',
+          'Export saves all current messages to a JSON file. Import replaces the current chat — existing messages are overwritten. Clear is irreversible — once cleared, the messages are gone. Long-term memory is not affected by any of these.',
+        )}
       </p>
 
       <div className="settings-section__title-row">
@@ -64,7 +80,9 @@ export const HistorySection = memo(function HistorySection({
           onClick={onExportChatHistory}
           disabled={exportingChatHistory}
         >
-          {exportingChatHistory ? '导出中...' : '导出聊天 JSON'}
+          {exportingChatHistory
+            ? t('导出中...', 'Exporting...')
+            : t('导出聊天 JSON', 'Export chat JSON')}
         </button>
 
         <button
@@ -73,7 +91,9 @@ export const HistorySection = memo(function HistorySection({
           onClick={onImportChatHistory}
           disabled={importingChatHistory || chatBusy}
         >
-          {importingChatHistory ? '导入中...' : '导入聊天 JSON'}
+          {importingChatHistory
+            ? t('导入中...', 'Importing...')
+            : t('导入聊天 JSON', 'Import chat JSON')}
         </button>
 
         <button
@@ -82,7 +102,9 @@ export const HistorySection = memo(function HistorySection({
           onClick={onClearChatHistory}
           disabled={clearingChatHistory || chatBusy || !chatMessageCount}
         >
-          {clearingChatHistory ? '清空中...' : '清空当前聊天'}
+          {clearingChatHistory
+            ? t('清空中...', 'Clearing...')
+            : t('清空当前聊天', 'Clear current chat')}
         </button>
       </div>
 

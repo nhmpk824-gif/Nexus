@@ -165,7 +165,7 @@ export async function startTencentConversation(
           return
         }
 
-        void finalizeTranscript('长时间未继续说话，正在收尾', latestText, '（静默收尾）')
+        void finalizeTranscript('长时间未继续说话，正在收尾', latestText, ' (silent finalize)')
       }, SHERPA_STREAM_MAX_IDLE_MS)
     }
 
@@ -206,7 +206,7 @@ export async function startTencentConversation(
           return
         }
 
-        params.appendVoiceTrace('腾讯云识别完成', `#${traceLabel} 已拿到最终文本${traceSuffix}`)
+        params.appendVoiceTrace('Tencent ASR recognition complete', `#${traceLabel} received final text${traceSuffix}`)
         await params.handleRecognizedVoiceTranscript(transcript, { traceId })
       } catch (error) {
         params.tencentAsrSessionRef.current = null
@@ -232,7 +232,7 @@ export async function startTencentConversation(
       )
     }
 
-    params.appendVoiceTrace('开始腾讯云识别', `#${traceLabel} 正在使用腾讯云实时语音识别`)
+    params.appendVoiceTrace('Start Tencent ASR recognition', `#${traceLabel} using Tencent real-time ASR`)
 
     session = await startTencentAsrStream(credentials, {
       onActivity: (rms) => {
@@ -258,7 +258,7 @@ export async function startTencentConversation(
           void finalizeTranscript(
             '检测到你已经停下，正在整理识别文本',
             latestText,
-            '（静音收尾）',
+            ' (silence finalize)',
           )
         }
       },
@@ -329,7 +329,7 @@ export async function startTencentConversation(
         return
       }
 
-      void finalizeTranscript('录音时间到，正在收尾', latestText, '（时间到）')
+      void finalizeTranscript('录音时间到，正在收尾', latestText, ' (max duration reached)')
     }, API_RECORDING_MAX_DURATION_MS)
   } catch (error) {
     params.clearTencentConversationState()

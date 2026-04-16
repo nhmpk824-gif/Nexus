@@ -10,6 +10,7 @@ import type {
   WindowView,
 } from '../../types'
 import type { VoiceActivityDetector } from '../../features/hearing/browserVad.ts'
+import type { MainProcessVadController } from '../../features/hearing/mainProcessVad.ts'
 
 export type ApiRecordingSession = {
   mediaRecorder: MediaRecorder
@@ -29,7 +30,14 @@ export type ApiRecordingSession = {
 }
 
 export type VadConversationSession = {
-  detector: VoiceActivityDetector
+  // Either path — `detector` (legacy MicVAD that opens its own mic, used
+  // only when the always-on wakeword isn't running) or `frameDriver` (the
+  // main-process Silero VAD fed by the wakeword ScriptProcessor's frames).
+  // `tearDown` abstracts cleanup of whichever path is active.
+  detector: VoiceActivityDetector | null
+  frameDriver: MainProcessVadController | null
+  unsubscribeFrames: (() => void) | null
+  tearDown: () => Promise<void>
   noSpeechTimer: number | null
   maxDurationTimer: number | null
   cancelled: boolean
@@ -83,7 +91,7 @@ export type UseVoiceContext = {
   setInput: (input: string) => void
   setSettings: Dispatch<SetStateAction<AppSettings>>
   sendMessageRef: RefObject<
-    (content: string, options?: { source?: 'text' | 'voice'; traceId?: string }) => Promise<boolean>
+    (content: string, options?: { source?: 'text' | 'voice' | 'telegram' | 'discord'; traceId?: string }) => Promise<boolean>
   >
   appendSystemMessage: (content: string, tone?: 'neutral' | 'error') => void
 }

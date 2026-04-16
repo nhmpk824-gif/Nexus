@@ -81,6 +81,18 @@ export const MessageBubble = memo(function MessageBubble({ message, assistantNam
         </span>
       </div>
       <div className="message-bubble__content">
+        {message.images?.length ? (
+          <div className="message-bubble__images">
+            {message.images.map((url, index) => (
+              <img
+                key={`${message.id}-img-${index}`}
+                src={url}
+                alt="附加图片"
+                className="message-bubble__image"
+              />
+            ))}
+          </div>
+        ) : null}
         {message.content ? <div>{renderLinkedContent(message.content)}</div> : null}
         {message.toolResult ? <ToolResultCard toolResult={message.toolResult} /> : null}
       </div>

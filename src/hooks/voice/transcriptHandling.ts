@@ -38,12 +38,12 @@ export type HandleRecognizedVoiceTranscriptRuntimeOptions = {
   fillComposerWithVoiceTranscript: (transcript: string) => void
   showPetStatus: ShowPetStatus
   shouldAutoRestartVoice: () => boolean
-  scheduleVoiceRestart: (statusText?: string, delay?: number) => void
+  scheduleVoiceRestart: (statusText?: string, delay?: number, force?: boolean) => void
   shouldIgnoreRepeatedVoiceContent: (content: string) => boolean
   rememberSubmittedVoiceContent: (content: string) => void
   sendMessage: (
     content: string,
-    options?: { source?: 'text' | 'voice'; traceId?: string },
+    options?: { source?: 'text' | 'voice' | 'telegram' | 'discord'; traceId?: string },
   ) => Promise<boolean>
 }
 
@@ -71,7 +71,7 @@ export type HandleVoiceListeningFailureRuntimeOptions = {
   maxContinuousNoSpeechRestarts: number
   pauseContinuousVoice: (message: string, statusText?: string) => void
   showPetStatus: ShowPetStatus
-  scheduleVoiceRestart: (statusText?: string, delay?: number) => void
+  scheduleVoiceRestart: (statusText?: string, delay?: number, force?: boolean) => void
   getNoSpeechRestartDelay: () => number
   setContinuousVoiceSession: (active: boolean) => void
   resetNoSpeechRestartCount: () => void
@@ -121,14 +121,14 @@ export async function handleRecognizedVoiceTranscriptRuntime(
     wakeWord: wakeWord || '(empty)',
     wakeWordAlreadyTriggered,
   })
-  options.appendVoiceTrace('识别完成', `#${traceLabel} ${shorten(transcript, 30)}`)
+  options.appendVoiceTrace('Recognition complete', `#${traceLabel} ${shorten(transcript, 30)}`)
 
   if (hotwordCorrection.changed && hotwordCorrection.replacements.length) {
     const replacementSummary = hotwordCorrection.replacements
       .slice(0, 3)
       .map((entry) => `${entry.from} -> ${entry.to}`)
       .join(' / ')
-    options.appendVoiceTrace('热词纠错已生效', `#${traceLabel} ${replacementSummary}`, 'success')
+    options.appendVoiceTrace('Hotword correction applied', `#${traceLabel} ${replacementSummary}`, 'success')
   }
 
   options.setLiveTranscript(transcript)
@@ -146,7 +146,7 @@ export async function handleRecognizedVoiceTranscriptRuntime(
       '识别结果已放入输入框，等待手动发送。',
       transcriptDecision.transcript,
     )
-    options.appendVoiceTrace('等待手动发送', `#${traceLabel} 识别文本已写入输入框`)
+    options.appendVoiceTrace('Waiting for manual send', `#${traceLabel} recognized text placed in composer`)
     options.showPetStatus('识别完成，已填入输入框，按回车发送。', 3_000, 3_200)
 
     if (options.shouldAutoRestartVoice()) {
@@ -172,8 +172,8 @@ export async function handleRecognizedVoiceTranscriptRuntime(
       transcriptDecision.content,
     )
     options.appendVoiceTrace(
-      '暂缓发送',
-      `#${traceLabel} 疑似没说完，先不发送：${shorten(transcriptDecision.content, 24)}`,
+      'Hold send',
+      `#${traceLabel} looks unfinished, not sending yet: ${shorten(transcriptDecision.content, 24)}`,
       'info',
     )
     options.showPetStatus('这句像是还没说完，我先不发送，你可以接着说。', 3_000, 3_200)
@@ -195,8 +195,8 @@ export async function handleRecognizedVoiceTranscriptRuntime(
       transcriptDecision.transcript,
     )
     options.appendVoiceTrace(
-      '发送被拦截',
-      `#${traceLabel} 当前是唤醒词模式，但没有设置唤醒词`,
+      'Send blocked',
+      `#${traceLabel} wake word mode is on, but no wake word is configured`,
       'error',
     )
     options.setError('当前是唤醒词模式，但还没有填写唤醒词。')
@@ -222,8 +222,8 @@ export async function handleRecognizedVoiceTranscriptRuntime(
       transcriptDecision.transcript,
     )
     options.appendVoiceTrace(
-      '未命中唤醒词',
-      `#${traceLabel} 没有命中“${transcriptDecision.wakeWord}”`,
+      'Wake word not matched',
+      `#${traceLabel} did not match "${transcriptDecision.wakeWord}"`,
       'error',
     )
     options.setError(`本句未发送，因为没有命中唤醒词“${transcriptDecision.wakeWord}”。`)
@@ -253,7 +253,7 @@ export async function handleRecognizedVoiceTranscriptRuntime(
       '只识别到了唤醒词，继续说内容即可',
       transcriptDecision.transcript,
     )
-    options.appendVoiceTrace('仅识别到唤醒词', `#${traceLabel} 还没有拿到真正要发送的内容`)
+    options.appendVoiceTrace('Only wake word recognized', `#${traceLabel} no actual content to send yet`)
     options.showPetStatus('我在，继续说。', 2_200, 2_600)
 
     if (options.shouldAutoRestartVoice()) {
@@ -277,7 +277,7 @@ export async function handleRecognizedVoiceTranscriptRuntime(
       transcriptDecision.content,
     )
     options.appendVoiceTrace(
-      '已忽略重复识别',
+      'Ignored duplicate recognition',
       `#${traceLabel} ${shorten(transcriptDecision.content, 30)}`,
       'info',
     )
@@ -292,17 +292,24 @@ export async function handleRecognizedVoiceTranscriptRuntime(
 
   if (transcriptDecision.mode === 'direct_send') {
     logVoiceEvent('forwarding transcript directly to assistant')
-    options.appendVoiceTrace('准备发送', `#${traceLabel} 将识别文本直接发给大模型`)
-    // Remember content BEFORE sending to prevent duplicate sends from concurrent calls.
+    options.appendVoiceTrace('Preparing to send', `#${traceLabel} forwarding recognized text directly to the model`)
     options.rememberSubmittedVoiceContent(transcriptDecision.content)
     const sent = await options.sendMessage(transcriptDecision.content, { source: 'voice', traceId })
 
-    if (!sent && options.shouldAutoRestartVoice()) {
-      // sendMessage was rejected (e.g. busy). The bus may be stuck in 'transcribing'.
-      // Dispatch session_completed to push it back to 'idle', then schedule a restart.
+    if (!sent) {
+      // sendMessage was rejected (e.g. busy). Push the legacy machine
+      // back to idle so voiceStateRef doesn't stay stuck at 'processing'.
       options.dispatchVoiceSessionAndSync({ type: 'session_completed' })
-      options.scheduleVoiceRestart('消息未发出，我继续收音。', 320)
+      if (options.shouldAutoRestartVoice()) {
+        options.scheduleVoiceRestart('消息未发出，我继续收音。', 320)
+      }
     }
+    // On success: DON'T dispatch session_completed here. sendMessage
+    // awaits the full turn including TTS. The VoiceBus handles the
+    // speaking → idle transition via tts:completed. Dispatching
+    // session_completed after a 12s TTS-wait timeout would force
+    // voiceState to 'idle' while TTS is still playing, breaking
+    // continuous voice and the restart loop.
 
     return sent
   }
@@ -313,18 +320,19 @@ export async function handleRecognizedVoiceTranscriptRuntime(
     '已命中唤醒词，准备发送给大模型',
     transcriptDecision.content,
   )
-  options.appendVoiceTrace('唤醒词命中', `#${traceLabel} 已去掉唤醒词并准备发送`)
+  options.appendVoiceTrace('Wake word matched', `#${traceLabel} stripped wake word and preparing to send`)
   logVoiceEvent('wake word matched, forwarding stripped transcript', {
     traceId,
     content: transcriptDecision.content,
   })
-  // Remember content BEFORE sending to prevent duplicate sends from concurrent calls.
   options.rememberSubmittedVoiceContent(transcriptDecision.content)
   const sent = await options.sendMessage(transcriptDecision.content, { source: 'voice', traceId })
 
-  if (!sent && options.shouldAutoRestartVoice()) {
+  if (!sent) {
     options.dispatchVoiceSessionAndSync({ type: 'session_completed' })
-    options.scheduleVoiceRestart('消息未发出，我继续收音。', 320)
+    if (options.shouldAutoRestartVoice()) {
+      options.scheduleVoiceRestart('消息未发出，我继续收音。', 320)
+    }
   }
 
   return sent
@@ -350,7 +358,7 @@ export function handleVoiceListeningFailureRuntime(
   options.setMood('idle')
   options.updateVoicePipeline('idle', options.message)
   options.appendVoiceTrace(
-    '语音回合中断',
+    'Voice turn interrupted',
     options.message,
     options.errorCode === 'aborted' ? 'info' : 'error',
   )

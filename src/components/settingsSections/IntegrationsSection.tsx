@@ -506,7 +506,7 @@ export const IntegrationsSection = memo(function IntegrationsSection({
             <div>
               <h5>Telegram</h5>
               <p className="settings-drawer__hint">
-                通过 Telegram Bot 接收和发送消息，实现手机端与伴侣的跨平台对话。
+                {ti('settings.integrations.telegram.note')}
               </p>
             </div>
             <div className="settings-page__meta">
@@ -515,7 +515,7 @@ export const IntegrationsSection = memo(function IntegrationsSection({
           </div>
 
           <label className="settings-toggle">
-            <span>启用 Telegram 网关</span>
+            <span>{ti('settings.integrations.telegram.enable')}</span>
             <input
               type="checkbox"
               checked={draft.telegramIntegrationEnabled}
@@ -524,17 +524,17 @@ export const IntegrationsSection = memo(function IntegrationsSection({
           </label>
 
           <label>
-            <span>Bot Token</span>
+            <span>{ti('settings.integrations.telegram.bot_token')}</span>
             <input
               type="password"
               value={draft.telegramBotToken}
-              placeholder="123456:ABC-DEF..."
+              placeholder={ti('settings.integrations.telegram.bot_token_placeholder')}
               onChange={(event) => setDraft((prev) => ({ ...prev, telegramBotToken: event.target.value }))}
             />
           </label>
 
           <label>
-            <span>允许的 Chat ID（逗号分隔，留空则接受所有）</span>
+            <span>{ti('settings.integrations.telegram.allowed_chats')}</span>
             <input
               value={draft.telegramAllowedChatIds}
               placeholder="123456789, -100123456"
@@ -542,8 +542,17 @@ export const IntegrationsSection = memo(function IntegrationsSection({
             />
           </label>
 
+          <label>
+            <span>{ti('settings.integrations.telegram.owner_chats')}</span>
+            <input
+              value={draft.ownerTelegramChatIds}
+              placeholder="123456789"
+              onChange={(event) => setDraft((prev) => ({ ...prev, ownerTelegramChatIds: event.target.value }))}
+            />
+          </label>
+
           <p className="settings-inline-note">
-            在 Telegram 中找 @BotFather 创建 Bot 并获取 Token。Chat ID 可通过 @userinfobot 获取。
+            {ti('settings.integrations.telegram.help')}
           </p>
         </div>
 
@@ -560,7 +569,7 @@ export const IntegrationsSection = memo(function IntegrationsSection({
             <div>
               <h5>Discord</h5>
               <p className="settings-drawer__hint">
-                通过 Discord Bot 接收和发送消息，实现 Discord 频道与伴侣的跨平台对话。
+                {ti('settings.integrations.discord.note')}
               </p>
             </div>
             <div className="settings-page__meta">
@@ -569,7 +578,7 @@ export const IntegrationsSection = memo(function IntegrationsSection({
           </div>
 
           <label className="settings-toggle">
-            <span>启用 Discord 网关</span>
+            <span>{ti('settings.integrations.discord.enable')}</span>
             <input
               type="checkbox"
               checked={draft.discordIntegrationEnabled}
@@ -578,17 +587,17 @@ export const IntegrationsSection = memo(function IntegrationsSection({
           </label>
 
           <label>
-            <span>Bot Token</span>
+            <span>{ti('settings.integrations.discord.bot_token')}</span>
             <input
               type="password"
               value={draft.discordBotToken}
-              placeholder="MTIz...abc"
+              placeholder={ti('settings.integrations.discord.bot_token_placeholder')}
               onChange={(event) => setDraft((prev) => ({ ...prev, discordBotToken: event.target.value }))}
             />
           </label>
 
           <label>
-            <span>允许的频道 ID（逗号分隔，留空则接受所有）</span>
+            <span>{ti('settings.integrations.discord.allowed_channels')}</span>
             <input
               value={draft.discordAllowedChannelIds}
               placeholder="1234567890123456789, 9876543210123456789"
@@ -596,8 +605,17 @@ export const IntegrationsSection = memo(function IntegrationsSection({
             />
           </label>
 
+          <label>
+            <span>{ti('settings.integrations.discord.owner_users')}</span>
+            <input
+              value={draft.ownerDiscordUserIds}
+              placeholder="1234567890123456789"
+              onChange={(event) => setDraft((prev) => ({ ...prev, ownerDiscordUserIds: event.target.value }))}
+            />
+          </label>
+
           <p className="settings-inline-note">
-            在 Discord Developer Portal 创建 Application 和 Bot，开启 Message Content Intent，获取 Token 后填入。频道 ID 可在 Discord 开发者模式下右键频道获取。
+            {ti('settings.integrations.discord.help')}
           </p>
         </div>
 

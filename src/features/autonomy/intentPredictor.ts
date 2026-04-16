@@ -33,13 +33,18 @@ const SEARCH_PATTERNS = /搜索|搜一下|查一下|找一下|search|look up|goo
 const CODE_PATTERNS = /代码|bug|报错|error|compile|编译|函数|function|class|变量|debug|fix/i
 const LEARN_PATTERNS = /怎么|如何|教我|学习|learn|tutorial|explain|解释|什么是|what is/i
 
+/** Window-title patterns that refine browsing intent into specific categories. */
+const WINDOW_SHOPPING_PATTERNS = /淘宝|京东|Amazon|eBay|拼多多|shopping|cart|checkout/i
+const WINDOW_EMAIL_PATTERNS = /Gmail|Outlook|Mail|邮件|邮箱/i
+const WINDOW_CALENDAR_PATTERNS = /Calendar|日历|Google Calendar|Notion.*calendar/i
+
 /**
  * Predict user's likely next intent based on recent messages and desktop context.
  * Pure function — no side effects or LLM calls.
  */
 export function predictIntent(
   recentMessages: ChatMessage[],
-  _activeWindowTitle: string | null,
+  activeWindowTitle: string | null,
   activity: ActivityClass,
   currentHour: number,
 ): IntentPrediction {
@@ -62,6 +67,31 @@ export function predictIntent(
       intent: 'searching',
       confidence: 0.7,
       suggestion: '需要我帮你搜索或者整理相关信息吗？',
+    }
+  }
+
+  // Window-title-based refinements for browsing activity
+  if (activity === 'browsing' && activeWindowTitle) {
+    if (WINDOW_SHOPPING_PATTERNS.test(activeWindowTitle)) {
+      return {
+        intent: 'searching',
+        confidence: 0.65,
+        suggestion: '在逛购物网站呢，需要我帮你比价或找优惠吗？',
+      }
+    }
+    if (WINDOW_EMAIL_PATTERNS.test(activeWindowTitle)) {
+      return {
+        intent: 'communicating',
+        confidence: 0.65,
+        suggestion: '在处理邮件呢，需要我帮你起草或整理回复吗？',
+      }
+    }
+    if (WINDOW_CALENDAR_PATTERNS.test(activeWindowTitle)) {
+      return {
+        intent: 'communicating',
+        confidence: 0.6,
+        suggestion: '在看日程呢，需要我帮你整理今天的安排吗？',
+      }
     }
   }
 
@@ -173,10 +203,26 @@ export function dequeueReady(queue: DecisionQueue): {
   return { ready, remaining: { items: remaining } }
 }
 
-/** Remove stale entries older than maxAgeMs (default 10 minutes). */
+/** Remove stale entries older than maxAgeMs (default 10 minutes) and cap queue size. */
 export function pruneStale(queue: DecisionQueue, maxAgeMs = 600_000): DecisionQueue {
   const cutoff = Date.now() - maxAgeMs
-  return {
-    items: queue.items.filter((item) => item.createdAt > cutoff),
+  const items = queue.items.filter((item) => item.createdAt > cutoff)
+
+  // Cap queue size to prevent unbounded growth
+  if (items.length > 20) {
+    items.sort((a, b) => getDecisionPriority(b.decision) - getDecisionPriority(a.decision))
+    items.length = 20
+  }
+
+  return { items }
+}
+
+function getDecisionPriority(d: ProactiveDecision): number {
+  switch (d.kind) {
+    case 'remind': return 90
+    case 'brief': return 70
+    case 'suggest': return 45
+    case 'speak': return d.priority
+    case 'silent': return 0
   }
 }

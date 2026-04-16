@@ -116,10 +116,10 @@ export async function loadRelevantSkills(query: string, limit = 2): Promise<stri
     }
 
     const sections = skills.map(
-      (s) => `【自动技能 · ${s.title}】\n${s.content.replace(/^---[\s\S]*?---\s*\n/, '')}`,
+      (s) => `[Auto skill · ${s.title}]\n${s.content.replace(/^---[\s\S]*?---\s*\n/, '')}`,
     )
 
-    return `以下是过往经验生成的参考技能，可按需借鉴：\n${sections.join('\n\n')}`
+    return `The following reference skills were distilled from past experience — draw on them as needed:\n${sections.join('\n\n')}`
   } catch {
     return ''
   }

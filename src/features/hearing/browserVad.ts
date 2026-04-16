@@ -95,8 +95,10 @@ async function getVadModule() {
 export async function createVoiceActivityDetector(
   callbacks: VoiceActivityDetectorCallbacks,
   sensitivity: VadSensitivity = 'medium',
+  options: { sharedStream?: MediaStream } = {},
 ): Promise<VoiceActivityDetector> {
   const preset = VAD_PRESETS[sensitivity]
+  const sharedStream = options.sharedStream ?? null
   const createDetector = async (processorType: 'auto' | 'ScriptProcessor'): Promise<MicVadInstance> => {
     const { MicVAD } = await getVadModule()
 
@@ -113,15 +115,33 @@ export async function createVoiceActivityDetector(
       baseAssetPath: resolvePublicAssetPath('vendor/vad/'),
       onnxWASMBasePath: resolvePublicAssetPath('vendor/ort/'),
       getStream: async () => {
+        if (sharedStream) {
+          // Clone the wake word's mic stream instead of calling getUserMedia
+          // again. Both the wake word KWS feed and VAD end up reading from
+          // the same underlying Windows capture, so there is no race on
+          // WASAPI releasing / re-grabbing the device — the kind of race
+          // that caused VAD to get silent audio after a getUserMedia retry.
+          return sharedStream.clone()
+        }
         const { stream } = await requestVoiceInputStream({ purpose: 'vad' })
         return stream
       },
       pauseStream: async (stream: MediaStream) => {
-        stream.getTracks().forEach((track) => track.stop())
+        // When we own the stream, stop its tracks. When the stream is a clone
+        // of the shared wake word capture, don't stop the underlying tracks —
+        // that would also kill the wake word listener. Disconnecting the
+        // MediaStreamAudioSourceNode inside vad-web's destroy is already
+        // enough to detach us from the pipeline.
+        if (!sharedStream) {
+          stream.getTracks().forEach((track) => track.stop())
+        }
       },
       resumeStream: async (stream: MediaStream) => {
         if (stream.active) {
           return stream
+        }
+        if (sharedStream) {
+          return sharedStream.clone()
         }
 
         const { stream: nextStream } = await requestVoiceInputStream({ purpose: 'vad' })
@@ -154,7 +174,13 @@ export async function createVoiceActivityDetector(
   return {
     start: () => detector.start(),
     pause: () => detector.pause(),
-    destroy: () => detector.destroy(),
+    destroy: () => {
+      // Temporary diagnostic — log who is calling destroy on a live VAD session
+      // so we can identify the source of the "VAD destroyed immediately after
+      // started micVAD" regression. Safe to remove once the trigger is found.
+      console.warn('[VAD] detector.destroy called — stack:', new Error('vad-destroy').stack)
+      return detector.destroy()
+    },
   }
 }
 

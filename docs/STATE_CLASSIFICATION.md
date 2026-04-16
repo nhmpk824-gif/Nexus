@@ -46,7 +46,6 @@
 | `settings:apiKey` | LLM 主 API key | safeStorage (Windows DPAPI / macOS Keychain) |
 | `settings:speechInputApiKey` | STT API key | 同上 |
 | `settings:speechOutputApiKey` | TTS API key | 同上 |
-| `settings:voiceCloneApiKey` | 声音克隆 API key | 同上 |
 | `settings:toolWebSearchApiKey` | 搜索 API key | 同上 |
 | `profile:{category}:{providerId}:apiKey` | Provider 配置的 key | 同上 |
 

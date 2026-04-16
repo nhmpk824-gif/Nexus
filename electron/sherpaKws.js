@@ -116,7 +116,7 @@ function buildEnglishKeywordMap(kwsDir) {
   return entries
 }
 
-function ensureEnglishKeywordsFile(kwsDir, wakeWord) {
+function ensureEnglishKeywordsFileAllowlist(kwsDir, wakeWord) {
   const normalized = normalizeWakeWord(wakeWord).replace(SPACE_REGEX, ' ').toUpperCase()
   const keywords = buildEnglishKeywordMap(kwsDir)
   const matched = keywords?.get(normalized)
@@ -128,6 +128,31 @@ function ensureEnglishKeywordsFile(kwsDir, wakeWord) {
   return {
     keywordsFile: targetFile,
     label: normalizeWakeWord(wakeWord),
+  }
+}
+
+let _lastEnglishRawKeywordFileContent = ''
+
+// Write a raw-text English keywords file and let sherpa-onnx's C++ BPE
+// encoder tokenize at load time via modelingUnit='bpe' + bpeVocab. This
+// unlocks arbitrary custom English wake words (e.g. "HEY NEXUS") instead
+// of the fixed 9-keyword allowlist baked into keywords_raw.txt.
+function ensureEnglishRawKeywordsFile(kwsDir, wakeWord) {
+  const label = normalizeWakeWord(wakeWord)
+  const normalized = label.replace(SPACE_REGEX, ' ').toUpperCase()
+  if (!normalized) return null
+
+  const targetFile = path.join(kwsDir, ENGLISH_CUSTOM_KEYWORDS_FILE)
+  const content = `${normalized} @${label}\n`
+
+  if (content !== _lastEnglishRawKeywordFileContent) {
+    fs.writeFileSync(targetFile, content, 'utf8')
+    _lastEnglishRawKeywordFileContent = content
+  }
+
+  return {
+    keywordsFile: targetFile,
+    label,
   }
 }
 
@@ -295,16 +320,26 @@ function resolveKwsRuntime(options = {}) {
   if (!modelFiles) {
     return {
       config: null,
-      reason: `未找到英文唤醒词模型目录：${kwsDir}`,
+      reason: `未找到英文唤醒词模型目录：${kwsDir}。请把唤醒词改成中文（例如「星绘」「小爱同学」）。`,
       modelKind: 'en',
     }
   }
 
-  const keywordConfig = ensureEnglishKeywordsFile(kwsDir, wakeWord)
+  // Prefer runtime BPE encoding when bpe.model ships with the KWS model —
+  // that lets any English wake word work, not just the 9 allowlist entries.
+  const bpeVocab = path.join(kwsDir, 'bpe.model')
+  const useRuntimeBpe = fs.existsSync(bpeVocab)
+
+  const keywordConfig = useRuntimeBpe
+    ? ensureEnglishRawKeywordsFile(kwsDir, wakeWord)
+    : ensureEnglishKeywordsFileAllowlist(kwsDir, wakeWord)
+
   if (!keywordConfig) {
     return {
       config: null,
-      reason: '当前英文唤醒词仅支持模型内置关键词，请改成中文唤醒词，或使用 HELLO WORLD / HEY SIRI / ALEXA 等内置词。',
+      reason: useRuntimeBpe
+        ? '英文唤醒词解析失败，请检查是否包含 BPE 词表无法识别的字符。'
+        : '自定义英文唤醒词暂不支持。请改成中文唤醒词，或使用内置词：HELLO WORLD / HI GOOGLE / HEY SIRI / ALEXA / LOVE AND PEACE / PLAY MUSIC / GO HOME / HAPPY NEW YEAR / MERRY CHRISTMAS。',
       modelKind: 'en',
     }
   }
@@ -313,7 +348,9 @@ function resolveKwsRuntime(options = {}) {
     config: {
       ...modelFiles,
       keywordsFile: keywordConfig.keywordsFile,
-      cacheKey: `en:${wakeWord.replace(SPACE_REGEX, ' ').toUpperCase()}`,
+      bpeVocab: useRuntimeBpe ? bpeVocab : '',
+      modelingUnit: useRuntimeBpe ? 'bpe' : '',
+      cacheKey: `en${useRuntimeBpe ? '-bpe' : ''}:${wakeWord.replace(SPACE_REGEX, ' ').toUpperCase()}`,
       modelKind: 'en',
       wakeWord: keywordConfig.label,
     },
@@ -330,6 +367,9 @@ class SherpaKwsService {
     this.active = false
     this.runtimeCacheKey = ''
     this.runtimeConfig = null
+    this._feedCallCount = 0
+    this._feedRmsAccum = 0
+    this._feedPeakAccum = 0
   }
 
   isAvailable(options = {}) {
@@ -368,26 +408,40 @@ class SherpaKwsService {
     this.destroy()
 
     try {
+      const modelConfigPayload = {
+        transducer: {
+          encoder: modelConfig.encoder,
+          decoder: modelConfig.decoder,
+          joiner: modelConfig.joiner,
+        },
+        tokens: modelConfig.tokens,
+        provider: 'cpu',
+        numThreads: 1,
+      }
+
+      // Only pass modelingUnit/bpeVocab when runtime BPE encoding is active
+      // (custom English wake words). Passing them as empty strings in the
+      // Chinese path breaks sherpa-onnx init — it treats them as "BPE requested
+      // but vocab missing" and the spotter fails to load.
+      if (modelConfig.modelingUnit && modelConfig.bpeVocab) {
+        modelConfigPayload.modelingUnit = modelConfig.modelingUnit
+        modelConfigPayload.bpeVocab = modelConfig.bpeVocab
+      }
+
+      // Threshold/score tuned for short Chinese wake words (2 chars): the
+      // default 0.25/1.0 is too strict for "星绘" and similar — acoustic
+      // evidence is thin, so loosen the threshold and boost the keyword path.
       this.spotter = new sherpa.KeywordSpotter({
         featConfig: {
           sampleRate: SAMPLE_RATE,
           featureDim: 80,
         },
-        modelConfig: {
-          transducer: {
-            encoder: modelConfig.encoder,
-            decoder: modelConfig.decoder,
-            joiner: modelConfig.joiner,
-          },
-          tokens: modelConfig.tokens,
-          provider: 'cpu',
-          numThreads: 1,
-        },
+        modelConfig: modelConfigPayload,
         keywordsFile: modelConfig.keywordsFile,
-        keywordsThreshold: 0.25,
-        keywordsScore: 1.0,
+        keywordsThreshold: 0.15,
+        keywordsScore: 2.0,
         maxActivePaths: 4,
-        numTrailingBlanks: 1,
+        numTrailingBlanks: 2,
       })
 
       this.initialized = true
@@ -423,6 +477,34 @@ class SherpaKwsService {
   feed(samples, sampleRate = SAMPLE_RATE) {
     if (!this.stream || !this.spotter || !this.active) return { keyword: null }
 
+    // Sanity log: compute RMS/peak across the chunk and emit a rolling
+    // summary roughly every ~6 seconds (50 chunks @ 2048/16000Hz). Lets us
+    // tell whether audio is actually arriving when the listener fails silently.
+    let sumSquares = 0
+    let peak = 0
+    for (let i = 0; i < samples.length; i += 1) {
+      const value = samples[i]
+      sumSquares += value * value
+      const absValue = value < 0 ? -value : value
+      if (absValue > peak) peak = absValue
+    }
+    const rms = samples.length ? Math.sqrt(sumSquares / samples.length) : 0
+    this._feedRmsAccum += rms
+    if (peak > this._feedPeakAccum) this._feedPeakAccum = peak
+    this._feedCallCount += 1
+    if (this._feedCallCount >= 50) {
+      const avgRms = this._feedRmsAccum / this._feedCallCount
+      console.info('[SherpaKWS] Audio flowing', {
+        chunks: this._feedCallCount,
+        avgRms: Number(avgRms.toFixed(4)),
+        peak: Number(this._feedPeakAccum.toFixed(4)),
+        wakeWord: this.runtimeConfig?.wakeWord,
+      })
+      this._feedCallCount = 0
+      this._feedRmsAccum = 0
+      this._feedPeakAccum = 0
+    }
+
     this.stream.acceptWaveform({ samples, sampleRate })
 
     while (this.spotter.isReady(this.stream)) {
@@ -433,7 +515,12 @@ class SherpaKwsService {
     if (result && result.keyword) {
       const keyword = result.keyword.trim().replace(/^\//, '')
       console.info('[SherpaKWS] Keyword detected:', keyword)
+      // Rebuild the stream instead of just resetting — spotter.reset()
+      // clears the decoder hypothesis but leaves the Zipformer encoder
+      // hidden state damaged, which tanks detection sensitivity on the
+      // next utterance. Creating a fresh stream restores full sensitivity.
       this.spotter.reset(this.stream)
+      this.stream = this.spotter.createStream()
       return { keyword }
     }
 

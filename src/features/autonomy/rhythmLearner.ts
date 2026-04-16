@@ -45,6 +45,9 @@ export function recordInteraction(profile: RhythmProfile): RhythmProfile {
   }
 }
 
+/** Baseline weight used when resetting slots after a long absence. */
+const NEUTRAL_SLOT_WEIGHT = 0.5
+
 /** Apply weekly decay to all slots so the model adapts to changing habits. */
 export function applyWeeklyDecay(profile: RhythmProfile): RhythmProfile {
   const today = new Date().toISOString().slice(0, 10)
@@ -56,6 +59,18 @@ export function applyWeeklyDecay(profile: RhythmProfile): RhythmProfile {
 
   const elapsed = Date.now() - lastDecay
   if (elapsed < MS_PER_WEEK) return profile
+
+  const daysSinceUpdate = elapsed / 86_400_000
+
+  // If more than 7 days have passed, reset all slots to neutral baseline
+  // instead of applying normal decay — the old pattern is too stale to be useful.
+  if (daysSinceUpdate > 7) {
+    return {
+      slots: new Array(SLOT_COUNT).fill(NEUTRAL_SLOT_WEIGHT),
+      lastDecayDate: today,
+      totalInteractions: profile.totalInteractions,
+    }
+  }
 
   // Apply decay for each elapsed week
   const weeks = Math.floor(elapsed / MS_PER_WEEK)
@@ -114,6 +129,6 @@ export function formatRhythmSummary(profile: RhythmProfile): string {
   if (profile.totalInteractions < 10) return ''
 
   const topHours = getTopActiveHours(profile, 3)
-  const hourLabels = topHours.map((h) => `${h}:00`).join('、')
-  return `用户最活跃的时段：${hourLabels}`
+  const hourLabels = topHours.map((h) => `${h}:00`).join(', ')
+  return `User's most active hours: ${hourLabels}`
 }

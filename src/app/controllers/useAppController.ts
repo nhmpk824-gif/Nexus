@@ -34,6 +34,12 @@ import {
   toChatToolResult,
 } from '../../features/tools'
 import { getSettingsSnapshot, initializeSettingsWithVault } from '../store/settingsStore'
+import {
+  broadcastToChannels,
+  getCoreRuntime,
+  setDiscordKnownChannelIds,
+  setTelegramKnownChatIds,
+} from '../../lib/coreRuntime'
 import { useAppOverlays } from './useAppOverlays'
 import { useAutonomyController } from './useAutonomyController'
 import { useDebugConsole } from './useDebugConsole'
@@ -70,6 +76,65 @@ export function useAppController() {
       setSettings(updated)
     })
   }, [])
+
+  // Push budget config into CostTracker whenever relevant settings change.
+  useEffect(() => {
+    getCoreRuntime().refreshBudgetConfig({
+      dailyCapUsd: settings.budgetDailyCapUsd || undefined,
+      monthlyCapUsd: settings.budgetMonthlyCapUsd || undefined,
+      downgradeThresholdRatio: settings.budgetDowngradeRatio || undefined,
+      hardStop: settings.budgetHardStopEnabled,
+    })
+  }, [
+    settings.budgetDailyCapUsd,
+    settings.budgetMonthlyCapUsd,
+    settings.budgetDowngradeRatio,
+    settings.budgetHardStopEnabled,
+  ])
+
+  // Seed the core runtime's cross-channel broadcast targets from settings
+  // (the React gateway hooks own the actual bridge connections).
+  useEffect(() => {
+    const allowedChatIds = settings.telegramIntegrationEnabled
+      ? settings.telegramAllowedChatIds
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => Number.isFinite(n) && n !== 0)
+      : []
+    setTelegramKnownChatIds(allowedChatIds)
+  }, [settings.telegramIntegrationEnabled, settings.telegramAllowedChatIds])
+
+  useEffect(() => {
+    const allowedChannelIds = settings.discordIntegrationEnabled
+      ? settings.discordAllowedChannelIds
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      : []
+    setDiscordKnownChannelIds(allowedChannelIds)
+  }, [settings.discordIntegrationEnabled, settings.discordAllowedChannelIds])
+
+  // Push the agent workspace root into the main process so the sandboxed
+  // fs tools (Read/Edit/Glob/Grep) know where they're allowed to operate.
+  useEffect(() => {
+    const root = settings.agentWorkspaceRoot.trim()
+    if (root) {
+      // Reject paths containing traversal segments
+      if (/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(root)) {
+        console.error('[workspaceRoot] Rejected: path must not contain ".." segments:', root)
+        setErrorRef.current?.('Workspace root must not contain ".." path segments.')
+        return
+      }
+      // On Windows, require a drive letter prefix (e.g. C:\)
+      const isWindows = typeof navigator !== 'undefined' && /win/i.test(navigator.platform)
+      if (isWindows && !/^[A-Za-z]:[\\/]/.test(root)) {
+        console.error('[workspaceRoot] Rejected: Windows path must start with a drive letter:', root)
+        setErrorRef.current?.('On Windows, workspace root must start with a drive letter (e.g. C:\\).')
+        return
+      }
+    }
+    void window.desktopPet?.workspaceSetRoot?.({ root })
+  }, [settings.agentWorkspaceRoot])
 
   const [goals] = useState<Goal[]>(() => readJson<Goal[]>(AUTONOMY_GOALS_STORAGE_KEY, []))
   const goalsRef = useRef(goals)
@@ -215,6 +280,16 @@ export function useAppController() {
     appendSystemMessage: (content, tone) => appendSystemMessageRef.current(content, tone),
   })
 
+  // Ref bridge for emotion/relationship/rhythm prompt getters:
+  // useChat must be created before useAutonomyController (autonomy depends on
+  // chat), so we cannot pass autonomy.getEmotionPrompt / getRelationshipPrompt /
+  // getRhythmPrompt directly into useChat. We create empty refs here first, then
+  // after autonomy is created, a useEffect installs the real getters. The wrapper
+  // function references seen by useChat ctx are stable, so ctx won't rebuild.
+  const emotionPromptGetterRef = useRef<() => string>(() => '')
+  const relationshipPromptGetterRef = useRef<() => string>(() => '')
+  const rhythmPromptGetterRef = useRef<() => string>(() => '')
+
   const chat = useChat({
     settingsRef,
     setSettings,
@@ -249,6 +324,9 @@ export function useAppController() {
     stopActiveSpeechOutput: voice.stopActiveSpeechOutput,
     canInterruptSpeech: () => settingsRef.current.voiceInterruptionEnabled,
     loadDesktopContextSnapshot: desktopContext.loadDesktopContextSnapshot,
+    getEmotionPromptText: () => emotionPromptGetterRef.current(),
+    getRelationshipPromptText: () => relationshipPromptGetterRef.current(),
+    getRhythmPromptText: () => rhythmPromptGetterRef.current(),
     reminderTasksRef: reminderTaskStore.reminderTasksRef,
     addReminderTask: (input) => addReminderTaskFnRef.current?.(input) ?? null,
     updateReminderTask: (id, updates) => updateReminderTaskFnRef.current?.(id, updates) ?? null,
@@ -342,10 +420,10 @@ export function useAppController() {
     const currentSettings = settingsRef.current
     const defaultSpeechText = task.speechText?.trim() || `${task.title}提醒，${task.prompt.trim()}`
 
-    const actionLabel = action.kind === 'notice' ? '通知' : action.kind === 'weather' ? '天气' : action.kind === 'chat_action' ? '智能动作' : '搜索'
+    const actionLabel = action.kind === 'notice' ? 'notice' : action.kind === 'weather' ? 'weather' : action.kind === 'chat_action' ? 'chat_action' : 'search'
     debugConsole.appendDebugConsoleEvent({
       source: 'tool',
-      title: '开始执行自动任务',
+      title: 'Starting automated task',
       detail: `${task.title} / ${actionLabel}`,
       relatedTaskId: task.id,
     })
@@ -358,10 +436,16 @@ export function useAppController() {
           speechContent: defaultSpeechText,
           autoHideMs: 16_000,
         })
+        const broadcastResults = await broadcastToChannels(
+          `${task.title}\n${displayText}`,
+        )
+        const deliveredCount = broadcastResults.filter((r) => r.ok).length
         debugConsole.appendDebugConsoleEvent({
           source: 'tool',
-          title: '自动提醒已发出',
-          detail: `${task.title} / 下一次时间可在任务快照里查看`,
+          title: 'Automated reminder dispatched',
+          detail: deliveredCount > 0
+            ? `${task.title} / 本地 + 跨通道 ${deliveredCount}`
+            : `${task.title} / next run visible in task snapshot`,
           tone: 'success',
           relatedTaskId: task.id,
         })
@@ -374,8 +458,8 @@ export function useAppController() {
           chat.appendSystemMessage(`本地自动任务「${task.title}」没有执行：天气工具当前已关闭。`, 'error')
           debugConsole.appendDebugConsoleEvent({
             source: 'tool',
-            title: '自动任务被跳过',
-            detail: `${task.title} / 天气工具当前已关闭`,
+            title: 'Automated task skipped',
+            detail: `${task.title} / weather tool currently disabled`,
             tone: 'error',
             relatedTaskId: task.id,
           })
@@ -400,8 +484,8 @@ export function useAppController() {
         })
         debugConsole.appendDebugConsoleEvent({
           source: 'tool',
-          title: '自动天气任务已完成',
-          detail: `${task.title} / ${result.kind === 'weather' ? result.result.resolvedName : action.location || '默认地点'}`,
+          title: 'Automated weather task completed',
+          detail: `${task.title} / ${result.kind === 'weather' ? result.result.resolvedName : action.location || 'default location'}`,
           tone: 'success',
           relatedTaskId: task.id,
         })
@@ -415,7 +499,7 @@ export function useAppController() {
         )
         debugConsole.appendDebugConsoleEvent({
           source: 'tool',
-          title: '智能动作已触发',
+          title: 'Chat action triggered',
           detail: `${task.title} / ${action.instruction}`,
           tone: 'success',
           relatedTaskId: task.id,
@@ -428,8 +512,8 @@ export function useAppController() {
         chat.appendSystemMessage(`本地自动任务「${task.title}」没有执行：网页搜索工具当前已关闭。`, 'error')
         debugConsole.appendDebugConsoleEvent({
           source: 'tool',
-          title: '自动任务被跳过',
-          detail: `${task.title} / 搜索工具当前已关闭`,
+          title: 'Automated task skipped',
+          detail: `${task.title} / search tool currently disabled`,
           tone: 'error',
           relatedTaskId: task.id,
         })
@@ -455,7 +539,7 @@ export function useAppController() {
       })
       debugConsole.appendDebugConsoleEvent({
         source: 'tool',
-        title: '自动搜索任务已完成',
+        title: 'Automated search task completed',
         detail: `${task.title} / ${result.kind === 'web_search' ? result.result.query : action.query}`,
         tone: 'success',
         relatedTaskId: task.id,
@@ -466,7 +550,7 @@ export function useAppController() {
       pet.updatePetStatus(`自动任务失败：${task.title}`, 3200)
       debugConsole.appendDebugConsoleEvent({
         source: 'tool',
-        title: '自动任务执行失败',
+        title: 'Automated task execution failed',
         detail: `${task.title} / ${errorMessage}`,
         tone: 'error',
         relatedTaskId: task.id,
@@ -496,6 +580,17 @@ export function useAppController() {
     debugConsole,
   })
 
+  // Install autonomy's emotion/relationship/rhythm prompt getters into the refs
+  // created at the top. This lets useChat (when assembling chat options) read
+  // the latest emotion/relationship/rhythm state text into the system prompt.
+  // No dependency array: autonomy returns new getter references every render,
+  // so we sync on every render.
+  useEffect(() => {
+    emotionPromptGetterRef.current = autonomy.getEmotionPrompt
+    relationshipPromptGetterRef.current = autonomy.getRelationshipPrompt
+    rhythmPromptGetterRef.current = autonomy.getRhythmPrompt
+  })
+
   // Wake autonomy when user sends a chat message
   const originalSendMessage = chat.sendMessage
   const autonomyAwareSendMessage = useCallback(async (...args: Parameters<typeof originalSendMessage>) => {
@@ -519,7 +614,7 @@ export function useAppController() {
       autonomy.applyEmotionSignal('task_completed')
     }
     return result
-  }, [originalSendMessage, autonomy.focusAwareness, autonomy.autonomyTick, autonomy.memoryDream, autonomy.markUserResponse, autonomy.applyEmotionSignal, autonomy.markInteraction])
+  }, [originalSendMessage, autonomy])
 
   // Patch chat.sendMessage with autonomy-aware wrapper
   const chatWithAutonomy = useMemo(() => ({

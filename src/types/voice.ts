@@ -15,7 +15,6 @@ export type ServiceConnectionCapability =
   | 'text'
   | 'speech-input'
   | 'speech-output'
-  | 'voice-clone'
 
 export interface ServiceConnectionRequest {
   providerId: string
@@ -191,27 +190,6 @@ export interface TtsStreamErrorEvent {
 }
 
 export type TtsStreamEvent = TtsStreamChunkEvent | TtsStreamEndEvent | TtsStreamErrorEvent
-
-export interface VoiceCloneFilePayload {
-  name: string
-  mimeType: string
-  dataBase64: string
-}
-
-export interface VoiceCloneRequest {
-  providerId: string
-  baseUrl: string
-  apiKey: string
-  name: string
-  description?: string
-  removeBackgroundNoise?: boolean
-  files: VoiceCloneFilePayload[]
-}
-
-export interface VoiceCloneResponse {
-  voiceId: string
-  message: string
-}
 
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking'
 

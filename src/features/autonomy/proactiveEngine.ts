@@ -80,12 +80,19 @@ function classifyActivity(windowTitle: string | null): ActivityClass {
   return 'unknown'
 }
 
+/** Web-based IDE keywords — when browsing one of these, treat as deep-focus coding. */
+const WEB_IDE_PATTERNS = /VS ?Code|Visual Studio|Cursor|WebStorm|IntelliJ|GitHub Codespace|Gitpod|CodeSandbox|StackBlitz|Replit/i
+
 /**
  * Returns true if the user appears deeply focused (coding, documents, etc.)
  * and should not be interrupted with ambient messages.
  */
-function isUserDeepFocused(activity: ActivityClass, idleTicks: number): boolean {
-  return idleTicks <= 2 && (activity === 'coding' || activity === 'documents')
+function isUserDeepFocused(activity: ActivityClass, idleTicks: number, windowTitle?: string | null): boolean {
+  if (idleTicks > 2) return false
+  if (activity === 'coding' || activity === 'documents') return true
+  // Browsing a web IDE counts as deep focus
+  if (activity === 'browsing' && windowTitle && WEB_IDE_PATTERNS.test(windowTitle)) return true
+  return false
 }
 
 // ── Decision evaluation ───────────────────────────────────────────────────────
@@ -125,7 +132,7 @@ export function evaluateProactiveContext(input: ProactiveContextInput): Proactiv
 
   // Gate: user is deep-focused → stay silent (core feature: don't interrupt coding)
   // Exception: overdue reminders still break through
-  const deepFocused = isUserDeepFocused(activity, tickState.consecutiveIdleTicks)
+  const deepFocused = isUserDeepFocused(activity, tickState.consecutiveIdleTicks, input.activeWindowTitle)
 
   // Collect candidates and pick the highest-priority one
   const candidates: ProactiveDecision[] = []

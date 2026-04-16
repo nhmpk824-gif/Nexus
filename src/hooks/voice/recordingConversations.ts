@@ -6,6 +6,7 @@ import type {
 } from '../../features/voice/sessionMachine'
 import { blobToBase64 } from '../../lib/common'
 import { createId } from '../../lib'
+import { recordSttUsage } from '../../features/metering/speechCost'
 import { mapSpeechError } from '../../lib/voice'
 import type {
   AppSettings,
@@ -151,7 +152,8 @@ export async function startApiRecordingConversation(
         }
       },
       onSpeech: () => {
-        params.setLiveTranscript('正在录音，请继续...')
+        // No setLiveTranscript here — the floating bubble should only show
+        // real recognized text, not "recording in progress" status messages.
       },
       onRecorderError: () => {
         params.handleVoiceListeningFailure('录音失败，请检查麦克风是否可用。')
@@ -173,7 +175,7 @@ export async function startApiRecordingConversation(
           params.updateVoicePipeline('transcribing', '录音结束，正在转写语音。')
           const traceId = createId('voice')
           const traceLabel = formatTraceLabel(traceId)
-          params.appendVoiceTrace('开始转写', `#${traceLabel} 正在请求语音识别服务`)
+          params.appendVoiceTrace('Start transcription', `#${traceLabel} requesting speech recognition service`)
           const payload: AudioTranscriptionRequest = {
             providerId: params.currentSettings.speechInputProviderId,
             baseUrl: params.currentSettings.speechInputApiBaseUrl,
@@ -194,7 +196,13 @@ export async function startApiRecordingConversation(
             return
           }
 
-          params.appendVoiceTrace('转写完成', `#${traceLabel} 已拿到识别文本`)
+          recordSttUsage({
+            providerId: params.currentSettings.speechInputProviderId,
+            modelId: params.currentSettings.speechInputModel,
+            transcriptChars: transcript.length,
+          })
+
+          params.appendVoiceTrace('Transcription complete', `#${traceLabel} received recognized text`)
           await params.handleRecognizedVoiceTranscript(transcript, { traceId })
         } catch (error) {
           params.handleVoiceListeningFailure(

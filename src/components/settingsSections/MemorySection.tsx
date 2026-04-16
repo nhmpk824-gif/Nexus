@@ -1,7 +1,8 @@
 import { memo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { MemoryPanel } from '../../features/memory/components'
-import { MEMORY_EMBEDDING_MODEL_OPTIONS } from '../../features/memory/constants'
+import { MEMORY_EMBEDDING_MODEL_OPTIONS, SCREEN_VLM_MODEL_OPTIONS } from '../../features/memory/constants'
+import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import { parseNumberInput } from '../settingsDrawerSupport'
 import type {
   AppSettings,
@@ -78,19 +79,21 @@ export const MemorySection = memo(function MemorySection({
   onUpdateDailyEntry,
   onRemoveDailyEntry,
 }: MemorySectionProps) {
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) => pickTranslatedUiText(uiLanguage, key)
+
   return (
     <section className={`settings-section ${active ? 'is-active' : 'is-hidden'}`}>
       <div className="settings-section__title-row">
         <div>
-          <h4>上下文感知</h4>
+          <h4>{ti('settings.memory.context.title')}</h4>
           <p className="settings-drawer__hint">
-            桌面感知能力。建议先稳定开启前台窗口和剪贴板，OCR 只在确实需要时打开。
+            {ti('settings.memory.context.note')}
           </p>
         </div>
       </div>
 
       <label className="settings-toggle">
-        <span>启用上下文感知</span>
+        <span>{ti('settings.memory.context.enable')}</span>
         <input
           type="checkbox"
           checked={draft.contextAwarenessEnabled}
@@ -104,7 +107,7 @@ export const MemorySection = memo(function MemorySection({
       </label>
 
       <label className="settings-toggle">
-        <span>读取剪贴板上下文</span>
+        <span>{ti('settings.memory.context.clipboard')}</span>
         <input
           type="checkbox"
           checked={draft.clipboardContextEnabled}
@@ -119,7 +122,7 @@ export const MemorySection = memo(function MemorySection({
       </label>
 
       <label className="settings-toggle">
-        <span>读取当前窗口上下文</span>
+        <span>{ti('settings.memory.context.active_window')}</span>
         <input
           type="checkbox"
           checked={draft.activeWindowContextEnabled}
@@ -134,7 +137,7 @@ export const MemorySection = memo(function MemorySection({
       </label>
 
       <label className="settings-toggle">
-        <span>读取屏幕文字（OCR）</span>
+        <span>{ti('settings.memory.context.screen_ocr')}</span>
         <input
           type="checkbox"
           checked={draft.screenContextEnabled}
@@ -151,7 +154,7 @@ export const MemorySection = memo(function MemorySection({
       {draft.contextAwarenessEnabled && draft.screenContextEnabled ? (
         <>
           <label>
-            <span>屏幕 OCR 语言</span>
+            <span>{ti('settings.memory.context.ocr_language')}</span>
             <input
               value={draft.screenOcrLanguage}
               onChange={(event) =>
@@ -165,7 +168,7 @@ export const MemorySection = memo(function MemorySection({
           </label>
 
           <label className="settings-toggle">
-            <span>启用 VLM 屏幕理解</span>
+            <span>{ti('settings.memory.context.vlm_enable')}</span>
             <input
               type="checkbox"
               checked={draft.screenVlmEnabled}
@@ -179,13 +182,13 @@ export const MemorySection = memo(function MemorySection({
           </label>
 
           <p className="settings-drawer__hint">
-            使用视觉语言模型（VLM）分析屏幕截图，获得比 OCR 更丰富的画面理解。需要支持视觉的模型（如 GPT-4o、Qwen-VL 等）。
+            {ti('settings.memory.context.vlm_note')}
           </p>
 
           {draft.screenVlmEnabled ? (
             <>
               <label>
-                <span>VLM API 地址</span>
+                <span>{ti('settings.memory.context.vlm_base_url')}</span>
                 <input
                   value={draft.screenVlmBaseUrl}
                   onChange={(event) =>
@@ -199,7 +202,7 @@ export const MemorySection = memo(function MemorySection({
               </label>
 
               <label>
-                <span>VLM API Key</span>
+                <span>{ti('settings.memory.context.vlm_api_key')}</span>
                 <input
                   type="password"
                   value={draft.screenVlmApiKey}
@@ -209,12 +212,40 @@ export const MemorySection = memo(function MemorySection({
                       screenVlmApiKey: event.target.value,
                     }))
                   }
-                  placeholder="留空则不使用鉴权"
+                  placeholder={ti('settings.memory.context.vlm_api_key_placeholder')}
                 />
               </label>
 
               <label>
-                <span>VLM 模型</span>
+                <span>{ti('settings.memory.context.vlm_model_preset')}</span>
+                <select
+                  value={SCREEN_VLM_MODEL_OPTIONS.some((option) => option.value === draft.screenVlmModel)
+                    ? draft.screenVlmModel
+                    : '__custom__'}
+                  onChange={(event) => {
+                    if (event.target.value === '__custom__') return
+                    setDraft((prev) => ({
+                      ...prev,
+                      screenVlmModel: event.target.value,
+                    }))
+                  }}
+                >
+                  {SCREEN_VLM_MODEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                  <option value="__custom__">{ti('settings.memory.custom_option')}</option>
+                </select>
+              </label>
+
+              <p className="settings-drawer__hint">
+                {SCREEN_VLM_MODEL_OPTIONS.find((option) => option.value === draft.screenVlmModel)?.hint
+                  ?? ti('settings.memory.context.vlm_custom_hint')}
+              </p>
+
+              <label>
+                <span>{ti('settings.memory.context.vlm_custom_model')}</span>
                 <input
                   value={draft.screenVlmModel}
                   onChange={(event) =>
@@ -233,15 +264,15 @@ export const MemorySection = memo(function MemorySection({
 
       <div className="settings-section__title-row">
         <div>
-          <h4>长期记忆</h4>
+          <h4>{ti('settings.memory.long_term.title')}</h4>
           <p className="settings-drawer__hint">
-            这里把记忆拆成当前会话、每日日志和长期记忆三层，并支持可配置的向量检索。
+            {ti('settings.memory.long_term.note')}
           </p>
         </div>
       </div>
 
       <label>
-        <span>记忆检索模式</span>
+        <span>{ti('settings.memory.long_term.search_mode')}</span>
         <select
           value={draft.memorySearchMode}
           onChange={(event) =>
@@ -264,7 +295,7 @@ export const MemorySection = memo(function MemorySection({
       </p>
 
       <label>
-        <span>向量模型预设</span>
+        <span>{ti('settings.memory.long_term.embedding_preset')}</span>
         <select
           value={selectedMemoryEmbeddingModel?.value ?? '__custom__'}
           onChange={(event) => {
@@ -281,16 +312,16 @@ export const MemorySection = memo(function MemorySection({
               {option.label}
             </option>
           ))}
-          <option value="__custom__">保留自定义值</option>
+          <option value="__custom__">{ti('settings.memory.custom_option')}</option>
         </select>
       </label>
 
       <p className="settings-drawer__hint">
-        {selectedMemoryEmbeddingModel?.hint ?? '也可以直接在下面填写自定义向量模型 ID。'}
+        {selectedMemoryEmbeddingModel?.hint ?? ti('settings.memory.long_term.embedding_custom_hint')}
       </p>
 
       <label>
-        <span>自定义向量模型 ID</span>
+        <span>{ti('settings.memory.long_term.embedding_custom_model')}</span>
         <input
           value={draft.memoryEmbeddingModel}
           onChange={(event) =>
@@ -304,7 +335,7 @@ export const MemorySection = memo(function MemorySection({
 
       <div className="settings-grid">
         <label>
-          <span>长期记忆召回数</span>
+          <span>{ti('settings.memory.long_term.recall_long_term')}</span>
           <input
             type="number"
             min="1"
@@ -321,7 +352,7 @@ export const MemorySection = memo(function MemorySection({
         </label>
 
         <label>
-          <span>日记召回数</span>
+          <span>{ti('settings.memory.long_term.recall_diary')}</span>
           <input
             type="number"
             min="1"
@@ -338,7 +369,7 @@ export const MemorySection = memo(function MemorySection({
         </label>
 
         <label>
-          <span>语义命中数</span>
+          <span>{ti('settings.memory.long_term.recall_semantic')}</span>
           <input
             type="number"
             min="1"
@@ -356,7 +387,7 @@ export const MemorySection = memo(function MemorySection({
       </div>
 
       <label>
-        <span>每日日志保留天数</span>
+        <span>{ti('settings.memory.long_term.diary_retention')}</span>
         <input
           type="number"
           min="1"
@@ -373,7 +404,7 @@ export const MemorySection = memo(function MemorySection({
       </label>
 
       <p className="settings-drawer__hint">
-        记忆导入会替换当前长期记忆和每日日志；手动编辑可以直接改单条长期记忆内容。
+        {ti('settings.memory.long_term.archive_note')}
       </p>
 
       <div className="settings-section__title-row">
@@ -383,7 +414,7 @@ export const MemorySection = memo(function MemorySection({
           onClick={onExportMemoryArchive}
           disabled={exportingMemoryArchive}
         >
-          {exportingMemoryArchive ? '导出中...' : '导出记忆 JSON'}
+          {exportingMemoryArchive ? ti('settings.memory.long_term.exporting') : ti('settings.memory.long_term.export')}
         </button>
 
         <button
@@ -392,7 +423,7 @@ export const MemorySection = memo(function MemorySection({
           onClick={onImportMemoryArchive}
           disabled={importingMemoryArchive || chatBusy}
         >
-          {importingMemoryArchive ? '导入中...' : '导入记忆 JSON'}
+          {importingMemoryArchive ? ti('settings.memory.long_term.importing') : ti('settings.memory.long_term.import')}
         </button>
 
         <button
@@ -401,7 +432,7 @@ export const MemorySection = memo(function MemorySection({
           onClick={onClearMemoryArchive}
           disabled={clearingMemoryArchive || chatBusy}
         >
-          {clearingMemoryArchive ? '清空中...' : '清空记忆库'}
+          {clearingMemoryArchive ? ti('settings.memory.long_term.clearing') : ti('settings.memory.long_term.clear')}
         </button>
       </div>
 

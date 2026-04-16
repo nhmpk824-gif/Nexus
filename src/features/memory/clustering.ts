@@ -148,7 +148,6 @@ function buildClusterLabel(tokens: Set<string>): string {
 export function findBestCluster(
   memory: MemoryItem,
   clusters: MemoryCluster[],
-  _allMemories: MemoryItem[],
 ): string | null {
   if (clusters.length === 0) return null
 

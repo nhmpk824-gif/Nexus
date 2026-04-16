@@ -24,6 +24,8 @@ export function register() {
     requireTrustedSender(event)
     const { samples } = payload
     if (!samples || !samples.length) return { ok: true }
+    if (!Array.isArray(samples) && !(samples instanceof Float32Array)) return { ok: true }
+    if (samples.length > 320000) return { ok: true }
     const float32 = samples instanceof Float32Array ? samples : new Float32Array(samples)
     tencentAsr.feedAudio(float32)
     return { ok: true }
@@ -137,7 +139,10 @@ export function register() {
   })
   ipcMain.handle('realtime:feed', (event, payload) => {
     requireTrustedSender(event)
-    realtimeVoice.feedAudio(payload.samples)
+    const samples = payload.samples
+    if (samples && !(Array.isArray(samples) || samples instanceof Float32Array)) return { ok: true }
+    if (samples && samples.length > 320000) return { ok: true }
+    realtimeVoice.feedAudio(samples)
     return { ok: true }
   })
   ipcMain.handle('realtime:interrupt', (event) => {

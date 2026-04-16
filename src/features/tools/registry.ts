@@ -1,10 +1,7 @@
 import type { AppSettings, ExternalLinkResponse, WeatherLookupResponse, WebSearchResponse } from '../../types'
 import { buildBuiltInToolAssistantSummary } from './assistant.ts'
-import { extractBuiltInToolMatch } from './extractors.ts'
 import { resolveWeatherLocationFallback, rewriteSearchQuery } from './queryRewrite.ts'
 import type { BuiltInToolPolicy, BuiltInToolResult, MatchedBuiltInTool } from './toolTypes'
-
-const DEFAULT_WEB_SEARCH_LIMIT = 5
 
 export { extractLikelyWeatherLocation, extractSearchQuery, normalizeToolText } from './extractors.ts'
 
@@ -16,13 +13,13 @@ function formatWebSearchDisplayContext(result: WebSearchResponse) {
   const sections: string[] = []
 
   if (result.display?.summary) {
-    sections.push(`结构化摘要：${result.display.summary}`)
+    sections.push(`Structured summary: ${result.display.summary}`)
   }
 
   if (result.display?.bodyLines?.length) {
     sections.push(
       [
-        '结构化正文：',
+        'Structured body:',
         ...result.display.bodyLines.slice(0, 6).map((line, index) => `${index + 1}. ${line}`),
       ].join('\n'),
     )
@@ -31,9 +28,9 @@ function formatWebSearchDisplayContext(result: WebSearchResponse) {
   if (result.display?.panels?.length) {
     sections.push(
       [
-        '结构化卡片：',
+        'Structured cards:',
         ...result.display.panels.slice(0, 3).map((panel, index) => (
-          `${index + 1}. 标题：${panel.title}\n来源：${panel.host}\n摘要：${panel.body}`
+          `${index + 1}. Title: ${panel.title}\nSource: ${panel.host}\nSnippet: ${panel.body}`
         )),
       ].join('\n\n'),
     )
@@ -52,15 +49,15 @@ function formatWebSearchPromptContext(result: WebSearchResponse) {
   })
 
   const itemLines = result.items.map((item, index) => (
-    `${index + 1}. 标题：${item.title}\n链接：${item.url}\n摘要：${item.snippet}${item.publishedAt ? `\n发布时间：${item.publishedAt}` : ''}`
+    `${index + 1}. Title: ${item.title}\nURL: ${item.url}\nSnippet: ${item.snippet}${item.publishedAt ? `\nPublished: ${item.publishedAt}` : ''}`
   ))
 
   const displayContext = formatWebSearchDisplayContext(result)
 
   return [
-    `网页搜索结果（查询：${result.query}）：`,
-    `建议先给用户的总结：${assistantSummary}`,
-    '请先直接总结这些结果是否回答了用户问题；如果结果明显跑偏，也要明确说这次搜索结果不准，不要再说“我这就去查”。',
+    `Web search results (query: ${result.query}):`,
+    `Suggested summary for the user: ${assistantSummary}`,
+    'First, directly summarize whether these results answer the user\'s question. If the results are clearly off-topic, say the search results are not useful — do NOT say "I\'ll go search it now." Reply in the user\'s language.',
     displayContext,
     itemLines.join('\n\n'),
   ]
@@ -74,10 +71,10 @@ function formatWeatherSystemMessage(result: WeatherLookupResponse) {
 
 function formatWeatherPromptContext(result: WeatherLookupResponse) {
   return [
-    `天气工具结果（地点：${result.resolvedName}）：`,
-    `当前：${result.currentSummary}`,
-    result.todaySummary ? `今天：${result.todaySummary}` : '',
-    result.tomorrowSummary ? `明天：${result.tomorrowSummary}` : '',
+    `Weather tool result (location: ${result.resolvedName}):`,
+    `Current: ${result.currentSummary}`,
+    result.todaySummary ? `Today: ${result.todaySummary}` : '',
+    result.tomorrowSummary ? `Tomorrow: ${result.tomorrowSummary}` : '',
   ]
     .filter(Boolean)
     .join('\n')
@@ -88,7 +85,7 @@ function formatOpenLinkSystemMessage(result: ExternalLinkResponse) {
 }
 
 function formatOpenLinkPromptContext(result: ExternalLinkResponse) {
-  return `打开链接工具结果：已在系统浏览器中打开 ${result.url}`
+  return `Open link tool result: opened ${result.url} in the system browser.`
 }
 
 export function isBuiltInToolAvailable(tool: MatchedBuiltInTool['id']) {
@@ -101,10 +98,6 @@ export function isBuiltInToolAvailable(tool: MatchedBuiltInTool['id']) {
   }
 
   return Boolean(window.desktopPet?.searchWeb)
-}
-
-export function matchBuiltInTool(content: string): MatchedBuiltInTool | null {
-  return extractBuiltInToolMatch(content, DEFAULT_WEB_SEARCH_LIMIT)
 }
 
 export async function executeBuiltInTool(
@@ -132,7 +125,7 @@ export async function executeBuiltInTool(
     return {
       kind: 'open_external',
       systemMessage: formatOpenLinkSystemMessage(result),
-      promptContext: `${formatOpenLinkPromptContext(result)}\n建议先给用户的总结：${assistantSummary}`,
+      promptContext: `${formatOpenLinkPromptContext(result)}\nSuggested summary for the user: ${assistantSummary}`,
       assistantSummary,
       result,
     }
@@ -163,7 +156,7 @@ export async function executeBuiltInTool(
     return {
       kind: 'weather',
       systemMessage: formatWeatherSystemMessage(result),
-      promptContext: `${formatWeatherPromptContext(result)}\n建议先给用户的总结：${assistantSummary}`,
+      promptContext: `${formatWeatherPromptContext(result)}\nSuggested summary for the user: ${assistantSummary}`,
       assistantSummary,
       result,
     }
@@ -173,21 +166,43 @@ export async function executeBuiltInTool(
     throw new Error('当前环境暂不支持网页搜索。')
   }
 
-  const rewrittenQuery = rewriteSearchQuery(tool.query)
+  // Trust Tavily / Perplexity / etc. to handle semantic understanding — pass
+  // the user's raw query through instead of re-mutating it on our side. The
+  // rewriteSearchQuery call below is still used to derive metadata (subject /
+  // facet / keywords / candidateQueries) that the electron runtime uses for
+  // local result scoring, but it no longer replaces the query itself.
+  const searchMetadata = rewriteSearchQuery(tool.query)
   const result = await window.desktopPet.searchWeb({
-    query: rewrittenQuery.rewrittenQuery,
+    query: tool.query,
     limit: tool.limit,
     providerId: settings?.toolWebSearchProviderId,
     baseUrl: settings?.toolWebSearchApiBaseUrl,
     apiKey: settings?.toolWebSearchApiKey,
-    displayQuery: rewrittenQuery.displayQuery,
-    keywords: tool.keywords?.length ? tool.keywords : rewrittenQuery.keywords,
+    displayQuery: tool.query,
+    keywords: tool.keywords?.length ? tool.keywords : searchMetadata.keywords,
     candidateQueries: tool.candidateQueries?.length
       ? tool.candidateQueries
-      : rewrittenQuery.candidateQueries,
+      : searchMetadata.candidateQueries,
+    subject: searchMetadata.subject,
+    facet: searchMetadata.facet,
+    matchProfile: searchMetadata.matchProfile,
+    strictTerms: searchMetadata.strictTerms,
+    softTerms: searchMetadata.softTerms,
+    phraseTerms: searchMetadata.phraseTerms,
     fallbackToBing: settings?.toolWebSearchFallbackToBing,
     policy,
   })
+  if (result?.debugTrace?.length) {
+    console.info(
+      '[web_search] provider trace',
+      {
+        query: tool.query,
+        configuredProvider: settings?.toolWebSearchProviderId,
+        actualProvider: result.providerId,
+        trace: result.debugTrace,
+      },
+    )
+  }
   const assistantSummary = buildBuiltInToolAssistantSummary({
     kind: 'web_search',
     systemMessage: '',

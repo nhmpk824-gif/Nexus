@@ -13,6 +13,7 @@ import type {
   MemoryItem,
   PetDialogBubbleState,
   PetMood,
+  PetThoughtBubbleState,
   ReminderTask,
   VoicePipelineState,
   VoiceState,
@@ -76,6 +77,26 @@ export type UseChatContext = {
   stopActiveSpeechOutput: () => void
   canInterruptSpeech: () => boolean
   loadDesktopContextSnapshot: () => Promise<DesktopContextSnapshot | null>
+  /**
+   * Get the current emotion state formatted as prompt text (from
+   * useAutonomyController.getEmotionPrompt). Injected via a ref wrapper to
+   * break the useChat -> useAutonomyController hook ordering cycle. Callers
+   * must tolerate the getter being unset (returns an empty string).
+   */
+  getEmotionPromptText?: () => string
+  /**
+   * Get the current relationship state formatted as prompt text (from
+   * useAutonomyController.getRelationshipPrompt). Same pattern as above —
+   * injected via ref wrapper, tolerant of being unset.
+   */
+  getRelationshipPromptText?: () => string
+  /**
+   * Get the user's rhythm awareness formatted as prompt text (from
+   * useAutonomyController.getRhythmPrompt). Returns an empty string when
+   * interaction count < 10. Same pattern as above — injected via ref wrapper,
+   * tolerant of being unset.
+   */
+  getRhythmPromptText?: () => string
   reminderTasksRef: RefObject<ReminderTask[]>
   addReminderTask: (input: {
     title: string
@@ -108,6 +129,7 @@ export type UseChatSnapshot = {
   busy: boolean
   error: string | null
   petDialogBubble: PetDialogBubbleState | null
+  petThoughtBubble: PetThoughtBubbleState | null
   assistantActivity: AssistantRuntimeActivity
 }
 

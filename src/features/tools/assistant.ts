@@ -2,10 +2,6 @@ import type { WebSearchResultItem } from '../../types'
 import type { BuiltInToolResult } from './toolTypes'
 import { formatWeatherPeriodSummary } from './weatherText.ts'
 
-const TOOL_PROMISE_PATTERN = /(?:我这就|我去|现在就|马上|稍等|这就给主人|给主人查|去查|去搜|去播放)/iu
-
-const TOOL_RESULT_EVIDENCE_PATTERN = /(?:搜到|查到|结果|显示|目前|已经|现在|第一条|前几条|打开了|已打开|网页搜索|最相关)/iu
-
 const QUERY_FILLER_PATTERN = /(?:请|麻烦|帮我|给我|替我|我想|我想要|我要|我要的是|查一个|查一查|查找|查询|搜索|搜一个|搜一搜|找一个|找一找|看看|告诉我|一下|现在|目前|这个|那个)/giu
 
 function normalizeWhitespace(text: string) {
@@ -121,10 +117,11 @@ function buildWebSearchSummary(result: Extract<BuiltInToolResult, { kind: 'web_s
     }))
     .sort((left, right) => right.score - left.score)
 
+  const confidence = result.result.matchConfidence ?? 'medium'
   const best = ranked[0]
   const relevant = ranked.filter((entry) => entry.score >= 2).slice(0, 3)
 
-  if (!best || best.score < 2 || relevant.length === 0) {
+  if (!best || best.score < 2 || relevant.length === 0 || confidence === 'low') {
     const topTitle = result.result.items[0]?.title?.trim()
     return topTitle
       ? `这次网页搜索还没准确命中“${result.result.query}”。当前排在前面的结果是“${truncateText(topTitle, 28)}”，和你的问题还不够贴合。`
@@ -133,6 +130,10 @@ function buildWebSearchSummary(result: Extract<BuiltInToolResult, { kind: 'web_s
 
   const leadSnippet = pickBestSummarySnippet(relevant[0]?.item ?? best.item)
   if (leadSnippet) {
+    if (confidence === 'medium') {
+      return `我先整理了一下：目前最接近“${result.result.query}”的结果提到：${leadSnippet}，不过和你要找的内容可能还差一点。`
+    }
+
     return `我先整理一下：这次搜索已经基本命中“${result.result.query}”，最相关的内容提到：${leadSnippet}`
   }
 
@@ -140,7 +141,9 @@ function buildWebSearchSummary(result: Extract<BuiltInToolResult, { kind: 'web_s
     .map((entry) => `“${truncateText(entry.item.title.trim(), 24)}”`)
     .join('、')
 
-  return `我先整理一下：这次搜索已经基本命中“${result.result.query}”，目前最相关的结果有 ${titles}。`
+  return confidence === 'medium'
+    ? `我先整理了一下：目前最接近“${result.result.query}”的结果有 ${titles}，但还需要你确认是不是这个方向。`
+    : `我先整理一下：这次搜索已经基本命中“${result.result.query}”，目前最相关的结果有 ${titles}。`
 }
 
 function buildWebSearchSpeechSummary(result: Extract<BuiltInToolResult, { kind: 'web_search' }>) {
@@ -205,24 +208,4 @@ export function buildBuiltInToolSpeechSummary(result: BuiltInToolResult) {
   }
 
   return buildWebSearchSpeechSummary(result)
-}
-
-export function shouldUseBuiltInToolAssistantSummary(
-  reply: string,
-  result: BuiltInToolResult,
-) {
-  const normalizedReply = normalizeWhitespace(reply)
-  if (!normalizedReply) {
-    return true
-  }
-
-  if (TOOL_PROMISE_PATTERN.test(normalizedReply) && !TOOL_RESULT_EVIDENCE_PATTERN.test(normalizedReply)) {
-    return true
-  }
-
-  if (result.kind === 'web_search' && normalizedReply.length <= 18) {
-    return true
-  }
-
-  return false
 }

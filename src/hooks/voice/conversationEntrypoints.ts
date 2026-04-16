@@ -128,12 +128,13 @@ export function startVoiceConversationEntrypoint(
       if (!isParaformerSpeechInputProvider(params.settingsRef.current.speechInputProviderId)) {
         return
       }
-
       if (!status.installed || !status.modelFound) {
         params.setError('Paraformer 模型缺失，请检查模型目录。')
         return
       }
-
+      if (params.vadSessionRef.current || params.paraformerSessionRef.current || params.busyRef.current) {
+        return
+      }
       void params.startParaformerConversation(params.options)
     }).catch(() => {
       params.setError('Paraformer 不可用，请检查安装。')
@@ -151,7 +152,9 @@ export function startVoiceConversationEntrypoint(
         params.setError('SenseVoice 模型缺失，请检查模型目录。')
         return
       }
-
+      if (params.vadSessionRef.current || params.sensevoiceSessionRef.current || params.busyRef.current) {
+        return
+      }
       void params.startSenseVoiceConversation(params.options)
     }).catch(() => {
       params.setError('SenseVoice 不可用，请检查安装。')
@@ -166,7 +169,12 @@ export function startVoiceConversationEntrypoint(
 
   currentSettings = params.settingsRef.current
 
-  if (!currentSettings.speechInputEnabled) {
+  // Wake-word-triggered sessions bypass the speechInputEnabled guard because
+  // the user opted into wakewordAlwaysOn specifically to be heard without
+  // leaving continuous STT running — see the settings hint
+  // "无论是否启用语音输入，唤醒词引擎都会后台常驻监听。喊出唤醒词即可立即开始对话。"
+  const wakewordTriggered = params.options?.wakewordTriggered ?? false
+  if (!currentSettings.speechInputEnabled && !wakewordTriggered) {
     params.setContinuousVoiceSession(false)
     params.setError('请先在设置中启用语音输入。')
     return
@@ -221,7 +229,11 @@ export function stopVoiceConversationEntrypoint(
   void params.stopVadListening(true)
   params.stopActiveSpeechOutput()
   params.dispatchVoiceSessionAndSync({ type: 'aborted' })
-  params.busEmit({ type: 'session:aborted', reason: 'user_stopped' })
+  params.busEmit({
+    type: 'session:aborted',
+    reason: 'session_aborted',
+    abortReason: 'user_stopped',
+  })
   params.setLiveTranscript('')
   params.updateVoicePipeline(
     'idle',

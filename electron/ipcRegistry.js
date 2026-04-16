@@ -11,39 +11,44 @@ import * as telegramIpc from './ipc/telegramIpc.js'
 import * as discordIpc from './ipc/discordIpc.js'
 import * as vaultIpc from './ipc/vaultIpc.js'
 import * as personaIpc from './ipc/personaIpc.js'
+import * as updaterIpc from './ipc/updaterIpc.js'
+import * as workspaceFsIpc from './ipc/workspaceFsIpc.js'
+import * as sherpaIpc from './ipc/sherpaIpc.js'
 
 const CHAT_REQUEST_TIMEOUT_MS = 25_000
 const CONNECTION_TEST_TIMEOUT_MS = 12_000
 const AUDIO_TRANSCRIBE_TIMEOUT_MS = 20_000
 const AUDIO_SYNTH_TIMEOUT_MS = 25_000
 const AUDIO_VOICE_LIST_TIMEOUT_MS = 15_000
-const VOICE_CLONE_TIMEOUT_MS = 60_000
 
 const activeChatStreamControllers = new Map()
 
-// Lazy-loaded modules — loaded on first use, not at startup
+// Lazy-loaded modules — loaded on first use, not at startup.
+// sherpaIpc is eager because the renderer's wakeword runtime calls kws:status
+// immediately on mount; a deferred registration caused "No handler registered"
+// errors during the first ~1.5s of app startup.
 let _deferredModulesPromise = null
 
 function loadDeferredModules() {
   if (!_deferredModulesPromise) {
     _deferredModulesPromise = Promise.all([
-      import('./ipc/sherpaIpc.js'),
       import('./ipc/mcpIpc.js'),
       import('./ipc/pluginIpc.js'),
       import('./ipc/memoryIpc.js'),
       import('./ipc/skillIpc.js'),
-    ]).then(([sherpaIpc, mcpIpc, pluginIpc, memoryIpc, skillIpc]) => {
+    ]).then(async ([mcpIpc, pluginIpc, memoryIpc, skillIpc]) => {
+      const notificationIpc = await import('./ipc/notificationIpc.js')
       const ttsStreamService = createTtsStreamService({
         synthesizeRemote: synthesizeRemoteTts,
         warmupRemote: warmupRemoteTtsSession,
       })
 
       ttsStreamIpc.register({ ttsStreamService })
-      sherpaIpc.register()
       mcpIpc.register()
       pluginIpc.register()
       memoryIpc.register()
       skillIpc.register()
+      notificationIpc.register()
 
       console.info('[IPC] Deferred modules loaded')
     })
@@ -64,7 +69,6 @@ export function registerIpc() {
     AUDIO_TRANSCRIBE_TIMEOUT_MS,
     AUDIO_SYNTH_TIMEOUT_MS,
     AUDIO_VOICE_LIST_TIMEOUT_MS,
-    VOICE_CLONE_TIMEOUT_MS,
   })
 
   serviceIpc.register()
@@ -72,13 +76,16 @@ export function registerIpc() {
   discordIpc.register()
   vaultIpc.register()
   personaIpc.register()
+  updaterIpc.register()
+  workspaceFsIpc.register()
+  sherpaIpc.register()
 
   // Load deferred modules when the renderer is ready (first IPC call will trigger it),
   // but also kick off a background load after a short delay as a warm-up.
   setTimeout(loadDeferredModules, 1_500)
 
   app.once('before-quit', async () => {
-    const [mcpHost, memoryVectorStore, minecraftGateway, factorioRcon, realtimeVoice, telegramGateway, discordGateway] = await Promise.all([
+    const [mcpHost, memoryVectorStore, minecraftGateway, factorioRcon, realtimeVoice, telegramGateway, discordGateway, notificationBridge] = await Promise.all([
       import('./services/mcpHost.js').catch(() => null),
       import('./services/memoryVectorStore.js').catch(() => null),
       import('./services/minecraftGateway.js').catch(() => null),
@@ -86,6 +93,7 @@ export function registerIpc() {
       import('./services/realtimeVoice.js').catch(() => null),
       import('./services/telegramGateway.js').catch(() => null),
       import('./services/discordGateway.js').catch(() => null),
+      import('./services/notificationBridge.js').catch(() => null),
     ])
     await Promise.all([
       mcpHost?.stopAll().catch(() => {}),
@@ -95,6 +103,7 @@ export function registerIpc() {
       realtimeVoice?.stopSession().catch(() => {}),
       telegramGateway?.disconnect().catch(() => {}),
       discordGateway?.disconnect().catch(() => {}),
+      notificationBridge?.stop(),
     ])
   })
 }

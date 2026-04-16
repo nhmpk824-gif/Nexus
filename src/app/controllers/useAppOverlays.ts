@@ -9,7 +9,6 @@ import type { SettingsDrawerProps } from '../../components/SettingsDrawer'
 import type { OnboardingGuideProps } from '../../features/onboarding'
 import type { PetModelDefinition } from '../../features/pet'
 import {
-  blobToBase64,
   loadOnboardingCompleted,
   normalizeSpeechOutputApiBaseUrl,
   resolveWebSearchApiBaseUrl,
@@ -255,20 +254,6 @@ export function useAppOverlays({
         })
       }
 
-      if (!window.desktopPet?.testServiceConnection) {
-        return {
-          ok: false,
-          message: '当前环境不支持连接测试。',
-        }
-      }
-
-      if (capability === 'voice-clone' && draftSettings.voiceCloneProviderId === 'none') {
-        return {
-          ok: true,
-          message: '当前未启用语音克隆服务，不需要测试 URL。',
-        }
-      }
-
       if (capability === 'speech-input') {
         return voice.testSpeechInputConnection(draftSettings)
       }
@@ -277,12 +262,10 @@ export function useAppOverlays({
         return voice.testSpeechOutputReadiness(draftSettings)
       }
 
-      return window.desktopPet.testServiceConnection({
-        capability,
-        providerId: draftSettings.voiceCloneProviderId,
-        baseUrl: draftSettings.voiceCloneApiBaseUrl,
-        apiKey: draftSettings.voiceCloneApiKey,
-      })
+      return {
+        ok: false,
+        message: '未知的连接测试类型。',
+      }
     },
     onLoadSpeechVoices: async (draftSettings) => {
       if (!window.desktopPet?.listSpeechVoices) {
@@ -325,33 +308,6 @@ export function useAppOverlays({
     },
     onRunAudioSmokeTest: async (draftSettings) => voice.runAudioSmokeTest(draftSettings),
     onClearDebugConsole: clearDebugConsoleEvents,
-    onCloneVoice: async (payload) => {
-      if (!window.desktopPet?.cloneVoice) {
-        throw new Error('当前环境不支持语音克隆。')
-      }
-
-      if (payload.settings.voiceCloneProviderId === 'none') {
-        throw new Error('请先启用一个语音克隆提供商。')
-      }
-
-      const files = await Promise.all(
-        payload.files.map(async (file) => ({
-          name: file.name,
-          mimeType: file.type || 'application/octet-stream',
-          dataBase64: await blobToBase64(file),
-        })),
-      )
-
-      return window.desktopPet.cloneVoice({
-        providerId: payload.settings.voiceCloneProviderId,
-        baseUrl: payload.settings.voiceCloneApiBaseUrl,
-        apiKey: payload.settings.voiceCloneApiKey,
-        name: payload.name,
-        description: payload.description,
-        removeBackgroundNoise: payload.removeBackgroundNoise,
-        files,
-      })
-    },
   }
 
   const onboardingGuideProps: OnboardingGuideProps = {

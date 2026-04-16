@@ -43,7 +43,6 @@ export async function initializeSettingsWithVault(): Promise<AppSettings> {
       settings.apiKey
       || settings.speechInputApiKey
       || settings.speechOutputApiKey
-      || settings.voiceCloneApiKey
       || settings.toolWebSearchApiKey,
     )
 

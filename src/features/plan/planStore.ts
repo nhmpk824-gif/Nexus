@@ -1,0 +1,190 @@
+// PlanStore — explicit goal → steps state machine for agent runs.
+//
+// The agent loop in features/agent/agentLoop.ts can run without a plan, but
+// when the user (or the model itself) wants a visible task list, the loop
+// creates a Plan, the model emits step updates between iterations, and the
+// PlanPanel UI shows progress in real time.
+//
+// Storage is localStorage (debounced) — survives reloads but is local-first
+// like every other Nexus subsystem. No IPC, no IndexedDB, no migrations.
+
+import { PLAN_STORE_STORAGE_KEY, createId, readJson, writeJsonDebounced } from '../../lib/storage/core'
+
+export type PlanStepStatus = 'pending' | 'in_progress' | 'completed' | 'skipped' | 'failed'
+
+export type PlanStep = {
+  id: string
+  text: string
+  status: PlanStepStatus
+  result?: string
+  startedAt?: number
+  completedAt?: number
+}
+
+export type PlanStatus = 'draft' | 'active' | 'completed' | 'aborted'
+
+export type Plan = {
+  id: string
+  goal: string
+  steps: PlanStep[]
+  status: PlanStatus
+  createdAt: number
+  updatedAt: number
+}
+
+export type PlanListener = (plans: Plan[]) => void
+
+class PlanStoreImpl {
+  private plans: Plan[] = []
+  private listeners = new Set<PlanListener>()
+  private hydrated = false
+
+  hydrate(): void {
+    if (this.hydrated) return
+    this.plans = readJson<Plan[]>(PLAN_STORE_STORAGE_KEY, [])
+    this.hydrated = true
+  }
+
+  list(): Plan[] {
+    this.hydrate()
+    return [...this.plans]
+  }
+
+  get(id: string): Plan | undefined {
+    this.hydrate()
+    return this.plans.find((p) => p.id === id)
+  }
+
+  active(): Plan | undefined {
+    this.hydrate()
+    return this.plans.find((p) => p.status === 'active')
+  }
+
+  create(goal: string, steps: string[] = []): Plan {
+    this.hydrate()
+    const now = Date.now()
+    const plan: Plan = {
+      id: createId('plan'),
+      goal,
+      status: steps.length > 0 ? 'active' : 'draft',
+      createdAt: now,
+      updatedAt: now,
+      steps: steps.map((text) => ({
+        id: createId('step'),
+        text,
+        status: 'pending',
+      })),
+    }
+    this.plans.unshift(plan)
+    this.persist()
+    return plan
+  }
+
+  setSteps(planId: string, steps: string[]): Plan | undefined {
+    return this.update(planId, (plan) => {
+      plan.steps = steps.map((text) => ({
+        id: createId('step'),
+        text,
+        status: 'pending',
+      }))
+      plan.status = 'active'
+    })
+  }
+
+  startStep(planId: string, stepId: string): Plan | undefined {
+    return this.update(planId, (plan) => {
+      const step = plan.steps.find((s) => s.id === stepId)
+      if (!step) return
+      step.status = 'in_progress'
+      step.startedAt = Date.now()
+    })
+  }
+
+  markStepDone(planId: string, stepId: string, result?: string): Plan | undefined {
+    return this.update(planId, (plan) => {
+      const step = plan.steps.find((s) => s.id === stepId)
+      if (!step) return
+      step.status = 'completed'
+      step.result = result
+      step.completedAt = Date.now()
+      if (plan.steps.every((s) => s.status === 'completed' || s.status === 'skipped')) {
+        plan.status = 'completed'
+      }
+    })
+  }
+
+  markStepFailed(planId: string, stepId: string, error: string): Plan | undefined {
+    return this.update(planId, (plan) => {
+      const step = plan.steps.find((s) => s.id === stepId)
+      if (!step) return
+      step.status = 'failed'
+      step.result = error
+      step.completedAt = Date.now()
+    })
+  }
+
+  abort(planId: string, reason?: string): Plan | undefined {
+    return this.update(planId, (plan) => {
+      plan.status = 'aborted'
+      if (reason) {
+        const inProgress = plan.steps.find((s) => s.status === 'in_progress')
+        if (inProgress) {
+          inProgress.status = 'failed'
+          inProgress.result = reason
+          inProgress.completedAt = Date.now()
+        }
+      }
+    })
+  }
+
+  remove(planId: string): void {
+    this.hydrate()
+    const before = this.plans.length
+    this.plans = this.plans.filter((p) => p.id !== planId)
+    if (this.plans.length !== before) this.persist()
+  }
+
+  clear(): void {
+    this.plans = []
+    this.hydrated = true
+    this.persist()
+  }
+
+  subscribe(listener: PlanListener): () => void {
+    this.hydrate()
+    this.listeners.add(listener)
+    listener(this.list())
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  private update(planId: string, mutator: (plan: Plan) => void): Plan | undefined {
+    this.hydrate()
+    const idx = this.plans.findIndex((p) => p.id === planId)
+    if (idx < 0) return undefined
+    const next: Plan = {
+      ...this.plans[idx],
+      steps: this.plans[idx].steps.map((s) => ({ ...s })),
+    }
+    mutator(next)
+    next.updatedAt = Date.now()
+    this.plans[idx] = next
+    this.persist()
+    return next
+  }
+
+  private persist(): void {
+    writeJsonDebounced(PLAN_STORE_STORAGE_KEY, this.plans)
+    const snapshot = this.list()
+    for (const listener of this.listeners) {
+      try {
+        listener(snapshot)
+      } catch {
+        // listener errors must not break the store
+      }
+    }
+  }
+}
+
+export const planStore = new PlanStoreImpl()

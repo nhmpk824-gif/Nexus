@@ -33,18 +33,18 @@ export function formatDesktopContext(snapshot: DesktopContextSnapshot | null | u
   const vlmAnalysis = String(snapshot.vlmAnalysis ?? '').trim()
 
   if (activeWindowTitle || activeWindowAppName || activeWindowProcessPath) {
-    const activeWindowLines = ['当前前台窗口：']
+    const activeWindowLines = ['Current foreground window:']
 
     if (activeWindowTitle) {
-      activeWindowLines.push(`窗口标题：${shorten(activeWindowTitle, MAX_ACTIVE_WINDOW_TITLE_LENGTH)}`)
+      activeWindowLines.push(`Window title: ${shorten(activeWindowTitle, MAX_ACTIVE_WINDOW_TITLE_LENGTH)}`)
     }
 
     if (activeWindowAppName) {
-      activeWindowLines.push(`应用名称：${shorten(activeWindowAppName, MAX_ACTIVE_WINDOW_APP_NAME_LENGTH)}`)
+      activeWindowLines.push(`App name: ${shorten(activeWindowAppName, MAX_ACTIVE_WINDOW_APP_NAME_LENGTH)}`)
     }
 
     if (activeWindowProcessPath) {
-      activeWindowLines.push(`进程路径：${shorten(activeWindowProcessPath, MAX_ACTIVE_WINDOW_PROCESS_PATH_LENGTH)}`)
+      activeWindowLines.push(`Process path: ${shorten(activeWindowProcessPath, MAX_ACTIVE_WINDOW_PROCESS_PATH_LENGTH)}`)
     }
 
     sections.push(activeWindowLines.join('\n'))
@@ -52,20 +52,20 @@ export function formatDesktopContext(snapshot: DesktopContextSnapshot | null | u
 
   if (clipboardText) {
     sections.push([
-      `剪贴板文本：${shorten(clipboardText, MAX_CLIPBOARD_CONTEXT_LENGTH)}`,
+      `Clipboard text: ${shorten(clipboardText, MAX_CLIPBOARD_CONTEXT_LENGTH)}`,
     ].join('\n'))
   }
 
   if (screenText) {
     sections.push([
-      '屏幕可见文字：',
+      'Visible on-screen text:',
       shorten(screenText, MAX_SCREEN_TEXT_CONTEXT_LENGTH),
     ].join('\n'))
   }
 
   if (vlmAnalysis) {
     sections.push([
-      '屏幕画面分析（VLM）：',
+      'Screen visual analysis (VLM):',
       shorten(vlmAnalysis, MAX_VLM_ANALYSIS_LENGTH),
     ].join('\n'))
   }
@@ -75,7 +75,7 @@ export function formatDesktopContext(snapshot: DesktopContextSnapshot | null | u
   }
 
   return [
-    '以下是当前桌面补充上下文，请只在自然相关时使用，不要强行引用：',
+    'Below is supplementary desktop context. Use it only when naturally relevant; do not force a reference. Reply in the user\'s language.',
     sections.join('\n\n'),
   ].join('\n\n')
 }

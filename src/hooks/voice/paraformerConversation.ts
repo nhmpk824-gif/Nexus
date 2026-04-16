@@ -175,7 +175,7 @@ export async function startParaformerConversation(
           return
         }
 
-        params.appendVoiceTrace('Paraformer 识别完成', `#${traceLabel} 已拿到最终文本`)
+        params.appendVoiceTrace('Paraformer recognition complete', `#${traceLabel} received final text`)
         await params.handleRecognizedVoiceTranscript(transcript, { traceId })
       } catch (error) {
         params.paraformerSessionRef.current = null
@@ -201,7 +201,7 @@ export async function startParaformerConversation(
       )
     }
 
-    params.appendVoiceTrace('开始 Paraformer 识别', `#${traceLabel} 正在使用 Paraformer 流式转写`)
+    params.appendVoiceTrace('Start Paraformer recognition', `#${traceLabel} running Paraformer streaming transcription`)
 
     // ── Silero VAD for accurate speech boundary detection ──────────────
     let vadDetector: VoiceActivityDetector | null = null
@@ -247,7 +247,7 @@ export async function startParaformerConversation(
       },
       onEndpoint: (text) => {
         if (finalizing || !session || params.paraformerSessionRef.current !== session) return
-        params.appendVoiceTrace('Paraformer endpoint', `分段识别: ${text.slice(0, 40)}`)
+        params.appendVoiceTrace('Paraformer endpoint', `segment recognized: ${text.slice(0, 40)}`)
       },
       onActivity: (rms) => {
         if (!session || params.paraformerSessionRef.current !== session || finalizing) return

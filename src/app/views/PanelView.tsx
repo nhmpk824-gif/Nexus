@@ -2,11 +2,14 @@ import {
   useEffect,
   useMemo,
   useRef,
+  type ChangeEvent as ReactChangeEvent,
+  type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react'
 import { getLiveTranscriptLabel, getTimeGreeting, voiceStateLabelMap } from '../appSupport'
-import { MessageBubble } from '../../components'
+import { ActivePlanStrip, MessageBubble } from '../../components'
 import { resolveCharacterPreset } from '../../features/character'
 import { shorten } from '../../lib'
 import type { UseAppControllerResult } from '../controllers/useAppController'
@@ -33,6 +36,7 @@ export function PanelView({
 }: PanelViewProps) {
   const messageListRef = useRef<HTMLDivElement | null>(null)
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const characterPreset = useMemo(() => resolveCharacterPreset(), [])
   const timeGreeting = getTimeGreeting()
@@ -151,6 +155,91 @@ export function PanelView({
     void chat.sendMessage()
   }
 
+  // ── Image attach helpers ────────────────────────────────────────────────
+  // Single image at a time, max 8MB. Larger files or unsupported MIME types
+  // surface a chat error so the user understands why nothing happened.
+  const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+  const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+
+  function readImageFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = () => reject(new Error('图片读取失败'))
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result)
+        } else {
+          reject(new Error('图片读取失败'))
+        }
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function attachImageFromFile(file: File | null | undefined) {
+    if (!file) return
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      chat.setError('只支持 PNG / JPEG / WebP / GIF 格式的图片。')
+      return
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      chat.setError('图片过大（请控制在 8MB 以内）。')
+      return
+    }
+    try {
+      const dataUrl = await readImageFileAsDataUrl(file)
+      chat.setPendingImage(dataUrl)
+    } catch (error) {
+      chat.setError(error instanceof Error ? error.message : '图片读取失败')
+    }
+  }
+
+  function handleComposerPaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+    const items = event.clipboardData?.items
+    if (!items || !items.length) return
+    for (const item of items) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) {
+          event.preventDefault()
+          void attachImageFromFile(file)
+          return
+        }
+      }
+    }
+  }
+
+  function handleComposerDragOver(event: ReactDragEvent<HTMLTextAreaElement>) {
+    if (event.dataTransfer?.types?.includes('Files')) {
+      event.preventDefault()
+    }
+  }
+
+  function handleComposerDrop(event: ReactDragEvent<HTMLTextAreaElement>) {
+    const files = event.dataTransfer?.files
+    if (!files || !files.length) return
+    const file = files[0]
+    if (file.type.startsWith('image/')) {
+      event.preventDefault()
+      void attachImageFromFile(file)
+    }
+  }
+
+  function handleFilePickerChange(event: ReactChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    void attachImageFromFile(file)
+    // Reset so picking the same file twice in a row still fires onChange.
+    event.target.value = ''
+  }
+
+  function openFilePicker() {
+    fileInputRef.current?.click()
+  }
+
+  function clearPendingImage() {
+    chat.setPendingImage(null)
+  }
+
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       const messageList = messageListRef.current
@@ -221,6 +310,8 @@ export function PanelView({
               </div>
             </div>
 
+            <ActivePlanStrip />
+
             <section className="companion-chat">
 
               <div ref={messageListRef} className="message-list companion-chat__messages">
@@ -258,6 +349,27 @@ export function PanelView({
               {chat.error ? <div className="error-banner">{chat.error}</div> : null}
 
               <div className="composer composer--minimal companion-chat__composer">
+                {chat.pendingImage ? (
+                  <div className="composer__attachments">
+                    <div className="composer__attachment-chip">
+                      <img
+                        src={chat.pendingImage}
+                        alt="待发送图片预览"
+                        className="composer__attachment-thumb"
+                      />
+                      <span className="composer__attachment-label">图片已就绪</span>
+                      <button
+                        type="button"
+                        className="composer__attachment-remove"
+                        onClick={clearPendingImage}
+                        aria-label="移除图片"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
                 <textarea
                   ref={composerTextareaRef}
                   rows={5}
@@ -265,15 +377,34 @@ export function PanelView({
                   placeholder={`和 ${settings.companionName} 说点什么，比如：帮我整理今天待办 / 记一下刚才的灵感 / 给我一句放松的提醒。`}
                   onChange={(event) => chat.setInput(event.target.value)}
                   onKeyDown={handleComposerKeyDown}
+                  onPaste={handleComposerPaste}
+                  onDragOver={handleComposerDragOver}
+                  onDrop={handleComposerDrop}
+                />
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  style={{ display: 'none' }}
+                  onChange={handleFilePickerChange}
                 />
 
                 <div className="companion-chat__composer-meta">
                   <div className="composer__hint">
-                    回车发送，Shift + Enter 换行。
+                    回车发送，Shift + Enter 换行。可粘贴或拖拽图片。
                   </div>
                 </div>
 
                 <div className="composer__actions">
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={openFilePicker}
+                    title="附加图片（也可粘贴或拖拽）"
+                  >
+                    图片
+                  </button>
                   <button
                     className="ghost-button"
                     type="button"
@@ -282,7 +413,12 @@ export function PanelView({
                   >
                     {voiceActionLabel}
                   </button>
-                  <button className="primary-button" type="button" onClick={() => void chat.sendMessage()} disabled={chat.busy}>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={() => void chat.sendMessage()}
+                    disabled={chat.busy || (!chat.input.trim() && !chat.pendingImage)}
+                  >
                     {chat.busy ? `${settings.companionName} 回复中...` : '发送'}
                   </button>
                 </div>

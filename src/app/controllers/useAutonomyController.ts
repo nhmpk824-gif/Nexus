@@ -17,9 +17,11 @@ import { useContextScheduler } from '../../hooks/useContextScheduler'
 import { useNotificationBridge } from '../../hooks/useNotificationBridge'
 import { useTelegramGateway, type TelegramIncoming } from '../../hooks/useTelegramGateway'
 import { useDiscordGateway, type DiscordIncoming } from '../../hooks/useDiscordGateway'
+import { rememberDiscordChannelId, rememberTelegramChatId } from '../../lib/coreRuntime'
 import { isActionAllowed } from '../../features/integrations/permissions'
 import {
   buildMonologuePrompt,
+  computeAdaptiveMonologueInterval,
   parseMonologueResponse,
   shouldRunMonologue,
 } from '../../features/autonomy/innerMonologue'
@@ -59,12 +61,42 @@ import {
   type RhythmProfile,
   applyWeeklyDecay,
   createDefaultRhythmProfile,
+  formatRhythmSummary,
   recordInteraction,
   shouldAllowProactiveSpeech,
 } from '../../features/autonomy/rhythmLearner'
 import { AUTONOMY_RELATIONSHIP_STORAGE_KEY, AUTONOMY_RHYTHM_STORAGE_KEY, readJson, writeJson } from '../../lib/storage'
 import { recordUsage } from '../../features/metering/contextMeter'
+import { openGoalsStore } from '../../features/agent/openGoalsStore'
 import type { DailyMemoryStore, Goal, ReminderTask } from '../../types'
+
+// ── Broadcast dedupe gate ────────────────────────────────────────────────────
+// Module-level so it survives React StrictMode remounts (useRef does not).
+// Each category has its own min-interval; firing twice within the window is
+// silently dropped. The chat-side text dedupe (useChat:recentCompanionNotices)
+// remains as a second safety net.
+
+type BroadcastCategory = 'speak' | 'brief' | 'suggest' | 'monologue' | 'open_goal_followup' | 'scheduled'
+
+const BROADCAST_MIN_INTERVAL_MS: Record<BroadcastCategory, number> = {
+  speak: 60_000,
+  brief: 4 * 60 * 60_000,
+  suggest: 5 * 60_000,
+  monologue: 90_000,
+  open_goal_followup: 30 * 60_000,
+  scheduled: 30_000,
+}
+
+const broadcastLastFiredAt = new Map<BroadcastCategory, number>()
+
+function canBroadcast(category: BroadcastCategory): boolean {
+  const last = broadcastLastFiredAt.get(category) ?? 0
+  return Date.now() - last >= BROADCAST_MIN_INTERVAL_MS[category]
+}
+
+function markBroadcast(category: BroadcastCategory): void {
+  broadcastLastFiredAt.set(category, Date.now())
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,7 +107,8 @@ type ChatBridge = {
     speechContent: string
     autoHideMs: number
   }) => Promise<void>
-  sendMessage?: (text?: string, options?: { source?: 'text' | 'voice'; traceId?: string }) => Promise<unknown>
+  pushInnerThought?: (thought: string, urgency: number, autoHideMs?: number) => void
+  sendMessage?: (text?: string, options?: { source?: 'text' | 'voice' | 'telegram' | 'discord'; traceId?: string }) => Promise<unknown>
 }
 
 type DebugConsoleBridge = {
@@ -103,7 +136,21 @@ export type UseAutonomyControllerOptions = {
   debugConsole: DebugConsoleBridge
 }
 
-// ── Hook ─��────────────────────────────────���──────────────────────────────────
+// Parse a comma-separated string of IDs (chatIds/userIds) into a Set of
+// trimmed non-empty strings. Used to match bridge senders against the
+// owner whitelist, so the system prompt can treat the master's own
+// Telegram/Discord messages as coming from the master rather than an
+// external contact.
+function parseCsvIdSet(csv: string): Set<string> {
+  const result = new Set<string>()
+  for (const raw of csv.split(',')) {
+    const trimmed = raw.trim()
+    if (trimmed) result.add(trimmed)
+  }
+  return result
+}
+
+// ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useAutonomyController({
   settings,
@@ -182,6 +229,8 @@ export function useAutonomyController({
     switch (decision.kind) {
       case 'speak':
         if (speakCooldownRef.current > 0 || !rhythmAllowed) break
+        if (!canBroadcast('speak')) break
+        markBroadcast('speak')
         lastProactiveCategoryRef.current = decision.category
         decisionFeedbackRef.current = recordDecision(decisionFeedbackRef.current, decision.category)
         speakCooldownRef.current = recommendedInterval
@@ -195,8 +244,9 @@ export function useAutonomyController({
       case 'brief': {
         const todayDate = new Date().toDateString()
         if (lastBriefDateRef.current === todayDate) break
-        // Double-guard: also check cooldown to prevent StrictMode / race duplicates
         if (speakCooldownRef.current > 0) break
+        if (!canBroadcast('brief')) break
+        markBroadcast('brief')
         lastBriefDateRef.current = todayDate
         lastProactiveCategoryRef.current = 'brief'
         decisionFeedbackRef.current = recordDecision(decisionFeedbackRef.current, 'brief')
@@ -212,12 +262,14 @@ export function useAutonomyController({
       case 'remind':
         debugConsole.appendDebugConsoleEvent({
           source: 'autonomy',
-          title: '自主引擎检测到待触发提醒',
+          title: 'Autonomy engine detected pending reminder',
           detail: `taskId: ${decision.taskId}`,
         })
         break
       case 'suggest':
         if (speakCooldownRef.current > 0 || !rhythmAllowed) break
+        if (!canBroadcast('suggest')) break
+        markBroadcast('suggest')
         lastProactiveCategoryRef.current = 'context'
         decisionFeedbackRef.current = recordDecision(decisionFeedbackRef.current, 'suggest')
         speakCooldownRef.current = recommendedInterval
@@ -237,7 +289,8 @@ export function useAutonomyController({
     const { ready, remaining } = dequeueReady(decisionQueueRef.current)
     decisionQueueRef.current = remaining
     for (const scheduled of ready) {
-      if (scheduled.decision.kind === 'speak') {
+      if (scheduled.decision.kind === 'speak' && canBroadcast('scheduled')) {
+        markBroadcast('scheduled')
         void chat.pushCompanionNotice({
           chatContent: `【计划】${scheduled.decision.text}`,
           bubbleContent: scheduled.decision.text,
@@ -247,7 +300,7 @@ export function useAutonomyController({
       }
       debugConsole.appendDebugConsoleEvent({
         source: 'autonomy',
-        title: '计划决策执行',
+        title: 'Scheduled decision executed',
         detail: scheduled.reason,
       })
     }
@@ -281,13 +334,25 @@ export function useAutonomyController({
 
     // ── Inner monologue ──────────────────────────────────────────────────────
     monologueTickCounterRef.current++
+    const lastUserMessage = [...messagesRef.current].reverse().find((m) => m.role === 'user')
+    const minutesSinceLastUserMessage = lastUserMessage
+      ? (Date.now() - new Date(lastUserMessage.createdAt).getTime()) / 60_000
+      : null
+    const adaptiveMonologueInterval = computeAdaptiveMonologueInterval(
+      currentSettings.autonomyMonologueIntervalTicks,
+      {
+        tickState,
+        focusState: focusAwareness.focusStateRef.current,
+        minutesSinceLastUserMessage,
+      },
+    )
     if (
       currentSettings.autonomyMonologueEnabled
       && !monologueRunningRef.current
       && shouldRunMonologue(
         tickState,
         monologueTickCounterRef.current,
-        currentSettings.autonomyMonologueIntervalTicks,
+        adaptiveMonologueInterval,
       )
     ) {
       monologueRunningRef.current = true
@@ -324,14 +389,21 @@ export function useAutonomyController({
             if (result) {
               debugConsole.appendDebugConsoleEvent({
                 source: 'autonomy',
-                title: `内心独白 (urgency: ${result.urgency})`,
+                title: `Inner monologue (urgency: ${result.urgency})`,
                 detail: result.thought,
               })
+
+              // Always surface the thought as a floating bubble — fades after a few seconds.
+              // Higher urgency lingers longer so the user can read more important thoughts.
+              const lingerMs = 6_000 + Math.round((result.urgency / 100) * 6_000)
+              chat.pushInnerThought?.(result.thought, result.urgency, lingerMs)
 
               if (
                 result.urgency >= currentSettings.autonomyMonologueSpeechThreshold
                 && result.speech
+                && canBroadcast('monologue')
               ) {
+                markBroadcast('monologue')
                 lastProactiveCategoryRef.current = 'monologue'
                 void chat.pushCompanionNotice({
                   chatContent: `【独白】${result.speech}`,
@@ -345,13 +417,42 @@ export function useAutonomyController({
         } catch (error) {
           debugConsole.appendDebugConsoleEvent({
             source: 'autonomy',
-            title: '内心独白失败',
+            title: 'Inner monologue failed',
             detail: error instanceof Error ? error.message : String(error),
           })
         } finally {
           monologueRunningRef.current = false
         }
       })()
+    }
+
+    if (
+      rhythmAllowed
+      && speakCooldownRef.current === 0
+      && tickState.phase !== 'sleeping'
+      && tickState.idleSeconds > 30
+      && !busyRef?.current
+    ) {
+      const eligibleGoal = canBroadcast('open_goal_followup') ? openGoalsStore.pickEligibleForNudge() : undefined
+      if (eligibleGoal) {
+        markBroadcast('open_goal_followup')
+        const nudgeText = openGoalsStore.buildNudgeText(eligibleGoal)
+        openGoalsStore.markNudged(eligibleGoal.id)
+        lastProactiveCategoryRef.current = 'open_goal_followup'
+        decisionFeedbackRef.current = recordDecision(decisionFeedbackRef.current, 'open_goal_followup')
+        speakCooldownRef.current = recommendedInterval
+        void chat.pushCompanionNotice({
+          chatContent: `【未完成】${nudgeText}`,
+          bubbleContent: nudgeText,
+          speechContent: nudgeText,
+          autoHideMs: 14_000,
+        })
+        debugConsole.appendDebugConsoleEvent({
+          source: 'autonomy',
+          title: 'Open-goal follow-up surfaced',
+          detail: `${eligibleGoal.goal} (nudge ${eligibleGoal.nudgeCount + 1})`,
+        })
+      }
     }
 
     // Check if sleeping — run dream if eligible
@@ -390,7 +491,7 @@ export function useAutonomyController({
   const handleContextAction = useCallback((action: AutonomousAction, task: ContextTriggeredTask) => {
     debugConsole.appendDebugConsoleEvent({
       source: 'autonomy',
-      title: '上下文触发器激活',
+      title: 'Context trigger activated',
       detail: `${task.name} → ${action.kind}`,
     })
 
@@ -430,7 +531,7 @@ export function useAutonomyController({
 
     debugConsole.appendDebugConsoleEvent({
       source: 'autonomy',
-      title: '外部通知到达',
+      title: 'External notification received',
       detail: `[${message.channelName}] ${message.title}`,
     })
 
@@ -452,25 +553,40 @@ export function useAutonomyController({
   const telegramSendMessageRef = useRef<(chatId: number, text: string, replyTo?: number) => Promise<void>>(undefined)
 
   const handleTelegramMessage = useCallback((msg: TelegramIncoming) => {
+    const ownerChatIds = parseCsvIdSet(settingsRef.current.ownerTelegramChatIds)
+    // Default: until the master explicitly declares their own chatId(s),
+    // every incoming Telegram message is treated as an external contact
+    // (named bridge prefix). Only chatIds that match the configured owner
+    // list are promoted to "master via Telegram".
+    const isOwner = ownerChatIds.has(String(msg.chatId))
+
     debugConsole.appendDebugConsoleEvent({
       source: 'autonomy',
-      title: 'Telegram 消息',
-      detail: `[${msg.chatTitle}] ${msg.fromUser}: ${msg.text}`,
+      title: 'Telegram message',
+      detail: `[${msg.chatTitle}] ${msg.fromUser}${isOwner ? '（主人）' : ''}: ${msg.text}`,
     })
 
-    // Forward to companion chat as a Telegram-sourced message
+    // Forward to companion chat as a Telegram-sourced message.
+    // Owner-match → prefix without a name so the system prompt treats it as
+    // the master speaking via Telegram. Otherwise keep the named prefix so
+    // the model responds to the external contact directly.
     if (chat.sendMessage) {
-      void chat.sendMessage(
-        `【Telegram · ${msg.fromUser}】${msg.text}`,
-        { source: 'text' },
-      )
+      const prefixedText = isOwner
+        ? `【Telegram】${msg.text}`
+        : `【Telegram · ${msg.fromUser}】${msg.text}`
+      void chat.sendMessage(prefixedText, { source: 'telegram' })
     }
 
     // Store chatId and messageId so the companion can reply
-    lastTelegramChatRef.current = { chatId: msg.chatId, messageId: msg.messageId }
-  }, [chat, debugConsole])
+    const chatEntry = { chatId: msg.chatId, messageId: msg.messageId }
+    lastTelegramChatRef.current = chatEntry
+    telegramChatMapRef.current.set(msg.chatId, chatEntry)
+    rememberTelegramChatId(msg.chatId)
+  }, [chat, debugConsole, settingsRef])
 
   const lastTelegramChatRef = useRef<{ chatId: number; messageId: number } | null>(null)
+  /** Per-chatId tracking so concurrent Telegram chats don't overwrite each other. */
+  const telegramChatMapRef = useRef<Map<number, { chatId: number; messageId: number }>>(new Map())
 
   const telegramGateway = useTelegramGateway({
     settingsRef,
@@ -482,19 +598,22 @@ export function useAutonomyController({
     telegramSendMessageRef.current = telegramGateway.sendMessage
   }, [telegramGateway.sendMessage])
 
-  /** Send a reply back to the last Telegram chat. Called from chat runtime when the companion replies. */
-  const replyToTelegram = useCallback(async (text: string) => {
-    const lastChat = lastTelegramChatRef.current
-    if (!lastChat || !telegramSendMessageRef.current) return
+  /** Send a reply back to a Telegram chat. If chatId is provided, replies to that
+   *  specific chat; otherwise falls back to the most recent incoming chat. */
+  const replyToTelegram = useCallback(async (text: string, chatId?: number) => {
+    const target = chatId != null
+      ? telegramChatMapRef.current.get(chatId) ?? lastTelegramChatRef.current
+      : lastTelegramChatRef.current
+    if (!target || !telegramSendMessageRef.current) return
     if (!isActionAllowed(settingsRef.current, 'telegram', 'send')) {
       debugConsole.appendDebugConsoleEvent({
         source: 'autonomy',
-        title: 'Telegram 回复已阻止',
-        detail: `权限模式 "${settingsRef.current.telegramPermissionMode}" 不允许发送消息`,
+        title: 'Telegram reply blocked',
+        detail: `permission mode "${settingsRef.current.telegramPermissionMode}" does not allow sending messages`,
       })
       return
     }
-    await telegramSendMessageRef.current(lastChat.chatId, text)
+    await telegramSendMessageRef.current(target.chatId, text)
   }, [debugConsole, settingsRef])
 
   // ── Discord Gateway ──────────────────────────────────────────────────────
@@ -502,25 +621,39 @@ export function useAutonomyController({
   const discordSendMessageRef = useRef<(channelId: string, text: string, replyTo?: string) => Promise<void>>(undefined)
 
   const handleDiscordMessage = useCallback((msg: DiscordIncoming) => {
+    const ownerUserIds = parseCsvIdSet(settingsRef.current.ownerDiscordUserIds)
+    // Default: empty ownerDiscordUserIds means every incoming Discord message
+    // is treated as an external contact. Only fromUserIds that match the
+    // configured owner list are promoted to "master via Discord".
+    const isOwner = ownerUserIds.has(msg.fromUserId)
+
     debugConsole.appendDebugConsoleEvent({
       source: 'autonomy',
-      title: 'Discord 消息',
-      detail: `[${msg.channelName}] ${msg.fromUser}: ${msg.text}`,
+      title: 'Discord message',
+      detail: `[${msg.channelName}] ${msg.fromUser}${isOwner ? '（主人）' : ''}: ${msg.text}`,
     })
 
-    // Forward to companion chat as a Discord-sourced message
+    // Forward to companion chat as a Discord-sourced message.
+    // Owner-match → prefix without a name so the system prompt treats it as
+    // the master speaking via Discord. Otherwise use the named prefix for
+    // external contacts.
     if (chat.sendMessage) {
-      void chat.sendMessage(
-        `【Discord · ${msg.fromUser}】${msg.text}`,
-        { source: 'discord' as 'text' },
-      )
+      const prefixedText = isOwner
+        ? `【Discord】${msg.text}`
+        : `【Discord · ${msg.fromUser}】${msg.text}`
+      void chat.sendMessage(prefixedText, { source: 'discord' })
     }
 
     // Store channelId and messageId so the companion can reply
-    lastDiscordChannelRef.current = { channelId: msg.channelId, messageId: msg.messageId }
-  }, [chat, debugConsole])
+    const channelEntry = { channelId: msg.channelId, messageId: msg.messageId }
+    lastDiscordChannelRef.current = channelEntry
+    discordChannelMapRef.current.set(msg.channelId, channelEntry)
+    rememberDiscordChannelId(msg.channelId)
+  }, [chat, debugConsole, settingsRef])
 
   const lastDiscordChannelRef = useRef<{ channelId: string; messageId: string } | null>(null)
+  /** Per-channelId tracking so concurrent Discord channels don't overwrite each other. */
+  const discordChannelMapRef = useRef<Map<string, { channelId: string; messageId: string }>>(new Map())
 
   const discordGateway = useDiscordGateway({
     settingsRef,
@@ -532,19 +665,22 @@ export function useAutonomyController({
     discordSendMessageRef.current = discordGateway.sendMessage
   }, [discordGateway.sendMessage])
 
-  /** Send a reply back to the last Discord channel. */
-  const replyToDiscord = useCallback(async (text: string) => {
-    const lastChannel = lastDiscordChannelRef.current
-    if (!lastChannel || !discordSendMessageRef.current) return
+  /** Send a reply back to a Discord channel. If channelId is provided, replies to that
+   *  specific channel; otherwise falls back to the most recent incoming channel. */
+  const replyToDiscord = useCallback(async (text: string, channelId?: string) => {
+    const target = channelId != null
+      ? discordChannelMapRef.current.get(channelId) ?? lastDiscordChannelRef.current
+      : lastDiscordChannelRef.current
+    if (!target || !discordSendMessageRef.current) return
     if (!isActionAllowed(settingsRef.current, 'discord', 'send')) {
       debugConsole.appendDebugConsoleEvent({
         source: 'autonomy',
-        title: 'Discord 回复已阻止',
-        detail: `权限模式 "${settingsRef.current.discordPermissionMode}" 不允许发送消息`,
+        title: 'Discord reply blocked',
+        detail: `permission mode "${settingsRef.current.discordPermissionMode}" does not allow sending messages`,
       })
       return
     }
-    await discordSendMessageRef.current(lastChannel.channelId, text)
+    await discordSendMessageRef.current(target.channelId, text)
   }, [debugConsole, settingsRef])
 
   /** Call when user sends a message — resolves pending proactive decision as effective/ignored. */
@@ -592,6 +728,8 @@ export function useAutonomyController({
     markInteraction,
     relationshipRef,
     getRelationshipPrompt: () => formatRelationshipForPrompt(relationshipRef.current),
+    rhythmRef,
+    getRhythmPrompt: () => formatRhythmSummary(rhythmRef.current),
     scheduleDecision,
   }
 }

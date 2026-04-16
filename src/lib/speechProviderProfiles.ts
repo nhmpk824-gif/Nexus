@@ -57,17 +57,9 @@ export function resolveSpeechInputProviderProfile(
 export function resolveSpeechOutputProviderProfile(
   providerId: string,
   profile?: PartialSpeechOutputProviderProfile,
-  options?: {
-    clonedVoiceId?: string
-  },
 ): SpeechOutputProviderProfile {
   const preset = getSpeechOutputProviderPreset(providerId)
   const requestedVoice = normalizeString(profile?.voice)
-    || (
-      providerId === 'elevenlabs-tts'
-        ? normalizeString(options?.clonedVoiceId)
-        : ''
-    )
     || preset.defaultVoice
     || ''
 
@@ -101,12 +93,7 @@ export function readStoredSpeechInputProviderProfiles(value: unknown) {
   }, {})
 }
 
-export function readStoredSpeechOutputProviderProfiles(
-  value: unknown,
-  options?: {
-    clonedVoiceId?: string
-  },
-) {
+export function readStoredSpeechOutputProviderProfiles(value: unknown) {
   if (!isRecord(value)) {
     return {}
   }
@@ -115,7 +102,6 @@ export function readStoredSpeechOutputProviderProfiles(
     accumulator[providerId] = resolveSpeechOutputProviderProfile(
       providerId,
       isRecord(profile) ? profile : undefined,
-      options,
     )
     return accumulator
   }, {})
@@ -134,9 +120,7 @@ export function syncSpeechProviderProfiles(settings: AppSettings): AppSettings {
     ),
   }
   const speechOutputProviderProfiles = {
-    ...readStoredSpeechOutputProviderProfiles(settings.speechOutputProviderProfiles, {
-      clonedVoiceId: settings.clonedVoiceId,
-    }),
+    ...readStoredSpeechOutputProviderProfiles(settings.speechOutputProviderProfiles),
     [settings.speechOutputProviderId]: resolveSpeechOutputProviderProfile(
       settings.speechOutputProviderId,
       {
@@ -145,9 +129,6 @@ export function syncSpeechProviderProfiles(settings: AppSettings): AppSettings {
         model: settings.speechOutputModel,
         voice: settings.speechOutputVoice,
         instructions: settings.speechOutputInstructions,
-      },
-      {
-        clonedVoiceId: settings.clonedVoiceId,
       },
     ),
   }
@@ -180,9 +161,6 @@ export function switchSpeechOutputProvider(settings: AppSettings, providerId: st
   const nextProfile = resolveSpeechOutputProviderProfile(
     providerId,
     syncedSettings.speechOutputProviderProfiles[providerId],
-    {
-      clonedVoiceId: syncedSettings.clonedVoiceId,
-    },
   )
 
   return {
@@ -239,9 +217,6 @@ export function updateCurrentSpeechOutputProviderProfile(
       voice: settings.speechOutputVoice,
       instructions: settings.speechOutputInstructions,
       ...updates,
-    },
-    {
-      clonedVoiceId: settings.clonedVoiceId,
     },
   )
 

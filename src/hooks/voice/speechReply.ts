@@ -1,4 +1,5 @@
 import type { AppSettings, PetMood } from '../../types'
+import { voiceResumeStore } from '../../features/voice/voiceResumeStore'
 import {
   createStreamingSpeechOutputController,
   type StreamingSpeechOutputRuntime,
@@ -53,12 +54,24 @@ function createSpeechReplyCallbacks(
   return {
     onStart: () => {
       console.log('[SpeechReply] onStart — tts:started')
+      // Track full text so an interrupt can compute the unplayed remainder.
+      // Streaming case passes the placeholder '(streaming)' — that's fine,
+      // the remainder simply won't be useful for streaming, but interrupts
+      // on completed-text speech (the common case) get a usable resume payload.
+      voiceResumeStore.setActiveText(options.text)
       options.busEmit({
         type: 'tts:started',
         text: options.text,
         speechGeneration: options.speechGeneration,
       })
-      // Bus effect handles setMood('happy') and voiceState → 'speaking'
+      // Bus effect handles setMood('happy') and voiceState → 'speaking'.
+      // Start the interrupt monitor so the user can speak over the TTS to
+      // cancel it. The monitor self-checks settings.voiceInterruptionEnabled
+      // and shouldResumeContinuousVoice — if either is off it just no-ops.
+      void options.startSpeechInterruptMonitor(
+        options.speechGeneration,
+        options.shouldResumeContinuousVoice,
+      )
     },
     onEnd: () => {
       console.log('[SpeechReply] onEnd fired — shouldResumeContinuousVoice:', options.shouldResumeContinuousVoice)
@@ -69,9 +82,11 @@ function createSpeechReplyCallbacks(
         options.isSpeechInterrupted,
       )) {
         console.log('[SpeechReply] onEnd — ignored (speech interrupted)')
+        voiceResumeStore.markInterrupted()
         return
       }
 
+      voiceResumeStore.markCompleted()
       options.busEmit({
         type: 'tts:completed',
         speechGeneration: options.speechGeneration,
@@ -131,6 +146,7 @@ export async function speakAssistantReplyRuntime(
 
     if (options.isSpeechInterrupted(options.speechGeneration)) {
       options.clearSpeechInterruptedFlag(options.speechGeneration)
+      voiceResumeStore.markInterrupted()
       options.busEmit({ type: 'tts:interrupted', speechGeneration: options.speechGeneration })
       return
     }
@@ -150,14 +166,18 @@ export function beginStreamingSpeechReplyRuntime(
     return createStreamingSpeechOutputController(
       options.currentSettings,
       options.streamingRuntime,
-      createSpeechReplyCallbacks({
-        ...options,
-        text: '(streaming)',
-      }),
+      {
+        ...createSpeechReplyCallbacks({
+          ...options,
+          text: '(streaming)',
+        }),
+        busEmit: options.busEmit,
+        speechGeneration: options.speechGeneration,
+      },
     )
   } catch (error) {
     throw error instanceof Error ? error : new Error(
-      error instanceof Error ? error.message : '流式语音播报失败。',
+      error instanceof Error ? error.message : 'Streaming speech playback failed.',
     )
   }
 }

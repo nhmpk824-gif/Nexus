@@ -75,7 +75,7 @@ async function getTranscriber(model: string, requestId: number) {
     postMessageToMain({
       type: 'status',
       requestId,
-      message: `正在加载本地语音模型：${model}`,
+      message: `Loading local speech model: ${model}`,
     })
     transcriberPromise = getPipelineFactory()
       .then((createPipeline) => createPipeline('automatic-speech-recognition', model))
@@ -83,7 +83,7 @@ async function getTranscriber(model: string, requestId: number) {
     postMessageToMain({
       type: 'status',
       requestId,
-      message: '本地 Whisper 模型已就绪，开始识别。',
+      message: 'Local Whisper model is ready; starting recognition.',
     })
   }
 
@@ -105,7 +105,7 @@ self.onmessage = async (event: MessageEvent<WhisperWorkerRequest>) => {
       postMessageToMain({
         type: 'error',
         requestId: payload.requestId,
-        message: error instanceof Error ? error.message : '本地 Whisper 模型预加载失败。',
+        message: error instanceof Error ? error.message : 'Local Whisper model preload failed.',
       })
     }
     return
@@ -120,7 +120,7 @@ self.onmessage = async (event: MessageEvent<WhisperWorkerRequest>) => {
     postMessageToMain({
       type: 'status',
       requestId: payload.requestId,
-      message: '本地语音识别中...',
+      message: 'Local speech recognition in progress...',
     })
 
     const result = await transcriber(payload.audio, {
@@ -141,7 +141,7 @@ self.onmessage = async (event: MessageEvent<WhisperWorkerRequest>) => {
     postMessageToMain({
       type: 'error',
       requestId: payload.requestId,
-      message: error instanceof Error ? error.message : '本地 Whisper 识别失败。',
+      message: error instanceof Error ? error.message : 'Local Whisper recognition failed.',
     })
   }
 }

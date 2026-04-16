@@ -8,29 +8,29 @@
  * proven path instead of improvising.
  */
 
-import type { AppSettings, DailyMemoryEntry } from '../../types'
+import type { DailyMemoryEntry } from '../../types'
 
-const DISTILLATION_SYSTEM_PROMPT = `你是一个技能提取模块。你的任务是分析对话历史，识别用户反复执行或可能会再次需要的多步操作模式。
+const DISTILLATION_SYSTEM_PROMPT = `You are a skill extraction module. Your job is to analyze conversation history and identify multi-step patterns the user has performed repeatedly or is likely to need again.
 
-对于每个发现的技能，输出一条简洁的技能描述，让 AI 助手在下次遇到类似请求时能快速执行。
+For each discovered skill, output a concise skill description so the AI assistant can quickly execute it the next time a similar request appears.
 
-输出格式（严格 JSON，不要 markdown 代码块）：
+Output format (strict JSON, no markdown code blocks):
 {
   "skills": [
     {
-      "name": "技能名称（4-12字）",
-      "trigger": "用户可能怎么说来触发这个技能",
-      "steps": "执行步骤的简洁描述",
-      "tools": ["涉及的工具ID，如 web_search, weather 等"]
+      "name": "skill name (4-12 characters)",
+      "trigger": "how the user might phrase a request that triggers this skill",
+      "steps": "concise description of the execution steps",
+      "tools": ["tool IDs involved, e.g. web_search, weather"]
     }
   ]
 }
 
-规则：
-- 只提取出现过至少 2 次的操作模式，或者用户明确表示以后还会用的操作
-- 每个技能用 1-2 句话描述步骤，不要冗长
-- 如果没有发现可提取的技能，返回 {"skills": []}
-- 不要和已有技能重复`
+Rules:
+- Only extract operation patterns that have appeared at least twice, or operations the user has explicitly said they will want again
+- Describe each skill's steps in 1-2 sentences; do not be verbose
+- If no extractable skill is found, return {"skills": []}
+- Do not duplicate existing skills`
 
 export type DistilledSkill = {
   name: string
@@ -42,7 +42,6 @@ export type DistilledSkill = {
 export function buildSkillDistillationPrompt(
   dailyEntries: DailyMemoryEntry[],
   existingSkills: string[],
-  _settings: AppSettings,
 ): { system: string; user: string } | null {
   if (dailyEntries.length < 6) return null
 
@@ -52,12 +51,12 @@ export function buildSkillDistillationPrompt(
     .join('\n')
 
   const existingSection = existingSkills.length
-    ? `\n已有技能（不要重复）：\n${existingSkills.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n`
+    ? `\nExisting skills (do not duplicate):\n${existingSkills.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n`
     : ''
 
   return {
     system: DISTILLATION_SYSTEM_PROMPT,
-    user: `请从以下对话日记中提取可复用的技能模式：${existingSection}\n## 对话日记\n${entriesText}`,
+    user: `Extract reusable skill patterns from the following conversation log:${existingSection}\n## Conversation log\n${entriesText}`,
   }
 }
 

@@ -7,7 +7,6 @@ import {
 } from './settingsDrawerSupport'
 import {
   getApiProviderPreset,
-  getVoiceCloneProviderPreset,
   switchSpeechOutputProvider,
   switchTextProvider,
   clampPresenceIntervalMinutes,
@@ -20,7 +19,6 @@ import type { ReminderTaskDraftInput } from '../features/reminders'
 import {
   AutonomySection,
   ChatSection,
-  CloneSection,
   ConsoleSection,
   ContextSection,
   HistorySection,
@@ -29,18 +27,20 @@ import {
   ModelSection,
   SpeechInputSection,
   SpeechOutputSection,
+  ToolsSection,
   VoiceSection,
   WindowSection,
 } from './settingsSections'
 import {
   useConnectionTests,
   useSpeechVoiceManagement,
-  useVoiceCloneActions,
   useChatHistoryActions,
   useMemoryArchiveActions,
   useWindowStateSync,
   usePetModelImport,
 } from './settingsDrawerHooks'
+import { renderSettingsCardIcon } from './settingsDrawerIcons'
+import { buildSettingsSectionMeta } from './settingsDrawerMetadata'
 import type {
   AppSettings,
   DailyMemoryEntry,
@@ -53,14 +53,6 @@ import type {
   VoiceState,
   VoiceTraceEntry,
 } from '../types'
-
-export type CloneVoicePayload = {
-  settings: AppSettings
-  name: string
-  description: string
-  files: File[]
-  removeBackgroundNoise: boolean
-}
 
 export type SettingsDrawerProps = {
   open: boolean
@@ -134,78 +126,12 @@ export type SettingsDrawerProps = {
   }>
   onRunAudioSmokeTest: (settings: AppSettings) => Promise<ConnectionResult>
   onClearDebugConsole: () => void
-  onCloneVoice: (payload: CloneVoicePayload) => Promise<{
-    voiceId: string
-    message: string
-  }>
   // Notification channels (optional — only present when autonomy is wired)
   notificationChannels?: import('../types').NotificationChannel[]
   notificationChannelsLoading?: boolean
   onAddNotificationChannel?: (draft: Omit<import('../types').NotificationChannel, 'id'>) => Promise<void>
   onUpdateNotificationChannel?: (id: string, patch: Partial<import('../types').NotificationChannel>) => Promise<void>
   onRemoveNotificationChannel?: (id: string) => Promise<void>
-}
-
-function renderSettingsCardIcon(iconKey: string) {
-  switch (iconKey) {
-    case 'console':
-      return (
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path fill="currentColor" d="M4 8a4 4 0 0 1 4-4h16a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8Zm6.3 3.3a1 1 0 0 0-1.4 1.4L12.2 16l-3.3 3.3a1 1 0 0 0 1.4 1.4l4-4a1 1 0 0 0 0-1.4l-4-4ZM16 19a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-6Z" />
-        </svg>
-      )
-    case 'model':
-      return (
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path fill="currentColor" d="M16 4a1.5 1.5 0 0 1 1.3.76l2.38 4.12 4.62 1.1a1.5 1.5 0 0 1 .83 2.46L21.8 16l1.02 4.72a1.5 1.5 0 0 1-2.17 1.58L16 19.8l-4.65 2.5a1.5 1.5 0 0 1-2.17-1.58L10.2 16l-3.33-3.56a1.5 1.5 0 0 1 .83-2.46l4.62-1.1 2.38-4.12A1.5 1.5 0 0 1 16 4Z" />
-        </svg>
-      )
-    case 'chat':
-      return (
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path fill="currentColor" d="M7 6a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h2v4a1 1 0 0 0 1.6.8L16 24h9a4 4 0 0 0 4-4V10a4 4 0 0 0-4-4H7Zm4 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" />
-        </svg>
-      )
-    case 'history':
-      return (
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path fill="currentColor" d="M16 4C9.37 4 4 9.37 4 16s5.37 12 12 12 12-5.37 12-12S22.63 4 16 4Zm1 5a1 1 0 1 0-2 0v7a1 1 0 0 0 .45.83l4 2.67a1 1 0 0 0 1.1-1.67L17 15.56V9Z" />
-        </svg>
-      )
-    case 'memory':
-      return (
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path fill="currentColor" d="M16 4a1 1 0 0 1 .86.5C18.5 7.5 22 11.24 22 15a6 6 0 0 1-5 5.91V24h3a1 1 0 1 1 0 2h-3v2a1 1 0 1 1-2 0v-2h-3a1 1 0 1 1 0-2h3v-3.09A6 6 0 0 1 10 15c0-3.76 3.5-7.5 5.14-10.5A1 1 0 0 1 16 4Z" />
-        </svg>
-      )
-    case 'voice':
-      return (
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <rect fill="currentColor" x="11" y="4" width="10" height="14" rx="5" />
-          <path fill="currentColor" d="M7 15a1 1 0 0 1 2 0 7 7 0 0 0 14 0 1 1 0 1 1 2 0 9 9 0 0 1-8 8.94V27h3a1 1 0 1 1 0 2h-8a1 1 0 1 1 0-2h3v-3.06A9 9 0 0 1 7 15Z" />
-        </svg>
-      )
-    case 'window':
-      return (
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path fill="currentColor" d="M4 8a4 4 0 0 1 4-4h16a4 4 0 0 1 4 4v16a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8Zm4-1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm4 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm4 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM4 12h24v12a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V12Z" />
-        </svg>
-      )
-    case 'integrations':
-      return (
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path fill="currentColor" d="M14 4a1 1 0 0 0-1 1v4.05A3.5 3.5 0 0 1 9.05 13H5a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h4.05A3.5 3.5 0 0 1 13 22.95V27a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-4.05A3.5 3.5 0 0 1 22.95 19H27a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1h-4.05A3.5 3.5 0 0 1 19 9.05V5a1 1 0 0 0-1-1h-4Z" />
-        </svg>
-      )
-    case 'autonomy':
-      return (
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path fill="currentColor" d="M16 3a1 1 0 0 1 .87.5l2.5 4.33 4.96 1.17a1 1 0 0 1 .58 1.62L21.5 14.5l.78 5.13a1 1 0 0 1-1.45 1.05L16 18l-4.83 2.68a1 1 0 0 1-1.45-1.05l.78-5.13-3.41-3.88a1 1 0 0 1 .58-1.62l4.96-1.17 2.5-4.33A1 1 0 0 1 16 3ZM8 24a1 1 0 1 0 0 2h16a1 1 0 1 0 0-2H8Zm2 4a1 1 0 1 0 0 2h12a1 1 0 1 0 0-2H10Z" />
-        </svg>
-      )
-    default:
-      return null
-  }
 }
 
 export function SettingsDrawer({
@@ -247,7 +173,6 @@ export function SettingsDrawer({
   onPreviewSpeech,
   onRunAudioSmokeTest,
   onClearDebugConsole,
-  onCloneVoice,
   notificationChannels,
   notificationChannelsLoading,
   onAddNotificationChannel,
@@ -271,13 +196,6 @@ export function SettingsDrawer({
     draft,
     onTestConnection,
     handleLoadSpeechVoices: speechVoices.handleLoadSpeechVoices,
-  })
-
-  const voiceClone = useVoiceCloneActions({
-    draft,
-    settings,
-    onCloneVoice,
-    setDraft,
   })
 
   const chatHistory = useChatHistoryActions({
@@ -304,18 +222,12 @@ export function SettingsDrawer({
 
   const textProvider = getApiProviderPreset(draft.apiProviderId)
   const petModel = petModelPresets.find((preset) => preset.id === draft.petModelId) ?? petModelPresets[0]
-  const voiceCloneProvider = getVoiceCloneProviderPreset(draft.voiceCloneProviderId)
 
   const uiLanguage = draft.uiLanguage
   const t = (zhCN: string, enUS: string) => resolveLocalizedText(uiLanguage, {
     'zh-CN': zhCN,
     'en-US': enUS,
   })
-  const getProviderRegionLabel = (region: 'global' | 'china' | 'custom') => {
-    if (region === 'china') return t('\u4e2d\u56fd', 'China')
-    if (region === 'custom') return t('\u81ea\u5b9a\u4e49', 'Custom')
-    return t('\u5168\u7403', 'Global')
-  }
   const memorySearchModeOptions = getMemorySearchModeOptions(uiLanguage)
   const settingsSectionOptions = getSettingsSectionOptions(uiLanguage)
   const selectedMemorySearchMode = memorySearchModeOptions.find((option) => option.value === draft.memorySearchMode)
@@ -325,112 +237,18 @@ export function SettingsDrawer({
   ))
   const activeSectionLabel = settingsSectionOptions.find((section) => section.id === activeSectionId)?.label
     ?? settingsSectionOptions[0].label
-  const activeSectionDescriptionById: Record<SettingsSectionId, string> = {
-    console: t('查看当前运行链路、日志、转写和后台任务状态。', 'Review the live pipeline, logs, transcripts, and background tasks.'),
-    model: t('单独管理大模型提供商、模型名称和主链路故障切换。', 'Manage the primary LLM provider, model id, and failover in one place.'),
-    chat: t('调整角色名称、用户称呼、系统提示词和 Live2D 角色。', 'Tune the companion identity, user name, system prompt, and Live2D character.'),
-    history: t('管理当前会话聊天记录的导入、导出与清理。', 'Manage import, export, and cleanup for the current chat history.'),
-    memory: t('整理长期记忆、日记和向量检索策略。', 'Manage long-term memory, diary entries, and retrieval strategy.'),
-    voice: t('统一配置连续对话、输入输出链路和语音体验。', 'Configure continuous talk mode plus the input and output voice pipeline.'),
-    window: t('控制桌宠、面板和桌面交互方式。', 'Control the desktop pet, panel, and on-screen behavior.'),
-    integrations: t('集中管理 MCP、Minecraft 与 Factorio 等模块接入。', 'Manage MCP, Minecraft, and Factorio module integrations.'),
-    autonomy: t('配置自治引擎：焦点感知、主动智能、记忆整理和通知桥。', 'Configure autonomy: focus awareness, proactive intelligence, memory dream, and notification bridge.'),
-  }
-  const settingsSectionMetaById: Record<SettingsSectionId, {
-    eyebrow: string
-    glyph: string
-    description: string
-    preview: string[]
-  }> = {
-    console: {
-      eyebrow: t('运行态观察', 'Runtime Monitor'),
-      glyph: 'console',
-      description: activeSectionDescriptionById.console,
-      preview: [
-        liveTranscript ? t('实时转写中', 'Live transcript') : t('等待语音输入', 'Waiting for voice'),
-        `${debugConsoleEvents.length} ${t('条事件', 'events')}`,
-      ],
-    },
-    model: {
-      eyebrow: t('主对话模型', 'Primary LLM'),
-      glyph: 'model',
-      description: activeSectionDescriptionById.model,
-      preview: [
-        textProvider.label,
-        draft.model || t('未填写模型', 'No model set'),
-      ],
-    },
-    chat: {
-      eyebrow: t('角色与设定', 'Companion Profile'),
-      glyph: 'chat',
-      description: activeSectionDescriptionById.chat,
-      preview: [
-        draft.companionName || t('未命名角色', 'Unnamed companion'),
-        petModel?.label ?? t('未选择 Live2D', 'No Live2D selected'),
-        draft.characterProfiles.length
-          ? t(`${draft.characterProfiles.length} 个角色档案`, `${draft.characterProfiles.length} profile(s)`)
-          : '',
-      ].filter(Boolean),
-    },
-    history: {
-      eyebrow: t('会话归档', 'Conversation Archive'),
-      glyph: 'history',
-      description: activeSectionDescriptionById.history,
-      preview: [
-        `${chatMessageCount} ${t('条消息', 'messages')}`,
-        t('导入 / 导出 / 清理', 'Import / Export / Clear'),
-      ],
-    },
-    memory: {
-      eyebrow: t('长期记忆', 'Long-term Memory'),
-      glyph: 'memory',
-      description: activeSectionDescriptionById.memory,
-      preview: [
-        `${memories.length} ${t('条记忆', 'memories')}`,
-        `${dailyMemoryEntries.length} ${t('条日记', 'daily notes')}`,
-      ],
-    },
-    voice: {
-      eyebrow: t('连续对话模式', 'Talk Mode'),
-      glyph: 'voice',
-      description: activeSectionDescriptionById.voice,
-      preview: [
-        draft.continuousVoiceModeEnabled ? t('连续语音开启', 'Continuous voice on') : t('连续语音关闭', 'Continuous voice off'),
-        continuousVoiceActive ? t('当前正在监听', 'Live session running') : t('当前待命', 'Standing by'),
-      ],
-    },
-    window: {
-      eyebrow: t('桌宠与面板', 'Pet & Window'),
-      glyph: 'window',
-      description: activeSectionDescriptionById.window,
-      preview: [
-        petModel?.label ?? t('桌宠模型', 'Desktop pet'),
-        windowState.petWindowState.clickThrough ? t('穿透开启', 'Click-through on') : t('正常交互', 'Interactive'),
-      ],
-    },
-    integrations: {
-      eyebrow: t('模块映射', 'Module Mapping'),
-      glyph: 'integrations',
-      description: activeSectionDescriptionById.integrations,
-      preview: [
-        draft.mcpServers.length ? t(`MCP ${draft.mcpServers.length} 个服务`, `MCP ${draft.mcpServers.length} server(s)`) : t('MCP 待配置', 'MCP pending'),
-        draft.minecraftIntegrationEnabled || draft.factorioIntegrationEnabled
-          ? t('游戏模块已启用', 'Game modules enabled')
-          : t('游戏模块待命', 'Game modules idle'),
-      ],
-    },
-    autonomy: {
-      eyebrow: t('自主行为', 'Autonomous Behavior'),
-      glyph: 'autonomy',
-      description: activeSectionDescriptionById.autonomy,
-      preview: [
-        draft.autonomyEnabled ? t('自治引擎开启', 'Autonomy on') : t('自治引擎关闭', 'Autonomy off'),
-        draft.autonomyEnabled && draft.autonomyDreamEnabled
-          ? t('记忆整理开启', 'Dream enabled')
-          : t('记忆整理关闭', 'Dream off'),
-      ],
-    },
-  }
+  const { meta: settingsSectionMetaById } = buildSettingsSectionMeta({
+    t,
+    draft,
+    petModel,
+    memories,
+    dailyMemoryEntries,
+    chatMessageCount,
+    liveTranscript,
+    debugConsoleEvents,
+    continuousVoiceActive,
+    clickThroughEnabled: windowState.petWindowState.clickThrough,
+  })
   const settingsHomeCards = settingsSectionOptions.map((section) => {
     const sectionMeta = settingsSectionMetaById[section.id]
 
@@ -453,7 +271,6 @@ export function SettingsDrawer({
     if (open) {
       console.info('[SettingsDrawer] SYNC draft from settings, provider:', settings.speechOutputProviderId)
       setDraft(settings)
-      voiceClone.syncCloneName(settings.companionName)
       speechVoices.syncPreviewText(settings.companionName)
       setSettingsView('home')
     }
@@ -466,7 +283,7 @@ export function SettingsDrawer({
   useEffect(() => {
     if (!open) return
     setDraft((current) => {
-      const keyFields = ['apiKey', 'speechInputApiKey', 'speechOutputApiKey', 'voiceCloneApiKey', 'toolWebSearchApiKey'] as const
+      const keyFields = ['apiKey', 'speechInputApiKey', 'speechOutputApiKey', 'toolWebSearchApiKey'] as const
       let changed = false
       const patch = { ...current }
       for (const field of keyFields) {
@@ -477,7 +294,7 @@ export function SettingsDrawer({
       }
       return changed ? patch : current
     })
-  }, [open, settings.apiKey, settings.speechOutputApiKey, settings.speechInputApiKey, settings.voiceCloneApiKey, settings.toolWebSearchApiKey]) // eslint-disable-line react-hooks/exhaustive-deps -- only sync specific vault keys, not full settings
+  }, [open, settings.apiKey, settings.speechOutputApiKey, settings.speechInputApiKey, settings.toolWebSearchApiKey]) // eslint-disable-line react-hooks/exhaustive-deps -- only sync specific vault keys, not full settings
 
    
   useEffect(() => {
@@ -496,7 +313,6 @@ export function SettingsDrawer({
   // Reset all transient state when drawer opens/closes or settings change
   useEffect(() => {
     connectionTests.resetConnectionTests()
-    voiceClone.resetVoiceClone()
     petModel_.resetPetModelImport()
     speechVoices.resetSpeechVoices()
     chatHistory.resetChatHistory()
@@ -516,16 +332,6 @@ export function SettingsDrawer({
       return next
     })
     speechVoices.applySpeechOutputPreset(providerId)
-  }
-
-  function applyVoiceClonePreset(providerId: string) {
-    const preset = getVoiceCloneProviderPreset(providerId)
-
-    setDraft((prev) => ({
-      ...prev,
-      voiceCloneProviderId: providerId,
-      voiceCloneApiBaseUrl: preset.baseUrl || prev.voiceCloneApiBaseUrl,
-    }))
   }
 
   function handleDismiss() {
@@ -650,7 +456,6 @@ export function SettingsDrawer({
           testingTarget={connectionTests.testingTarget}
           textProvider={textProvider}
           t={t}
-          getProviderRegionLabel={getProviderRegionLabel}
           onApplyTextProviderPreset={applyTextProviderPreset}
           onRunTextConnectionTest={() => void connectionTests.runConnectionTest('text')}
           renderTextTestResult={() => connectionTests.renderTestResult('text')}
@@ -660,7 +465,6 @@ export function SettingsDrawer({
           active={activeSectionId === 'chat'}
           draft={draft}
           setDraft={setDraft}
-          setCloneName={voiceClone.setCloneName}
           petModelPresets={petModelPresets}
           importingPetModel={petModel_.importingPetModel}
           petModelStatus={petModel_.petModelStatus}
@@ -669,6 +473,7 @@ export function SettingsDrawer({
 
         <HistorySection
           active={activeSectionId === 'history'}
+          uiLanguage={draft.uiLanguage}
           chatMessageCount={chatMessageCount}
           chatBusy={chatBusy}
           exportingChatHistory={chatHistory.exportingChatHistory}
@@ -746,28 +551,6 @@ export function SettingsDrawer({
           renderSpeechOutputTestResult={() => connectionTests.renderTestResult('speech-output')}
         />
 
-        <CloneSection
-          active={activeSectionId === 'voice'}
-          draft={draft}
-          setDraft={setDraft}
-          testingTarget={connectionTests.testingTarget}
-          cloneFiles={voiceClone.cloneFiles}
-          cloneName={voiceClone.cloneName}
-          cloneDescription={voiceClone.cloneDescription}
-          removeBackgroundNoise={voiceClone.removeBackgroundNoise}
-          cloningVoice={voiceClone.cloningVoice}
-          cloneStatus={voiceClone.cloneStatus}
-          voiceCloneProvider={voiceCloneProvider}
-          applyVoiceClonePreset={applyVoiceClonePreset}
-          setCloneFiles={voiceClone.setCloneFiles}
-          setCloneName={voiceClone.setCloneName}
-          setCloneDescription={voiceClone.setCloneDescription}
-          setRemoveBackgroundNoise={voiceClone.setRemoveBackgroundNoise}
-          onRunVoiceCloneConnectionTest={() => void connectionTests.runConnectionTest('voice-clone')}
-          onCloneVoice={() => void voiceClone.handleCloneVoice()}
-          renderVoiceCloneTestResult={() => connectionTests.renderTestResult('voice-clone')}
-        />
-
         <WindowSection
           active={activeSectionId === 'window'}
           draft={draft}
@@ -796,10 +579,14 @@ export function SettingsDrawer({
           onRemoveChannel={onRemoveNotificationChannel}
         />
 
-        <ContextSection
-          active={activeSectionId === 'console'}
+        <ToolsSection
+          active={activeSectionId === 'tools'}
           draft={draft}
           setDraft={setDraft}
+        />
+
+        <ContextSection
+          active={activeSectionId === 'console'}
           reminderTasks={reminderTasks}
           uiLanguage={uiLanguage}
           onAddReminderTask={onAddReminderTask}

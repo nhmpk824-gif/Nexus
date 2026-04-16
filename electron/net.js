@@ -65,6 +65,73 @@ export async function performNetworkRequest(url, options = {}) {
   )
 }
 
+/**
+ * Wrap performNetworkRequest with bounded retries for transient failures.
+ *
+ * Retries on:
+ *  - Network-level errors caught by shouldLabelAsConnectionFailure (ECONNRESET,
+ *    ETIMEDOUT, socket hang up, fetch failed, proxy/TLS hiccups, timeouts).
+ *  - HTTP 429 and 5xx responses.
+ *
+ * Does NOT retry on:
+ *  - 4xx responses (auth/validation — retry won't help).
+ *  - AbortError from caller-supplied signal.
+ *  - The final attempt, which surfaces its error/response to the caller as-is.
+ *
+ * Backoff is exponential with a small jitter so parallel requests don't burst.
+ */
+export async function performNetworkRequestWithRetry(url, options = {}) {
+  const {
+    maxAttempts = 3,
+    baseBackoffMs = 300,
+    maxBackoffMs = 2_000,
+    onRetry,
+    ...requestOptions
+  } = options
+
+  let attempt = 0
+  // The loop is bounded by maxAttempts; we either return a final response or
+  // throw the final error below.
+  while (true) {
+    attempt += 1
+    const isFinalAttempt = attempt >= maxAttempts
+
+    try {
+      const response = await performNetworkRequest(url, requestOptions)
+
+      if (response.ok || isFinalAttempt) {
+        return response
+      }
+
+      const status = response.status
+      const shouldRetry = status === 429 || (status >= 500 && status < 600)
+      if (!shouldRetry) {
+        return response
+      }
+
+      // Drain the body so the socket can be reused on retry — some runtimes
+      // keep the connection half-open until the body is consumed.
+      await response.text().catch(() => undefined)
+      onRetry?.({ attempt, reason: `http_${status}`, url })
+    } catch (error) {
+      // AbortError from the caller's signal (user cancel, teardown) should
+      // bubble immediately, not retry.
+      if (error?.name === 'AbortError') {
+        throw error
+      }
+      if (isFinalAttempt || !shouldLabelAsConnectionFailure(error?.message ?? error)) {
+        throw error
+      }
+      onRetry?.({ attempt, reason: 'network_error', url, error })
+    }
+
+    const exponent = Math.min(attempt - 1, 6)
+    const delay = Math.min(baseBackoffMs * 2 ** exponent, maxBackoffMs)
+    const jitter = Math.floor(Math.random() * 100)
+    await new Promise((resolve) => setTimeout(resolve, delay + jitter))
+  }
+}
+
 export async function extractResponseErrorMessage(response, fallbackMessage) {
   const contentType = response.headers.get('content-type') ?? ''
 

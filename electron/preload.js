@@ -75,7 +75,6 @@ contextBridge.exposeInMainWorld('desktopPet', {
     ipcRenderer.on('tts:stream-event', handler)
     return () => ipcRenderer.removeListener('tts:stream-event', handler)
   },
-  cloneVoice: (payload) => ipcRenderer.invoke('voice:clone', payload),
   getDesktopContext: (request) => ipcRenderer.invoke('desktop-context:get', request),
   getSystemMediaSession: () => ipcRenderer.invoke('media-session:get'),
   controlSystemMediaSession: (payload) => ipcRenderer.invoke('media-session:control', payload),
@@ -100,6 +99,13 @@ contextBridge.exposeInMainWorld('desktopPet', {
   kwsStart: (payload) => ipcRenderer.invoke('kws:start', payload),
   kwsFeed: (payload) => ipcRenderer.invoke('kws:feed', payload),
   kwsStop: () => ipcRenderer.invoke('kws:stop'),
+
+  // Sherpa-onnx Silero VAD (main-process, shares audio frames with KWS)
+  vadStatus: () => ipcRenderer.invoke('vad:status'),
+  vadStart: (payload) => ipcRenderer.invoke('vad:start', payload),
+  vadFeed: (payload) => ipcRenderer.invoke('vad:feed', payload),
+  vadFlush: () => ipcRenderer.invoke('vad:flush'),
+  vadStop: () => ipcRenderer.invoke('vad:stop'),
 
   // MCP stdio client — restricted to main process only (no renderer access)
 
@@ -205,6 +211,15 @@ contextBridge.exposeInMainWorld('desktopPet', {
   personaOpenDir: () => ipcRenderer.invoke('persona:open-dir'),
   personaInit: (payload) => ipcRenderer.invoke('persona:init', payload),
 
+  // Sandboxed workspace fs (agent loop tools)
+  workspaceSetRoot: (payload) => ipcRenderer.invoke('workspace:set-root', payload),
+  workspaceGetRoot: () => ipcRenderer.invoke('workspace:get-root'),
+  workspaceRead: (payload) => ipcRenderer.invoke('workspace:read', payload),
+  workspaceWrite: (payload) => ipcRenderer.invoke('workspace:write', payload),
+  workspaceEdit: (payload) => ipcRenderer.invoke('workspace:edit', payload),
+  workspaceGlob: (payload) => ipcRenderer.invoke('workspace:glob', payload),
+  workspaceGrep: (payload) => ipcRenderer.invoke('workspace:grep', payload),
+
   // Realtime Voice (OpenAI Realtime API)
   realtimeStart: (payload) => ipcRenderer.invoke('realtime:start', payload),
   realtimeStop: () => ipcRenderer.invoke('realtime:stop'),
@@ -216,6 +231,27 @@ contextBridge.exposeInMainWorld('desktopPet', {
     const handler = (_event, payload) => listener(payload)
     ipcRenderer.on('realtime:event', handler)
     return () => ipcRenderer.removeListener('realtime:event', handler)
+  },
+
+  // Auto-updater (electron-updater + GitHub Releases)
+  updaterCheck: () => ipcRenderer.invoke('updater:check'),
+  updaterStatus: () => ipcRenderer.invoke('updater:status'),
+  updaterInstall: () => ipcRenderer.invoke('updater:install'),
+  subscribeUpdaterEvent: (listener) => {
+    const handler = (_event, payload) => listener(payload)
+    ipcRenderer.on('updater:event', handler)
+    return () => ipcRenderer.removeListener('updater:event', handler)
+  },
+
+  // Notification bridge (RSS + webhook)
+  getNotificationChannels: () => ipcRenderer.invoke('notification:get-channels'),
+  setNotificationChannels: (channels) => ipcRenderer.invoke('notification:set-channels', channels),
+  startNotificationBridge: () => ipcRenderer.invoke('notification:start'),
+  stopNotificationBridge: () => ipcRenderer.invoke('notification:stop'),
+  subscribeNotifications: (listener) => {
+    const handler = (_event, msg) => listener(msg)
+    ipcRenderer.on('notification:incoming', handler)
+    return () => ipcRenderer.removeListener('notification:incoming', handler)
   },
 
   // Key vault (safeStorage encryption)

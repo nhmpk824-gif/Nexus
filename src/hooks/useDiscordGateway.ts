@@ -30,11 +30,24 @@ export function useDiscordGateway({
   onMessage,
   enabled,
 }: UseDiscordGatewayOptions) {
-  const [status, setStatus] = useState<DiscordStatus>({
-    state: 'disconnected',
-    botUsername: null,
-    lastError: null,
-  })
+  // Status updates are made during render (on enabled-prop transitions) or from
+  // async callbacks — never synchronously inside an effect — so the React 19
+  // set-state-in-effect rule stays satisfied. The effect below only owns the
+  // side effect of calling into the desktop bridge.
+  const [status, setStatus] = useState<DiscordStatus>(() => (
+    enabled
+      ? { state: 'connecting', botUsername: null, lastError: null }
+      : { state: 'disconnected', botUsername: null, lastError: null }
+  ))
+  const [prevEnabled, setPrevEnabled] = useState(enabled)
+  if (enabled !== prevEnabled) {
+    setPrevEnabled(enabled)
+    if (enabled) {
+      setStatus((prev) => ({ ...prev, state: 'connecting', lastError: null }))
+    } else {
+      setStatus({ state: 'disconnected', botUsername: null, lastError: null })
+    }
+  }
   const onMessageRef = useRef(onMessage)
 
   useEffect(() => {
@@ -45,7 +58,6 @@ export function useDiscordGateway({
   useEffect(() => {
     if (!enabled) {
       void window.desktopPet?.discordDisconnect?.()
-      setStatus({ state: 'disconnected', botUsername: null, lastError: null })
       return
     }
 
@@ -57,8 +69,6 @@ export function useDiscordGateway({
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
-
-    setStatus((prev) => ({ ...prev, state: 'connecting', lastError: null }))
 
     window.desktopPet?.discordConnect?.({ botToken, allowedChannelIds })
       .then((s) => {

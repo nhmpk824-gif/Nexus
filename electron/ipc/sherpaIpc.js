@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import sherpaKwsService from '../sherpaKws.js'
+import sherpaVadService from '../sherpaVad.js'
 import sherpaSenseVoiceService from '../sherpaSenseVoice.js'
 import sherpaParaformerService from '../sherpaParaformer.js'
 import { requireTrustedSender } from './validate.js'
@@ -27,6 +28,8 @@ export function register() {
     requireTrustedSender(event)
     const { samples, sampleRate } = payload
     if (!samples || !samples.length) return { keyword: null }
+    if (!Array.isArray(samples) && !(samples instanceof Float32Array)) return { keyword: null }
+    if (samples.length > 320000) return { keyword: null }
     const float32 = samples instanceof Float32Array ? samples : new Float32Array(samples)
     return sherpaKwsService.feed(float32, sampleRate)
   })
@@ -34,6 +37,45 @@ export function register() {
   ipcMain.handle('kws:stop', (event) => {
     requireTrustedSender(event)
     sherpaKwsService.stop()
+    return { ok: true }
+  })
+
+  // ── Silero VAD (main-process) ──
+
+  ipcMain.handle('vad:status', (event) => {
+    requireTrustedSender(event)
+    return sherpaVadService.getStatus()
+  })
+
+  ipcMain.handle('vad:start', (event, payload) => {
+    requireTrustedSender(event)
+    return sherpaVadService.start(payload ?? {})
+  })
+
+  ipcMain.handle('vad:feed', (event, payload) => {
+    requireTrustedSender(event)
+    const { samples } = payload || {}
+    if (!samples || !samples.length) {
+      return { speechDetected: false, speechStarted: false, speechEnded: false, segments: [] }
+    }
+    if (!Array.isArray(samples) && !(samples instanceof Float32Array)) {
+      return { speechDetected: false, speechStarted: false, speechEnded: false, segments: [] }
+    }
+    if (samples.length > 320000) {
+      return { speechDetected: false, speechStarted: false, speechEnded: false, segments: [] }
+    }
+    const float32 = samples instanceof Float32Array ? samples : new Float32Array(samples)
+    return sherpaVadService.feed(float32)
+  })
+
+  ipcMain.handle('vad:flush', (event) => {
+    requireTrustedSender(event)
+    return { segments: sherpaVadService.flush() }
+  })
+
+  ipcMain.handle('vad:stop', (event) => {
+    requireTrustedSender(event)
+    sherpaVadService.stop()
     return { ok: true }
   })
 
@@ -63,6 +105,8 @@ export function register() {
     requireTrustedSender(event)
     const { samples } = payload
     if (!samples || !samples.length) return { ok: true }
+    if (!Array.isArray(samples) && !(samples instanceof Float32Array)) return { ok: true }
+    if (samples.length > 320000) return { ok: true }
     const float32 = samples instanceof Float32Array ? samples : new Float32Array(samples)
     sherpaSenseVoiceService.feedAudio(float32)
     return { ok: true }
@@ -84,6 +128,8 @@ export function register() {
     requireTrustedSender(event)
     const { samples, sampleRate } = payload
     if (!samples || !samples.length) return { text: '' }
+    if (!Array.isArray(samples) && !(samples instanceof Float32Array)) return { text: '' }
+    if (samples.length > 320000) return { text: '' }
     const float32 = samples instanceof Float32Array ? samples : new Float32Array(samples)
     const text = sherpaSenseVoiceService.transcribe(float32, sampleRate || 16000)
     return { text }
@@ -115,6 +161,8 @@ export function register() {
     requireTrustedSender(event)
     const { samples } = payload
     if (!samples || !samples.length) return { text: '', isEndpoint: false }
+    if (!Array.isArray(samples) && !(samples instanceof Float32Array)) return { text: '', isEndpoint: false }
+    if (samples.length > 320000) return { text: '', isEndpoint: false }
     const float32 = samples instanceof Float32Array ? samples : new Float32Array(samples)
     return sherpaParaformerService.feedAudio(float32)
   })

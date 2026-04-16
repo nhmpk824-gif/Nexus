@@ -4,9 +4,7 @@ import { test } from 'node:test'
 import {
   buildBuiltInToolAssistantSummary,
   buildBuiltInToolSpeechSummary,
-  shouldUseBuiltInToolAssistantSummary,
 } from '../src/features/tools/assistant.ts'
-import { resolveAssistantPresentation } from '../src/features/tools/presentation.ts'
 
 test('prefers structured search display summary when available', () => {
   const summary = buildBuiltInToolAssistantSummary({
@@ -95,23 +93,51 @@ test('admits when web search results are off target', () => {
   assert.match(summary, /没准确命中|不够贴合/u)
 })
 
-test('uses tool summary when the model only promises to act', () => {
-  const shouldUseSummary = shouldUseBuiltInToolAssistantSummary(
-    '好的，我这就给主人查找《黄昏》的歌词。',
-    {
-      kind: 'web_search',
-      systemMessage: '',
-      promptContext: '',
-      assistantSummary: '我先总结一下：这次搜索已经基本命中“黄昏 歌词”。',
-      result: {
-        query: '黄昏 歌词',
-        message: '',
-        items: [],
-      },
+test('search summary stays cautious when only weakly related results exist', () => {
+  const summary = buildBuiltInToolAssistantSummary({
+    kind: 'web_search',
+    systemMessage: '',
+    promptContext: '',
+    assistantSummary: '',
+    result: {
+      query: '小米 SU7 官网',
+      message: '',
+      items: [
+        {
+          title: '小米 SU7 论坛讨论区',
+          url: 'https://example.com/forum',
+          snippet: '这里整理了一些车友讨论和使用感受。',
+        },
+      ],
     },
-  )
+  })
 
-  assert.equal(shouldUseSummary, true)
+  assert.match(summary, /不够贴合|最接近/u)
+})
+
+test('search summary prefers extracted content preview when evidence is strong', () => {
+  const summary = buildBuiltInToolAssistantSummary({
+    kind: 'web_search',
+    systemMessage: '',
+    promptContext: '',
+    assistantSummary: '',
+    result: {
+      query: '小米 SU7 官网',
+      message: '',
+      matchConfidence: 'high',
+      items: [
+        {
+          title: 'Xiaomi SU7 Official Site',
+          url: 'https://www.mi.com/su7',
+          snippet: '官方介绍页面。',
+          contentPreview: '小米 SU7 官方介绍页面，包含车型亮点、参数配置和预约入口。',
+        },
+      ],
+    },
+  })
+
+  assert.match(summary, /官方介绍页面/u)
+  assert.doesNotMatch(summary, /论坛讨论区/u)
 })
 
 test('lyrics search speech summary uses display title instead of generic result wording', () => {
@@ -193,60 +219,4 @@ test('weather speech summary does not repeat day labels', () => {
   assert.doesNotMatch(speech, /明天明天/u)
   assert.match(speech, /今天，小阵雨/u)
   assert.match(speech, /明天，阴天/u)
-})
-
-test('assistant spoken reply wins over tool speech when the model gives a real weather answer', () => {
-  const presentation = resolveAssistantPresentation({
-    builtInToolResult: {
-      kind: 'weather',
-      systemMessage: '',
-      promptContext: '',
-      assistantSummary: '我先总结一下：深圳当前有雷阵雨。',
-      result: {
-        location: 'Shenzhen',
-        resolvedName: '深圳',
-        currentSummary: '雷阵雨，24到28度',
-        todaySummary: '今天有雷阵雨，24到28度',
-        tomorrowSummary: '明天小阵雨，24到27度',
-        message: '',
-      },
-    },
-    hasToolResultCard: true,
-    assistantDisplayContent: '是的呢，今天深圳有雷阵雨，气温24到28度，出门记得带伞哦。',
-    assistantSpokenContent: '是的呢，今天深圳有雷阵雨，气温24到28度，出门记得带伞哦。',
-    toolSpeechOutput: '好的，主人。深圳当前雷阵雨，今天有雷阵雨，明天小阵雨。',
-  })
-
-  assert.equal(
-    presentation.speechContent,
-    '是的呢，今天深圳有雷阵雨，气温24到28度，出门记得带伞哦。',
-  )
-})
-
-test('tool speech stays as fallback when the model only promises to check weather', () => {
-  const presentation = resolveAssistantPresentation({
-    builtInToolResult: {
-      kind: 'weather',
-      systemMessage: '',
-      promptContext: '',
-      assistantSummary: '我先总结一下：深圳当前有雷阵雨。',
-      result: {
-        location: 'Shenzhen',
-        resolvedName: '深圳',
-        currentSummary: '雷阵雨，24到28度',
-        todaySummary: '今天有雷阵雨，24到28度',
-        tomorrowSummary: '明天小阵雨，24到27度',
-        message: '',
-      },
-    },
-    hasToolResultCard: true,
-    assistantDisplayContent: '好的，我这就帮你查天气。',
-    assistantSpokenContent: '好的，我这就帮你查天气。',
-    toolSpeechOutput: '好的，主人。深圳当前雷阵雨，今天有雷阵雨，明天小阵雨。',
-  })
-
-  assert.equal(
-    presentation.speechContent,
-    '好的，主人。深圳当前雷阵雨，今天有雷阵雨，明天小阵雨。',
-  )
 })

@@ -373,6 +373,75 @@
   line-height: 1.6;
 }
 
+/* ── Composer image attachments ─────────────────────────────────────── */
+.composer__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.composer__attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 12px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.composer__attachment-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+
+.composer__attachment-label {
+  white-space: nowrap;
+}
+
+.composer__attachment-remove {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.composer__attachment-remove:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Inline images inside chat bubbles ──────────────────────────────── */
+.message-bubble__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.message-bubble__image {
+  max-width: 240px;
+  max-height: 240px;
+  border-radius: 10px;
+  object-fit: contain;
+  display: block;
+  background: rgba(0, 0, 0, 0.15);
+}
+
 .message-list,
 .memory-list {
   display: flex;
@@ -1849,6 +1918,79 @@
   }
 }
 
+/* ── Inner thought bubble (autonomy monologue) ── */
+.pet-window__thought-layer {
+  position: absolute;
+  top: 24px;
+  right: calc(16px + var(--pet-control-rail-width) + var(--pet-control-rail-gap));
+  z-index: 3;
+  width: min(360px, calc(100% - var(--pet-control-rail-width) - 48px));
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.pet-thought-bubble {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  max-width: 100%;
+  border-radius: 18px;
+  border: 1px dashed rgba(168, 200, 255, 0.32);
+  background: rgba(20, 28, 44, 0.55);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 1.55;
+  color: rgba(220, 230, 255, 0.78);
+  pointer-events: auto;
+  animation: pet-thought-fade 0.45s ease-out both;
+}
+
+.pet-thought-bubble--soft {
+  opacity: 0.7;
+  border-color: rgba(168, 200, 255, 0.22);
+}
+
+.pet-thought-bubble--medium {
+  opacity: 0.88;
+  border-color: rgba(190, 215, 255, 0.36);
+  color: rgba(232, 240, 255, 0.86);
+}
+
+.pet-thought-bubble--strong {
+  opacity: 1;
+  border-color: rgba(210, 225, 255, 0.5);
+  background: rgba(28, 36, 56, 0.7);
+  color: rgba(245, 248, 255, 0.95);
+  box-shadow: 0 8px 28px rgba(80, 110, 180, 0.28);
+}
+
+.pet-thought-bubble__icon {
+  font-size: 14px;
+  line-height: 1;
+  margin-top: 1px;
+  opacity: 0.85;
+}
+
+.pet-thought-bubble__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@keyframes pet-thought-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: var(--pet-thought-bubble-opacity, 1);
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* ── Status indicator (top-left dot) ── */
 .pet-window__status-indicator {
   position: absolute;
@@ -2234,6 +2376,14 @@
   min-height: 0;
 }
 
+/* Expanded panel holds a single .panel-window__shell child — give it a 1fr row
+   so percentage heights inside (shell → chat → message list) have a definite
+   containing block. Without this, align-content:start collapses the cascade. */
+.panel-window--companion:not(.is-collapsed) {
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
 .panel-window__ambient--primary {
   top: -18px;
   right: -10px;
@@ -2257,11 +2407,19 @@
 
 .panel-window__shell {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Rows: toolbar (auto), optional active plan strip (auto/0), chat (1fr).
+     ActivePlanStrip may render null — the explicit grid-row on .companion-chat
+     below pins the chat into the 1fr row so the layout doesn't shift. */
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 18px;
   align-content: start;
   min-height: 0;
   height: 100%;
+}
+
+.panel-window__shell > .companion-chat {
+  grid-row: 3;
+  min-height: 0;
 }
 
 .companion-chat,
@@ -2295,7 +2453,9 @@
 
 .companion-chat {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  /* Children: message list, optional error banner, composer.
+     Message list takes the flex row; banner and composer stay auto. */
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 14px;
   min-height: 0;
   height: 100%;
@@ -3148,6 +3308,82 @@
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.62;
+}
+
+.settings-updater-panel {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 160, 230, 0.18);
+  background: linear-gradient(135deg, rgba(38, 50, 78, 0.55), rgba(24, 32, 52, 0.55));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}
+
+.settings-updater-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-updater-panel__title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(245, 250, 255, 0.92);
+}
+
+.settings-updater-panel__version {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-updater-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-updater-panel__status {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.settings-updater-panel__status--idle {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.settings-updater-panel__status--info {
+  color: rgba(160, 200, 255, 0.92);
+}
+
+.settings-updater-panel__status--success {
+  color: rgba(120, 220, 160, 0.92);
+}
+
+.settings-updater-panel__status--warning {
+  color: rgba(250, 200, 110, 0.92);
+}
+
+.settings-updater-panel__status--error {
+  color: rgba(255, 140, 140, 0.95);
+}
+
+.settings-updater-panel__progress {
+  margin-top: 10px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.settings-updater-panel__progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4a8fff, #6cdbff);
+  border-radius: 999px;
+  transition: width 0.3s ease;
 }
 
 .settings-console-grid {
@@ -4181,10 +4417,6 @@
 
 
 /* All cards same height, no per-section size overrides */
-
-.settings-home-card[data-section='clone'] {
-  --card-accent: #aa4c68;
-}
 
 .settings-page {
   display: grid;

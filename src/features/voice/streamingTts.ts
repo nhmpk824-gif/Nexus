@@ -47,6 +47,7 @@ function normalizeOptions(options?: StreamingTtsChunkerOptions) {
   )
 
   return {
+    absoluteMinChunkLength,
     maxChunkLength,
     minForcedChunkLength: Math.min(minForcedChunkLength, maxChunkLength),
     preferredEarlySplitLength: Math.min(preferredEarlySplitLength, maxChunkLength),
@@ -138,9 +139,13 @@ function collectCompletedChunks(
       }
     }
 
+    // Sentence boundaries (。！？!?；;：:\n) are natural TTS pause points;
+    // emit them immediately during streaming so short sentences don't get
+    // stuck waiting for the length-based thresholds.  Only the absolute
+    // minimum length applies (avoids pathological 1-char chunks).
     for (let index = 0; index < remaining.length; index += 1) {
       if (SENTENCE_BOUNDARY_PATTERN.test(remaining[index] ?? '')) {
-        if (index + 1 >= activeOptions.preferredEarlySplitLength || forceFlush) {
+        if (index + 1 >= options.absoluteMinChunkLength || forceFlush) {
           splitIndex = index + 1
           break
         }

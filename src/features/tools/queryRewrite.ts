@@ -1,6 +1,6 @@
 import { normalizeIntentText, stripConversationPrefix } from '../intent/preprocess.ts'
 
-type SearchQueryRewriteResult = {
+export type SearchQueryRewriteResult = {
   rawQuery: string
   normalizedQuery: string
   query: string
@@ -8,6 +8,12 @@ type SearchQueryRewriteResult = {
   topic: string
   displayQuery: string
   searchTopic: string
+  subject: string
+  facet: string
+  matchProfile: string
+  strictTerms: string[]
+  softTerms: string[]
+  phraseTerms: string[]
   keywords: string[]
   candidateQueries: string[]
   hasLyricsFacet: boolean
@@ -117,6 +123,8 @@ function extractLyricsTopic(query: string) {
 function buildCandidateQueries(result: {
   rewrittenQuery: string
   searchTopic: string
+  subject: string
+  facet: string
   keywords: string[]
   isLyricsQuery: boolean
 }) {
@@ -132,21 +140,74 @@ function buildCandidateQueries(result: {
     queries.add(topic)
   }
 
+  if (result.subject && result.facet) {
+    queries.add(`${result.subject} ${result.facet}`)
+  }
+
   if (result.isLyricsQuery && topic) {
     queries.add(`"${topic}" 歌词`)
     queries.add(`${topic} 歌词`)
     queries.add(`${topic} lyrics`)
   }
 
+  if (/官网/u.test(result.facet) && result.subject) {
+    queries.add(`${result.subject} official site`)
+    queries.add(`${result.subject} 官方网站`)
+  }
+
+  if (/最新/u.test(result.facet) && result.subject) {
+    queries.add(`${result.subject} 最新消息`)
+    queries.add(`${result.subject} latest news`)
+  }
+
   if (result.keywords.length >= 2) {
     queries.add(result.keywords.slice(0, 4).join(' '))
   }
 
-  return [...queries].filter(Boolean).slice(0, 5)
+  return [...queries].filter(Boolean).slice(0, 6)
 }
 
 export function extractSearchKeywords(text: string) {
   return tokenizeForKeywords(text)
+}
+
+function buildSearchPlanTerms(subject: string, facet: string, keywords: string[]) {
+  const normalizedSubject = normalizeWhitespace(subject)
+  const strictTerms = uniq(
+    normalizedSubject
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .flatMap((token) => {
+        if (/^[a-z0-9._-]+$/iu.test(token)) {
+          return token.toLowerCase().split(/[_./-]+/).filter(Boolean)
+        }
+        return [token]
+      }),
+  )
+
+  const softTerms = uniq([
+    ...keywords,
+    ...(facet === '官网' ? ['官网', 'official', '官方网站'] : []),
+    ...(facet === '最新' ? ['最新', 'latest', 'news'] : []),
+    ...(facet === '歌词' ? ['歌词', 'lyrics'] : []),
+  ]).filter(Boolean)
+
+  const phraseTerms = normalizedSubject ? [normalizedSubject] : []
+  const matchProfile = facet === '官网'
+    ? 'official'
+    : facet === '最新'
+      ? 'latest'
+      : facet === '歌词'
+        ? 'lyrics'
+        : 'general_entity'
+
+  return {
+    matchProfile,
+    strictTerms,
+    softTerms,
+    phraseTerms,
+  }
 }
 
 export function rewriteSearchQuery(query: string): SearchQueryRewriteResult {
@@ -154,6 +215,18 @@ export function rewriteSearchQuery(query: string): SearchQueryRewriteResult {
   const normalizedQuery = normalizeWhitespace(rawQuery)
   const isLyricsQuery = SEARCH_LYRICS_PATTERN.test(normalizedQuery)
   const searchTopic = isLyricsQuery ? extractLyricsTopic(normalizedQuery) : stripSearchDecorations(normalizedQuery)
+  const facet = isLyricsQuery
+    ? '歌词'
+    : (/(?:官网|官方网站|网址|链接)/iu.test(normalizedQuery)
+        ? '官网'
+        : /(?:最新|最近|新消息|新动态)/iu.test(normalizedQuery)
+          ? '最新'
+          : '')
+  const subject = normalizeWhitespace(
+    searchTopic
+      .replace(/(?:官网|官方网站|网址|链接|最新|最近|新消息|新动态)$/giu, '')
+      .trim(),
+  ) || searchTopic
   const normalizedLyricsQuery = normalizeWhitespace(
     isLyricsQuery && searchTopic
       ? /(?:完整|全文)$/u.test(searchTopic)
@@ -168,6 +241,11 @@ export function rewriteSearchQuery(query: string): SearchQueryRewriteResult {
   )
   const keywords = extractSearchKeywords(rewrittenQuery || normalizedQuery)
   const displayQuery = normalizeWhitespace(searchTopic || normalizedQuery || rewrittenQuery)
+  const searchPlanTerms = buildSearchPlanTerms(
+    subject || searchTopic || rewrittenQuery || normalizedQuery,
+    facet,
+    keywords,
+  )
 
   return {
     rawQuery,
@@ -177,10 +255,18 @@ export function rewriteSearchQuery(query: string): SearchQueryRewriteResult {
     topic: searchTopic || rewrittenQuery || normalizedQuery,
     displayQuery: displayQuery || normalizedQuery || rewrittenQuery,
     searchTopic: searchTopic || rewrittenQuery || normalizedQuery,
+    subject: subject || searchTopic || rewrittenQuery || normalizedQuery,
+    facet,
+    matchProfile: searchPlanTerms.matchProfile,
+    strictTerms: searchPlanTerms.strictTerms,
+    softTerms: searchPlanTerms.softTerms,
+    phraseTerms: searchPlanTerms.phraseTerms,
     keywords,
     candidateQueries: buildCandidateQueries({
       rewrittenQuery: rewrittenQuery || normalizedQuery,
       searchTopic: searchTopic || rewrittenQuery || normalizedQuery,
+      subject: subject || searchTopic || rewrittenQuery || normalizedQuery,
+      facet,
       keywords,
       isLyricsQuery,
     }),

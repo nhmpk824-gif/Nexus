@@ -327,6 +327,60 @@ export function extractChatStreamingDeltaContent(providerId, payload) {
   )
 }
 
+/**
+ * Extract tool_call fragments from a single SSE delta payload.
+ *
+ * Returns an array of partial tool_call descriptors keyed by `index`, or null
+ * when the delta carries no tool_call information. Each fragment may contribute
+ * `id`, `type`, `function.name`, or a chunk of `function.arguments` — the
+ * caller accumulates fragments with matching indexes across the stream.
+ */
+export function extractChatStreamingDeltaToolCalls(providerId, payload) {
+  if (getChatProviderProtocol(providerId) === 'anthropic') {
+    if (
+      payload?.type === 'content_block_start'
+      && payload?.content_block?.type === 'tool_use'
+    ) {
+      return [{
+        index: Number(payload?.index ?? 0),
+        id: payload.content_block.id,
+        type: 'function',
+        function: { name: payload.content_block.name, arguments: '' },
+      }]
+    }
+    if (
+      payload?.type === 'content_block_delta'
+      && payload?.delta?.type === 'input_json_delta'
+    ) {
+      return [{
+        index: Number(payload?.index ?? 0),
+        function: { arguments: payload.delta.partial_json ?? '' },
+      }]
+    }
+    return null
+  }
+
+  const deltaCalls = payload?.choices?.[0]?.delta?.tool_calls
+  if (!Array.isArray(deltaCalls) || !deltaCalls.length) return null
+
+  return deltaCalls.map((tc, fallbackIndex) => {
+    const fragment = { index: Number(tc?.index ?? fallbackIndex) }
+    if (typeof tc?.id === 'string' && tc.id) fragment.id = tc.id
+    if (typeof tc?.type === 'string' && tc.type) fragment.type = tc.type
+    if (tc?.function && typeof tc.function === 'object') {
+      const fn = {}
+      if (typeof tc.function.name === 'string' && tc.function.name) {
+        fn.name = tc.function.name
+      }
+      if (typeof tc.function.arguments === 'string') {
+        fn.arguments = tc.function.arguments
+      }
+      if (Object.keys(fn).length > 0) fragment.function = fn
+    }
+    return fragment
+  })
+}
+
 export function isChatStreamingPayloadTerminal(providerId, payload) {
   if (getChatProviderProtocol(providerId) === 'anthropic') {
     return payload?.type === 'message_stop' || payload?.type === 'error'

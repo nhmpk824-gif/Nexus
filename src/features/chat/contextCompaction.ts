@@ -5,7 +5,7 @@
  * to prevent context overflow while retaining important information.
  */
 
-import type { ChatMessage } from '../../types'
+import type { ChatMessage, ChatMessageContent } from '../../types'
 
 // ── Token estimation ──
 
@@ -24,19 +24,59 @@ export function estimateTokenCount(text: string): number {
   return Math.ceil(cjkChars * 2 + englishWords * 1.3)
 }
 
-export function estimateMessagesTokenCount(messages: Array<{ role: string; content: string }>): number {
-  return messages.reduce((sum, msg) => sum + estimateTokenCount(msg.content) + 4, 0)
+/**
+ * Extract just the text portion of a multimodal content value. Image parts are
+ * skipped — token counting and text-only summaries don't see images.
+ */
+export function getMessageText(content: ChatMessageContent): string {
+  if (typeof content === 'string') return content
+  return content
+    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+    .map((part) => part.text)
+    .join(' ')
+}
+
+export function estimateMessagesTokenCount(
+  messages: Array<{ role: string; content: ChatMessageContent }>,
+): number {
+  return messages.reduce((sum, msg) => sum + estimateTokenCount(getMessageText(msg.content)) + 4, 0)
+}
+
+/**
+ * Fold a `ChatMessage` into the OpenAI multimodal content shape.
+ * Returns a plain string when there are no images (cheap, backwards compatible)
+ * and a content-parts array when images are attached.
+ */
+function buildLlmContent(message: ChatMessage): ChatMessageContent {
+  if (!message.images?.length) {
+    return message.content
+  }
+
+  const parts: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' } }
+  > = []
+
+  for (const url of message.images) {
+    parts.push({ type: 'image_url', image_url: { url, detail: 'low' } })
+  }
+
+  // Append text part last so the model reads "image first, then prompt".
+  // Always include a text part — empty content lets the model focus on the image.
+  parts.push({ type: 'text', text: message.content || 'Please take a look at this image for me.' })
+
+  return parts
 }
 
 // ── Compaction ──
 
-const COMPACTION_SYSTEM_PROMPT = `你是一个对话摘要助手。请将以下对话历史压缩为一段简洁的摘要，保留：
-1. 用户的关键需求、决策和偏好
-2. 重要的事实信息（名称、数字、日期、ID）
-3. 未完成的任务和待办事项
-4. 对话的情感基调
+const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarization assistant. Compress the following conversation history into a concise summary that preserves:
+1. The user's key requirements, decisions, and preferences
+2. Important factual information (names, numbers, dates, IDs)
+3. Unfinished tasks and to-dos
+4. The emotional tone of the conversation
 
-摘要应该简短（不超过 300 字），用第三人称叙述。不要遗漏关键信息。`
+The summary should be short (no more than 300 words) and written in the third person. Do not omit key information.`
 
 /**
  * Build a set of messages that fits within the token budget.
@@ -49,7 +89,7 @@ export function compactMessagesForRequest(
   maxMessages: number,
   tokenBudget: number,
 ): {
-  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: ChatMessageContent }>
   compacted: boolean
   olderMessagesText: string | null
 } {
@@ -59,7 +99,7 @@ export function compactMessagesForRequest(
   // If within limits, no compaction needed
   if (userAssistantMessages.length <= maxMessages) {
     return {
-      messages: userAssistantMessages.map((m) => ({ role: m.role, content: m.content })),
+      messages: userAssistantMessages.map((m) => ({ role: m.role, content: buildLlmContent(m) })),
       compacted: false,
       olderMessagesText: null,
     }
@@ -72,7 +112,7 @@ export function compactMessagesForRequest(
 
   // Estimate if recent messages alone fit the budget
   const recentTokens = estimateMessagesTokenCount(
-    recentMessages.map((m) => ({ role: m.role, content: m.content })),
+    recentMessages.map((m) => ({ role: m.role, content: buildLlmContent(m) })),
   )
 
   if (recentTokens * SAFETY_MARGIN > tokenBudget) {
@@ -80,24 +120,25 @@ export function compactMessagesForRequest(
     const trimmedCount = Math.max(3, Math.floor(keepCount / 2))
     const trimmed = userAssistantMessages.slice(-trimmedCount)
     return {
-      messages: trimmed.map((m) => ({ role: m.role, content: m.content })),
+      messages: trimmed.map((m) => ({ role: m.role, content: buildLlmContent(m) })),
       compacted: true,
       olderMessagesText: null,
     }
   }
 
-  // Build summary of older messages
+  // Build summary of older messages — text-only, images are dropped from the
+  // summarization input (they don't help the text summarizer anyway).
   const olderText = olderMessages
-    .map((m) => `${m.role === 'user' ? '用户' : 'AI'}: ${m.content}`)
+    .map((m) => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`)
     .join('\n')
 
   // Truncate older text if it's extremely long (avoid sending huge prompts for summarization)
   const truncatedOlderText = olderText.length > 6000
-    ? olderText.slice(0, 6000) + '\n...(更早的对话已省略)'
+    ? olderText.slice(0, 6000) + '\n...(earlier conversation omitted)'
     : olderText
 
   return {
-    messages: recentMessages.map((m) => ({ role: m.role, content: m.content })),
+    messages: recentMessages.map((m) => ({ role: m.role, content: buildLlmContent(m) })),
     compacted: true,
     olderMessagesText: truncatedOlderText,
   }
@@ -118,7 +159,7 @@ export function buildCompactionSummaryPrompt(olderConversationText: string): Arr
  * Format a compaction summary as a system-level context injection.
  */
 export function formatCompactionContext(summary: string): string {
-  return `【对话摘要】以下是之前对话的重点回顾，请在回复时自然承接：\n${summary}`
+  return `[Conversation summary] The following is a recap of the earlier conversation. Carry it forward naturally in your reply:\n${summary}`
 }
 
 // ── LLM summary cache ──

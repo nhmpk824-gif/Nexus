@@ -36,7 +36,7 @@ import {
 } from '../services/ttsService.js'
 import { requireTrustedSender } from './validate.js'
 
-export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_SYNTH_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT_MS, VOICE_CLONE_TIMEOUT_MS }) {
+export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_SYNTH_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT_MS }) {
   ipcMain.handle('audio:list-voices', async (event, payload) => {
     requireTrustedSender(event)
     const baseUrl = normalizeBaseUrl(payload.baseUrl)
@@ -133,6 +133,11 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_SYNTH_TIMEOUT_MS, 
 
   ipcMain.handle('audio:transcribe', async (event, payload) => {
     requireTrustedSender(event)
+
+    if (typeof payload.audioBase64 === 'string' && payload.audioBase64.length > 50_000_000) {
+      throw new Error('Audio payload exceeds 50MB limit.')
+    }
+
     const baseUrl = normalizeBaseUrl(payload.baseUrl)
 
     if (!baseUrl) {
@@ -412,7 +417,7 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_SYNTH_TIMEOUT_MS, 
 
       if (result.usedFallback) {
         console.warn(
-          `[Volcengine TTS] 已自动回退到兼容组合 ${formatVolcengineSpeechOutputCombo(result.cluster, result.voice)} (${result.reason})`,
+          `[Volcengine TTS] Automatically fell back to compatible combo ${formatVolcengineSpeechOutputCombo(result.cluster, result.voice)} (${result.reason})`,
         )
       }
 
@@ -525,101 +530,6 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_SYNTH_TIMEOUT_MS, 
     return {
       audioBase64,
       mimeType,
-    }
-  })
-
-  ipcMain.handle('voice:clone', async (event, payload) => {
-    requireTrustedSender(event)
-    const baseUrl = normalizeBaseUrl(payload.baseUrl)
-
-    if (!baseUrl) {
-      throw new Error('请先填写语音克隆 API Base URL。')
-    }
-
-    if (payload.providerId !== 'elevenlabs-ivc') {
-      throw new Error('当前语音克隆提供商暂未接通。')
-    }
-
-    if (!payload.name?.trim()) {
-      throw new Error('请先填写克隆音色名称。')
-    }
-
-    if (!Array.isArray(payload.files) || payload.files.length === 0) {
-      throw new Error('请至少上传一段语音样本。')
-    }
-
-    const multipartParts = [
-      {
-        type: 'field',
-        name: 'name',
-        value: payload.name.trim(),
-      },
-    ]
-
-    if (payload.description?.trim()) {
-      multipartParts.push({
-        type: 'field',
-        name: 'description',
-        value: payload.description.trim(),
-      })
-    }
-
-    multipartParts.push({
-      type: 'field',
-      name: 'remove_background_noise',
-      value: String(payload.removeBackgroundNoise ?? true),
-    })
-
-    for (const file of payload.files) {
-      multipartParts.push({
-        type: 'file',
-        name: 'files',
-        data: Buffer.from(file.dataBase64, 'base64'),
-        fileName: file.name || 'sample.wav',
-        mimeType: file.mimeType,
-      })
-    }
-
-    const multipart = buildMultipartBody(multipartParts)
-
-    let response
-    try {
-      response = await performNetworkRequest(`${baseUrl}/voices/add`, {
-        method: 'POST',
-        headers: {
-          ...buildAuthorizationHeaders(payload.providerId, payload.apiKey),
-          'Content-Type': multipart.contentType,
-          'Content-Length': String(multipart.body.length),
-        },
-        body: multipart.body,
-        timeoutMs: VOICE_CLONE_TIMEOUT_MS,
-        timeoutMessage: '语音克隆上传超时，请检查网络、样本大小或稍后重试。',
-      })
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error)
-      throw new Error(`语音克隆接口连接失败，请检查 URL、网络或代理设置。原始错误：${reason}`)
-    }
-
-    const data = await readJsonSafe(response)
-
-    if (!response.ok) {
-      throw new Error(
-        data?.error?.message
-          ?? data?.detail?.message
-          ?? data?.message
-          ?? `语音克隆请求失败（状态码：${response.status}）`,
-      )
-    }
-
-    const voiceId = String(data?.voice_id ?? '').trim()
-
-    if (!voiceId) {
-      throw new Error('语音克隆已返回成功状态，但没有拿到 voice_id。')
-    }
-
-    return {
-      voiceId,
-      message: `克隆成功，新的 voice_id: ${voiceId}`,
     }
   })
 }

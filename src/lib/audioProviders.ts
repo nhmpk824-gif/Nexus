@@ -9,14 +9,13 @@
 import {
   SPEECH_INPUT_PROVIDERS,
   SPEECH_OUTPUT_PROVIDERS,
-  VOICE_CLONE_PROVIDERS,
   getSpeechInputProvider,
   getSpeechOutputProvider,
   type SpeechInputProviderEntry,
   type SpeechOutputProviderEntry,
-  type VoiceCloneProviderEntry,
   type SpeechModelOption,
   type SpeechVoiceOption,
+  type SpeechStyleOption,
   type SpeechOutputAdjustmentSupport,
 } from './providerCatalog.ts'
 
@@ -25,6 +24,7 @@ import {
 export type {
   SpeechModelOption,
   SpeechVoiceOption,
+  SpeechStyleOption,
   SpeechOutputAdjustmentSupport,
 }
 
@@ -45,13 +45,6 @@ export type SpeechOutputProviderPreset = {
   notes: string
 }
 
-export type VoiceCloneProviderPreset = {
-  id: string
-  label: string
-  baseUrl: string
-  notes: string
-}
-
 // ── Preset arrays (derived from catalog) ──
 
 function toInputPreset(entry: SpeechInputProviderEntry): SpeechInputProviderPreset {
@@ -60,10 +53,6 @@ function toInputPreset(entry: SpeechInputProviderEntry): SpeechInputProviderPres
 
 function toOutputPreset(entry: SpeechOutputProviderEntry): SpeechOutputProviderPreset {
   return { id: entry.id, label: entry.label, baseUrl: entry.baseUrl, defaultModel: entry.defaultModel, defaultVoice: entry.defaultVoice, notes: entry.notes }
-}
-
-function toClonePreset(entry: VoiceCloneProviderEntry): VoiceCloneProviderPreset {
-  return { id: entry.id, label: entry.label, baseUrl: entry.baseUrl, notes: entry.notes }
 }
 
 export const SPEECH_INPUT_PROVIDER_PRESETS: SpeechInputProviderPreset[] =
@@ -77,9 +66,6 @@ export const SPEECH_OUTPUT_PROVIDER_PRESETS: SpeechOutputProviderPreset[] =
 
 export const USER_VISIBLE_SPEECH_OUTPUT_PROVIDER_PRESETS: SpeechOutputProviderPreset[] =
   SPEECH_OUTPUT_PROVIDERS.filter((p) => !p.hidden).map(toOutputPreset)
-
-export const VOICE_CLONE_PROVIDER_PRESETS: VoiceCloneProviderPreset[] =
-  VOICE_CLONE_PROVIDERS.map(toClonePreset)
 
 // ── Model & voice option arrays (delegated to catalog entries) ──
 
@@ -100,11 +86,6 @@ export function getSpeechInputProviderPreset(providerId: string): SpeechInputPro
 
 export function getSpeechOutputProviderPreset(providerId: string): SpeechOutputProviderPreset {
   return toOutputPreset(getSpeechOutputProvider(providerId))
-}
-
-export function getVoiceCloneProviderPreset(providerId: string): VoiceCloneProviderPreset {
-  const found = VOICE_CLONE_PROVIDERS.find((p) => p.id === providerId)
-  return toClonePreset(found ?? VOICE_CLONE_PROVIDERS[0])
 }
 
 // ── Model & voice resolution (delegated to catalog) ──
@@ -134,6 +115,27 @@ export function getFallbackSpeechOutputVoices(providerId: string): SpeechVoiceOp
   return getSpeechOutputProvider(providerId).fallbackVoiceOptions
 }
 
+export function getSpeechOutputStyleOptions(providerId: string): SpeechStyleOption[] {
+  return getSpeechOutputProvider(providerId).styleOptions
+}
+
+export function supportsCustomSpeechOutputVoiceId(providerId: string): boolean {
+  return getSpeechOutputProvider(providerId).supportsCustomVoiceId
+}
+
+export function isSpeechOutputKeyless(providerId: string): boolean {
+  const entry = getSpeechOutputProvider(providerId)
+  return entry.kind === 'local' || entry.protocol === 'edge-tts'
+}
+
+export function isSpeechInputKeyless(providerId: string): boolean {
+  return getSpeechInputProvider(providerId).kind === 'local'
+}
+
+export function isSpeechInputLocal(providerId: string): boolean {
+  return getSpeechInputProvider(providerId).kind === 'local'
+}
+
 // ── Provider type detection (delegated to catalog protocol) ──
 
 export function isBrowserSpeechInputProvider(providerId: string) {
@@ -150,11 +152,6 @@ export function isParaformerSpeechInputProvider(providerId: string) {
 
 export function isTencentAsrSpeechInputProvider(providerId: string) {
   return getSpeechInputProvider(providerId).protocol === 'tencent'
-}
-
-
-export function isVoiceCloneDisabled(providerId: string) {
-  return providerId === 'none'
 }
 
 export function isElevenLabsSpeechProvider(providerId: string) {

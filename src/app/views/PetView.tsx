@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import { hoverReactionMap, voiceStateLabelMap } from '../appSupport'
-import { MusicPopupCard, PetControlIcon, PetDialogBubble } from '../../components'
+import { MusicPopupCard, PetControlIcon, PetDialogBubble, PetThoughtBubble } from '../../components'
 import { resolveCharacterPreset } from '../../features/character'
 import { clamp } from '../../lib'
 import type { PetTouchZone } from '../../types'
@@ -76,21 +76,29 @@ export function PetView({
   const petSignalArmed = settings.continuousVoiceModeEnabled || voice.continuousVoiceActive
 
   // ── Interrupt detection (was in TalkModeOverlay) ──
+  // When voice moves speaking → listening (detected during render via the
+  // prev-state pattern), we set `interrupted` true and bump `interruptEpoch`.
+  // The effect re-runs on each new epoch and arms a fresh 900ms timer that
+  // clears the flag from inside an async callback. setState here happens during
+  // render or inside setTimeout — never synchronously inside the effect body —
+  // so both the React 19 set-state-in-effect and purity rules stay satisfied.
   const [interrupted, setInterrupted] = useState(false)
-  const prevVoiceStateRef = useRef(voice.voiceState)
-  const interruptTimerRef = useRef<number | null>(null)
+  const [interruptEpoch, setInterruptEpoch] = useState(0)
+  const [prevVoiceState, setPrevVoiceState] = useState(voice.voiceState)
+
+  if (voice.voiceState !== prevVoiceState) {
+    setPrevVoiceState(voice.voiceState)
+    if (prevVoiceState === 'speaking' && voice.voiceState === 'listening') {
+      setInterrupted(true)
+      setInterruptEpoch((epoch) => epoch + 1)
+    }
+  }
 
   useEffect(() => {
-    if (prevVoiceStateRef.current === 'speaking' && voice.voiceState === 'listening') {
-      setInterrupted(true)
-      if (interruptTimerRef.current) window.clearTimeout(interruptTimerRef.current)
-      interruptTimerRef.current = window.setTimeout(() => setInterrupted(false), 900)
-    }
-    prevVoiceStateRef.current = voice.voiceState
-    return () => {
-      if (interruptTimerRef.current) window.clearTimeout(interruptTimerRef.current)
-    }
-  }, [voice.voiceState])
+    if (interruptEpoch === 0) return
+    const timerId = window.setTimeout(() => setInterrupted(false), 900)
+    return () => window.clearTimeout(timerId)
+  }, [interruptEpoch])
 
   const micDisplayState: 'idle' | 'listening' | 'thinking' | 'speaking' | 'interrupted' =
     voice.voiceState === 'idle' ? 'idle'
@@ -291,6 +299,12 @@ export function PetView({
               </div>
             ) : null}
 
+            {chat.petThoughtBubble && !chat.petDialogBubble ? (
+              <div className="pet-window__thought-layer">
+                <PetThoughtBubble bubble={chat.petThoughtBubble} />
+              </div>
+            ) : null}
+
             <div
               className={`pet-window__status-indicator ${
                 voice.voiceState !== 'idle' ? 'is-active'
@@ -361,13 +375,6 @@ export function PetView({
                     <path fill="currentColor" d="M4 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5ZM4 15a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-4Z" />
                   </svg>
                 </button>
-
-                {/* Transcript bubble — floats above mic button when listening */}
-                {micDisplayState === 'listening' && voice.liveTranscript ? (
-                  <div className="pet-window__mic-transcript" aria-live="polite">
-                    {voice.liveTranscript}
-                  </div>
-                ) : null}
 
                 <button
                   className={`pet-window__anchor-btn pet-window__anchor-btn--mic ${voice.voiceState !== 'idle' ? 'is-live' : ''} ${chat.busy ? 'is-busy' : ''} ${petSignalArmed && voice.voiceState === 'idle' && !chat.busy ? 'is-armed' : ''} ${micDisplayState !== 'idle' ? `is-${micDisplayState}` : ''}`}

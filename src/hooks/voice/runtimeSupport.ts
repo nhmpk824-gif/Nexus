@@ -82,6 +82,7 @@ type InterruptSpeakingForVoiceInputRuntimeOptions = {
   showPetStatus: ShowPetStatus
   stopActiveSpeechOutput: () => void
   dispatchVoiceSessionAndSync: (event: VoiceSessionEvent) => VoiceSessionState
+  busEmit?: (event: import('../../features/voice/busEvents').VoiceBusEvent) => void
 }
 
 type StopApiRecordingRuntimeOptions = {
@@ -239,6 +240,10 @@ export function interruptSpeakingForVoiceInputRuntime(
 
   options.stopActiveSpeechOutput()
   options.dispatchVoiceSessionAndSync({ type: 'tts_interrupted' })
+  // Sync the VoiceBus so its internal state also leaves SPEAKING.
+  // Without this the legacy machine goes idle but VoiceBus stays stuck
+  // in SPEAKING — a time bomb if any future logic trusts VoiceBus.uiPhase.
+  options.busEmit?.({ type: 'tts:interrupted', speechGeneration: 0 })
   return true
 }
 
@@ -280,7 +285,7 @@ export async function destroyVadSessionRuntime(
     options.vadSessionRef.current = null
   }
 
-  await options.session.detector.destroy().catch(() => undefined)
+  await options.session.tearDown().catch(() => undefined)
   options.setSpeechLevelValue(0)
 }
 
@@ -292,6 +297,7 @@ export async function stopVadListeningRuntime(
     return
   }
 
+  console.warn('[VAD] destroy source: stopVadListening (cancel=' + options.cancel + ')')
   session.cancelled = Boolean(options.cancel)
   await options.destroyVadSession(session)
 }
@@ -377,6 +383,11 @@ export function getStreamAudioPlayerRuntime(
 
   const player = new StreamAudioPlayer({
     onLevel: options.onLevel,
+    // Small "thinking beat" before the companion starts speaking — first
+    // chunk of each fresh session is scheduled 0.5s out instead of 0.03s.
+    // Subsequent chunks stay back-to-back because `nextStartTime` takes
+    // over once the first chunk is queued.
+    initialBufferSeconds: 0.5,
   })
 
   options.streamAudioPlayerRef.current = player

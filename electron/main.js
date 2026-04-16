@@ -9,6 +9,7 @@ import { initRendererServer, ensureRendererServer, getRendererServerUrl, closeRe
 import { mainWindow, panelWindow, panelSection, createMainWindow, createTray, applyPetWindowState } from './windowManager.js'
 import { registerIpc } from './ipcRegistry.js'
 import { autoStartPlugins } from './services/pluginHost.js'
+import { initAutoUpdater } from './services/updaterService.js'
 
 // ── Console safety: suppress broken-pipe errors on stdout/stderr ──
 
@@ -215,6 +216,9 @@ app.whenReady()
     createMainWindow()
     applyPetWindowState()
     createTray()
+    initAutoUpdater({
+      getWindows: () => [mainWindow, panelWindow].filter(Boolean),
+    })
     autoStartPlugins().catch((err) => console.warn('[pluginHost] auto-start error:', err.message))
     ensureOmniVoiceRunning().catch((err) => console.warn('[OmniVoice] auto-start error:', err.message))
     ensureGlmAsrRunning().catch((err) => console.warn('[GLM-ASR] auto-start error:', err.message))

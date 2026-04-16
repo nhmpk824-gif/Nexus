@@ -47,7 +47,6 @@ type LocalReminderActionDependencies = {
   >
   clearPendingReminderDraft: () => void
   pushCompanionNotice: (notice: CompanionNoticePayload) => Promise<void>
-  resetToolPlannerContext: () => void
   setAssistantActivity: (activity: AssistantRuntimeActivity) => void
   setPendingReminderDraft: (draft: PendingReminderDraftInput) => void
   syncAssistantActivity: () => void
@@ -148,7 +147,6 @@ export function createLocalReminderActionRunner(dependencies: LocalReminderActio
       }
     }
 
-    dependencies.resetToolPlannerContext()
     appendReminderDebugEvent(
       'Local reminder intent matched',
       `${options.fromVoice ? 'voice' : 'text'} / ${shorten(options.content, 48)}`,

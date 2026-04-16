@@ -1,4 +1,4 @@
-import { memo, useState, type Dispatch, type SetStateAction } from 'react'
+import { memo, useState } from 'react'
 import {
   formatReminderActionSummary,
   formatReminderCenterNextLabel,
@@ -11,13 +11,7 @@ import {
   type ReminderTaskActionKind,
 } from '../settingsDrawerSupport'
 import { formatReminderScheduleSummaryForUi, type ReminderTaskDraftInput } from '../../features/reminders/schedule'
-import {
-  getWebSearchProviderPreset,
-  resolveWebSearchApiBaseUrl,
-  WEB_SEARCH_PROVIDER_PRESETS,
-} from '../../lib/webSearchProviders'
 import type {
-  AppSettings,
   ReminderTask,
   ReminderTaskAction,
   ReminderTaskSchedule,
@@ -27,8 +21,6 @@ import type {
 
 type ContextSectionProps = {
   active: boolean
-  draft: AppSettings
-  setDraft: Dispatch<SetStateAction<AppSettings>>
   reminderTasks: ReminderTask[]
   uiLanguage: UiLanguage
   onAddReminderTask: (input: ReminderTaskDraftInput) => void
@@ -71,8 +63,6 @@ function buildReminderAction(
 
 export const ContextSection = memo(function ContextSection({
   active,
-  draft,
-  setDraft,
   reminderTasks,
   uiLanguage,
   onAddReminderTask,
@@ -90,24 +80,10 @@ export const ContextSection = memo(function ContextSection({
   const [newReminderEveryMinutes, setNewReminderEveryMinutes] = useState('60')
   const [newReminderCronExpression, setNewReminderCronExpression] = useState('0 9 * * *')
 
-  const webSearchProvider = getWebSearchProviderPreset(draft.toolWebSearchProviderId)
   const reminderScheduleOptions = getReminderScheduleOptions(uiLanguage)
   const reminderTemplatePresets = getReminderTemplatePresets(uiLanguage)
   const enabledReminderCount = reminderTasks.filter((task) => task.enabled).length
   const nextReminderTask = reminderTasks.find((task) => task.enabled && task.nextRunAt)
-
-  function applyWebSearchProviderPreset(providerId: string) {
-    const preset = getWebSearchProviderPreset(providerId)
-
-    setDraft((prev) => ({
-      ...prev,
-      toolWebSearchProviderId: preset.id,
-      toolWebSearchApiBaseUrl: resolveWebSearchApiBaseUrl(preset.id, prev.toolWebSearchApiBaseUrl),
-      toolWebSearchApiKey: preset.id === prev.toolWebSearchProviderId
-        ? prev.toolWebSearchApiKey
-        : '',
-    }))
-  }
 
   function buildReminderSchedule(
     kind: ReminderScheduleKind,
@@ -232,162 +208,6 @@ export const ContextSection = memo(function ContextSection({
 
   return (
     <section className={`settings-section ${active ? 'is-active' : 'is-hidden'}`}>
-      <div className="settings-section__title-row">
-        <div>
-          <h4>工具权限</h4>
-          <p className="settings-drawer__hint">
-            内置工具已经走"注册表 / 策略 / 确认"流程。这里决定助手能否自动调用搜索、天气和外链工具；对外部链接建议保留确认。
-          </p>
-        </div>
-      </div>
-
-      <label className="settings-toggle">
-        <span>允许网页搜索工具</span>
-        <input
-          type="checkbox"
-          checked={draft.toolWebSearchEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolWebSearchEnabled: event.target.checked,
-            }))
-          }
-        />
-      </label>
-
-      <label className="settings-toggle">
-        <span>允许天气查询工具</span>
-        <input
-          type="checkbox"
-          checked={draft.toolWeatherEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolWeatherEnabled: event.target.checked,
-            }))
-          }
-        />
-      </label>
-
-      <label className="settings-toggle">
-        <span>允许打开外部链接</span>
-        <input
-          type="checkbox"
-          checked={draft.toolOpenExternalEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolOpenExternalEnabled: event.target.checked,
-            }))
-          }
-        />
-      </label>
-
-      <label className="settings-toggle">
-        <span>打开外链前需要确认</span>
-        <input
-          type="checkbox"
-          checked={draft.toolOpenExternalRequiresConfirmation}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolOpenExternalRequiresConfirmation: event.target.checked,
-            }))
-          }
-          disabled={!draft.toolOpenExternalEnabled}
-        />
-      </label>
-
-      <div className="settings-section__title-row">
-        <div>
-          <h4>网页搜索 Provider</h4>
-          <p className="settings-drawer__hint">
-            可以切换搜索后端；当当前 provider 失败时，主进程会自动回退到内置 Bing RSS。
-          </p>
-        </div>
-      </div>
-
-      <label>
-        <span>搜索提供商</span>
-        <select
-          value={draft.toolWebSearchProviderId}
-          onChange={(event) => applyWebSearchProviderPreset(event.target.value)}
-          disabled={!draft.toolWebSearchEnabled}
-        >
-          {WEB_SEARCH_PROVIDER_PRESETS.map((provider) => (
-            <option key={provider.id} value={provider.id}>
-              {provider.label}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <p className="settings-drawer__hint">
-        {webSearchProvider.description}
-        {webSearchProvider.baseUrl ? ` 默认地址：${webSearchProvider.baseUrl}` : ''}
-      </p>
-
-      <label>
-        <span>搜索 API Base URL</span>
-        <input
-          value={draft.toolWebSearchApiBaseUrl}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolWebSearchApiBaseUrl: event.target.value,
-            }))
-          }
-          placeholder={webSearchProvider.baseUrl || '当前 provider 不需要填写'}
-          disabled={!draft.toolWebSearchEnabled || !webSearchProvider.supportsBaseUrlOverride}
-        />
-      </label>
-
-      <label>
-        <span>搜索 API Key</span>
-        <input
-          type="password"
-          value={draft.toolWebSearchApiKey}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolWebSearchApiKey: event.target.value,
-            }))
-          }
-          placeholder={webSearchProvider.apiKeyPlaceholder || '当前 provider 不需要填写'}
-          disabled={!draft.toolWebSearchEnabled || !webSearchProvider.requiresApiKey}
-        />
-      </label>
-
-      <label className="settings-toggle">
-        <span>Provider 失败时自动回退到 Bing</span>
-        <input
-          type="checkbox"
-          checked={draft.toolWebSearchFallbackToBing}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolWebSearchFallbackToBing: event.target.checked,
-            }))
-          }
-          disabled={!draft.toolWebSearchEnabled}
-        />
-      </label>
-
-      <label>
-        <span>天气默认地点</span>
-        <input
-          value={draft.toolWeatherDefaultLocation}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolWeatherDefaultLocation: event.target.value,
-            }))
-          }
-          placeholder="例如：深圳"
-          disabled={!draft.toolWeatherEnabled}
-        />
-      </label>
-
       <div className="settings-section__title-row">
         <div>
           <h4>本地自动任务中心</h4>

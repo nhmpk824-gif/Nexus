@@ -6,7 +6,7 @@
  * of shared history with the user beyond individual facts.
  */
 
-import type { MemoryDreamResult, MemoryItem } from '../../types'
+import type { MemoryItem } from '../../types'
 
 // ── Types ──────────────────────────────────────────────────────��──────────
 
@@ -138,7 +138,6 @@ function buildThreadTitle(memories: MemoryItem[]): string {
  */
 export function rebuildNarrative(
   memories: MemoryItem[],
-  _dreamHistory: MemoryDreamResult[],
 ): NarrativeSnapshot {
   const chains = extractChains(memories)
   const memMap = new Map(memories.map((m) => [m.id, m]))
@@ -193,17 +192,17 @@ export function formatNarrativeForPrompt(maxThreads = 5): string {
 
   const lines = snapshot.threads.slice(0, maxThreads).map((thread) => {
     const age = timeSince(thread.startedAt)
-    return `- ${thread.title}（${age}前开始，${thread.memoryIds.length} 条记忆）：${thread.summary}`
+    return `- ${thread.title} (started ${age} ago, ${thread.memoryIds.length} memories): ${thread.summary}`
   })
 
-  return `## 共同经历\n${lines.join('\n')}`
+  return `## Shared experiences\n${lines.join('\n')}`
 }
 
 function timeSince(isoDate: string): string {
   const ms = Date.now() - Date.parse(isoDate)
   const days = Math.floor(ms / 86_400_000)
-  if (days < 1) return '今天'
-  if (days < 7) return `${days} 天`
-  if (days < 30) return `${Math.floor(days / 7)} 周`
-  return `${Math.floor(days / 30)} 个月`
+  if (days < 1) return 'today'
+  if (days < 7) return `${days} days`
+  if (days < 30) return `${Math.floor(days / 7)} weeks`
+  return `${Math.floor(days / 30)} months`
 }

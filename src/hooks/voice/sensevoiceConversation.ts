@@ -175,7 +175,7 @@ export async function startSenseVoiceConversation(
           return
         }
 
-        params.appendVoiceTrace('SenseVoice 识别完成', `#${traceLabel} 已拿到最终文本`)
+        params.appendVoiceTrace('SenseVoice recognition complete', `#${traceLabel} received final text`)
         await params.handleRecognizedVoiceTranscript(transcript, { traceId })
       } catch (error) {
         params.sensevoiceSessionRef.current = null
@@ -201,7 +201,7 @@ export async function startSenseVoiceConversation(
       )
     }
 
-    params.appendVoiceTrace('开始 SenseVoice 识别', `#${traceLabel} 正在使用 SenseVoice 离线转写`)
+    params.appendVoiceTrace('Start SenseVoice recognition', `#${traceLabel} using SenseVoice offline transcription`)
 
     session = await startSenseVoiceStream({
       onActivity: (rms) => {

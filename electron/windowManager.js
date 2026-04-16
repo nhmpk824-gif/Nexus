@@ -103,10 +103,20 @@ export function syncPetWindowState() {
   }
 }
 
+function sanitizePartialState(partialState) {
+  const safe = Object.create(null)
+  for (const [key, value] of Object.entries(partialState)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+    safe[key] = value
+  }
+  return safe
+}
+
 export function updateRuntimeState(partialState) {
+  const safe = sanitizePartialState(partialState)
   runtimeState = {
     ...runtimeState,
-    ...partialState,
+    ...safe,
     updatedAt: new Date().toISOString(),
   }
   syncRuntimeState()
@@ -131,9 +141,10 @@ export function applyPetWindowState() {
 }
 
 export function updatePetWindowState(partialState = {}) {
+  const safe = sanitizePartialState(partialState)
   petWindowState = {
     ...petWindowState,
-    ...partialState,
+    ...safe,
   }
 
   applyPetWindowState()
@@ -241,9 +252,10 @@ function getExpandedPanelBounds() {
 }
 
 export function updatePanelWindowState(partialState = {}) {
+  const safe = sanitizePartialState(partialState)
   panelWindowState = {
     ...panelWindowState,
-    ...partialState,
+    ...safe,
   }
 
   if (!panelWindow || panelWindow.isDestroyed()) {
@@ -412,6 +424,19 @@ export function createMainWindow() {
     }
   })
 
+  // F12 / Ctrl+Shift+I → open DevTools (dev builds only).
+  if (!app.isPackaged) {
+    win.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+      const isF12 = input.key === 'F12'
+      const isCtrlShiftI = (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i'
+      if (isF12 || isCtrlShiftI) {
+        win.webContents.toggleDevTools()
+        event.preventDefault()
+      }
+    })
+  }
+
   win.loadURL(getRendererEntry('pet'))
 
   if (isSmokeTest) {
@@ -492,6 +517,19 @@ export function createPanelWindow() {
       event.preventDefault()
     }
   })
+
+  // F12 / Ctrl+Shift+I → open DevTools (dev builds only).
+  if (!app.isPackaged) {
+    win.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return
+      const isF12 = input.key === 'F12'
+      const isCtrlShiftI = (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i'
+      if (isF12 || isCtrlShiftI) {
+        win.webContents.toggleDevTools()
+        event.preventDefault()
+      }
+    })
+  }
 
   win.on('closed', () => {
     panelWindow = null

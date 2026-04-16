@@ -111,18 +111,18 @@ export function getRelationshipLevel(state: RelationshipState): RelationshipLeve
 // ── Prompt context ─────────────────────────────────────────────────────────
 
 const LEVEL_DESCRIPTIONS: Record<RelationshipLevel, string> = {
-  stranger: '你们刚认识不久，保持礼貌和适当距离，慢慢建立信任',
-  acquaintance: '你们已经有了一些交流，可以表现出温和的关心',
-  friend: '你们已经是朋友了，可以更自然、随意地交流',
-  close_friend: '你们关系很亲密，可以表现出真挚的关心和偶尔的撒娇',
-  intimate: '你们的关系非常深厚，可以表达深切的依赖感和亲昵',
+  stranger: 'You just met recently. Stay polite and at an appropriate distance, building trust gradually.',
+  acquaintance: 'You have had some interactions already. You may show mild warmth and care.',
+  friend: 'You are already friends, so you can converse more naturally and casually.',
+  close_friend: 'You are close friends. You can show genuine concern and be occasionally playful or clingy.',
+  intimate: 'Your bond runs deep. You can express deep reliance and intimacy.',
 }
 
 export function formatRelationshipForPrompt(state: RelationshipState): string {
   const level = getRelationshipLevel(state)
   const desc = LEVEL_DESCRIPTIONS[level]
   if (state.streak > 3) {
-    return `${desc}（你们已经连续互动${state.streak}天了，可以提到这份坚持）`
+    return `${desc} (You have interacted for ${state.streak} consecutive days — feel free to acknowledge this streak.)`
   }
   return desc
 }

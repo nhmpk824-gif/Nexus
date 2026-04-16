@@ -15,6 +15,13 @@ function chunkSamples(samples, chunkSize = STREAM_CHUNK_SIZE) {
 
 function emitSampleChunk(session, samples, sampleRate, text, isFinal = false) {
   if (!session?.sender || session.sender.isDestroyed()) {
+    // Sender is gone mid-stream (window reload / crash). Mark the session
+    // closed so the main-process synthesis chain short-circuits on its next
+    // await instead of consuming a PCM stream nobody is listening to. The
+    // caller (emitStreamedPcmResult) reads session.closed to tear down.
+    if (session) {
+      session.closed = true
+    }
     return
   }
 
@@ -108,10 +115,18 @@ function decodeWav(buffer) {
 }
 
 function buildLeadInOptions(session, options = {}) {
+  // Only the very first segment gets prepended silence + fade-in to avoid a
+  // click at playback start. Subsequent segments pass through raw so the
+  // sentence flows without audible attenuation at every punctuation boundary.
+  //
+  // Fade-out is disabled unconditionally — we don't know which segment is the
+  // terminal one until finish() runs, and applying a 6 ms fade to every mid-
+  // utterance segment end stacks into audible word swallow.
+  const isFirstSegment = !session.hasEmittedAudio
   return {
-    prependSilenceMs: session.hasEmittedAudio ? 6 : 18,
-    fadeInMs: session.hasEmittedAudio ? 8 : 12,
-    fadeOutMs: Number.isFinite(options.fadeOutMs) ? options.fadeOutMs : 6,
+    prependSilenceMs: isFirstSegment ? 18 : 0,
+    fadeInMs: isFirstSegment ? 12 : 0,
+    fadeOutMs: Number.isFinite(options.fadeOutMs) ? options.fadeOutMs : 0,
     normalizePeak: options.normalizePeak !== false,
   }
 }
@@ -135,6 +150,15 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
 
   function clearSession(requestId) {
     sessions.delete(requestId)
+  }
+
+  function detachSenderListener(session) {
+    if (session?.onSenderDestroyed && session.sender && !session.sender.isDestroyed()) {
+      session.sender.removeListener('destroyed', session.onSenderDestroyed)
+    }
+    if (session) {
+      session.onSenderDestroyed = null
+    }
   }
 
   function emitSamples(session, samples, sampleRate, text) {
@@ -296,6 +320,15 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
     if (session.closed) return
     const result = await synthesizeRemote(session.payload, text)
     if (session.closed) return
+    // Pin the resolved voice/cluster after the first chunk so subsequent
+    // chunks reuse the exact same combo instead of re-walking the fallback
+    // chain (which otherwise stitches chunks together with different voices).
+    if (result?.resolvedVoice && session.payload.voice !== result.resolvedVoice) {
+      session.payload = { ...session.payload, voice: result.resolvedVoice }
+    }
+    if (result?.resolvedCluster && session.payload.model !== result.resolvedCluster) {
+      session.payload = { ...session.payload, model: result.resolvedCluster }
+    }
     await emitRemoteResult(session, text, result)
   }
 
@@ -314,7 +347,7 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
         throw new Error('远程流式 TTS 未配置。')
       }
 
-      sessions.set(requestId, {
+      const session = {
         requestId,
         sender,
         payload,
@@ -322,7 +355,20 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
         closed: false,
         hasEmittedAudio: false,
         remoteWarmup: Promise.resolve(),
-      })
+      }
+
+      // If the renderer tears down mid-stream, mark the session closed and
+      // drop it from the map. The push_text chain short-circuits on
+      // session.closed so any in-flight synthesize calls stop consuming their
+      // PCM streams on the next boundary, releasing the socket.
+      const onSenderDestroyed = () => {
+        session.closed = true
+        sessions.delete(requestId)
+      }
+      sender.once('destroyed', onSenderDestroyed)
+      session.onSenderDestroyed = onSenderDestroyed
+
+      sessions.set(requestId, session)
 
       return { ok: true }
     },
@@ -347,6 +393,7 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
           await synthesizeAndEmitRemote(session, text)
         } catch (error) {
           session.closed = true
+          detachSenderListener(session)
           clearSession(session.requestId)
           emit(session.sender, {
             type: 'error',
@@ -373,6 +420,7 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
           requestId: session.requestId,
         })
       }
+      detachSenderListener(session)
       clearSession(session.requestId)
       return { ok: true }
     },
@@ -384,6 +432,7 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
       }
 
       session.closed = true
+      detachSenderListener(session)
       clearSession(session.requestId)
       return { ok: true }
     },

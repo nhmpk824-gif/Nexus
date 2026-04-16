@@ -19,7 +19,7 @@ omniVoiceScript = projectDir & "\scripts\omnivoice_server.py"
 omniVoicePython = "python"
 
 If Not fso.FileExists(electronExe) Then
-  MsgBox "Desktop Pet AI launcher error: electron.exe was not found. Please run npm install in the project folder first.", vbCritical, "Desktop Pet AI"
+  MsgBox "Nexus failed to launch: electron.exe not found. Run npm install in the project directory first.", vbCritical, "Nexus"
   WScript.Quit 1
 End If
 
@@ -27,15 +27,15 @@ StopProjectProcesses projectDirLower
 
 shell.CurrentDirectory = projectDir
 
-buildCommand = "cmd.exe /c npm.cmd run build"
+buildCommand = "cmd.exe /c npm.cmd run build > """ & projectDir & "\launcher-build.log"" 2>&1"
 exitCode = shell.Run(buildCommand, 0, True)
 If exitCode <> 0 Then
-  MsgBox "Desktop Pet AI launcher error: build failed. Please open the project folder and run npm run build to inspect the error.", vbCritical, "Desktop Pet AI"
+  MsgBox "Nexus failed to launch: build failed. Full log written to launcher-build.log in the project directory.", vbCritical, "Nexus"
   WScript.Quit exitCode
 End If
 
 If Not fso.FileExists(distIndex) Then
-  MsgBox "Desktop Pet AI launcher error: dist\index.html was not generated after build.", vbCritical, "Desktop Pet AI"
+  MsgBox "Nexus failed to launch: build finished but dist\index.html is missing. Check vite config or launcher-build.log.", vbCritical, "Nexus"
   WScript.Quit 1
 End If
 

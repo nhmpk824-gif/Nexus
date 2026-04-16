@@ -1,14 +1,24 @@
-import { StreamingTtsChunker } from '../../features/voice/streamingTts'
+import type { VoiceBusEvent } from '../../features/voice/busEvents'
 import type { StreamAudioPlayer } from '../../features/voice/streamAudioPlayer'
 import { prepareTextForTts } from '../../features/voice/text'
+import { VoiceReasonCodes } from '../../features/voice/voiceReasonCodes'
 import { createId } from '../../lib'
+import { recordTtsUsage } from '../../features/metering/speechCost'
 import type { AppSettings } from '../../types'
+import {
+  getMaxRequestCharsForProvider,
+  splitLongTextAtSentences,
+} from './speechTextSegmentation.ts'
 import type { StreamingSpeechOutputController, VoiceStreamEvent } from './types'
 
 export type StreamingSpeechOutputOptions = {
   onStart?: () => void
   onEnd?: () => void
   onError?: (message: string) => void
+  /** Phase 1-1: fire transition-log events so the voice bus can observe streaming. */
+  busEmit?: (event: VoiceBusEvent) => void
+  /** speechGeneration from the caller so events can correlate with tts:started/completed. */
+  speechGeneration?: number
 }
 
 export type StreamingSpeechOutputRuntime = {
@@ -17,36 +27,25 @@ export type StreamingSpeechOutputRuntime = {
   resetPlayer?: () => void
 }
 
-function resolveChunkerConfig(_providerId: string) {
-  return {
-    firstChunkMaxLength: 48,
-    firstChunkMinForcedChunkLength: 18,
-    firstChunkPreferredEarlySplitLength: 14,
-  }
-}
-
-function createChunker(speechSettings: AppSettings) {
-  return {
-    chunker: new StreamingTtsChunker(
-      resolveChunkerConfig(speechSettings.speechOutputProviderId),
-    ),
-  }
-}
-
 export function createStreamingSpeechOutputController(
   speechSettings: AppSettings,
   runtime: StreamingSpeechOutputRuntime,
   options?: StreamingSpeechOutputOptions,
 ): StreamingSpeechOutputController {
   if (!window.desktopPet?.ttsStreamStart || !window.desktopPet?.subscribeTtsStream) {
-    throw new Error('当前环境未连接桌面客户端，无法使用流式语音播报。')
+    throw new Error('Desktop client is not connected in the current environment; streaming speech playback is unavailable.')
   }
 
-  const { chunker } = createChunker(speechSettings)
+  let accumulatedText = ''
   const player = runtime.getPlayer()
   // Voice cloning disabled — always use the provider's configured voice.
   const effectiveVoice = speechSettings.speechOutputVoice
   const requestId = createId('tts-stream')
+  const busEmit = options?.busEmit
+  const speechGeneration = options?.speechGeneration ?? 0
+  const providerId = speechSettings.speechOutputProviderId
+  let segmentCounter = 0
+  let firstAudioEmitted = false
   let started = false
   let ended = false
   let settled = false
@@ -74,10 +73,21 @@ export function createStreamingSpeechOutputController(
         options?.onStart?.()
       }
 
+      if (!firstAudioEmitted) {
+        firstAudioEmitted = true
+        busEmit?.({
+          type: 'tts:first_audio',
+          speechGeneration,
+          reason: VoiceReasonCodes.TTS_SEGMENT_STARTED,
+          provider: providerId,
+          meta: { requestId },
+        })
+      }
+
       pendingAudioAppends += 1
       void player.appendPcmChunk(event.samples, event.sampleRate, event.channels)
         .catch((error) => {
-          fail(error instanceof Error ? error : new Error('流式音频播放失败。'))
+          fail(error instanceof Error ? error : new Error('Streaming audio playback failed.'))
         })
         .finally(() => {
           pendingAudioAppends = Math.max(0, pendingAudioAppends - 1)
@@ -87,11 +97,27 @@ export function createStreamingSpeechOutputController(
     }
 
     if (event.type === 'error') {
-      fail(new Error(event.message || '流式 TTS 合成失败。'))
+      // Request-level error from the main-process stream. We don't know
+      // which segment failed — main's push_text chain is opaque — so attribute
+      // it to the last-queued segment as the best guess for Phase 1-1 logs.
+      const lastSegment = Math.max(0, segmentCounter - 1)
+      busEmit?.({
+        type: 'tts:segment_error',
+        segmentIndex: lastSegment,
+        speechGeneration,
+        message: event.message || 'Streaming TTS synthesis failed.',
+        reason: VoiceReasonCodes.TTS_SEGMENT_NETWORK_ERROR,
+        provider: providerId,
+        meta: { requestId, scope: 'request' },
+      })
+      fail(new Error(event.message || 'Streaming TTS synthesis failed.'))
       return
     }
 
     if (event.type === 'end') {
+      // Request-level stream end. Segment-level finished events are emitted
+      // inside queueSegment() when each push_text IPC resolves; this path
+      // only drives the final settle.
       ended = true
       maybeResolve()
     }
@@ -140,7 +166,7 @@ export function createStreamingSpeechOutputController(
     player.waitForDrain().then(() => {
       if (!settled) settleSuccess()
     }).catch((error) => {
-      if (!settled) fail(error instanceof Error ? error : new Error('流式音频播放失败。'))
+      if (!settled) fail(error instanceof Error ? error : new Error('Streaming audio playback failed.'))
     })
   }
 
@@ -151,7 +177,7 @@ export function createStreamingSpeechOutputController(
 
     const desktopPet = window.desktopPet
     if (!desktopPet) {
-      throw new Error('当前环境未连接桌面客户端，无法使用流式语音播报。')
+      throw new Error('Desktop client is not connected in the current environment; streaming speech playback is unavailable.')
     }
 
     startPromise = desktopPet.ttsStreamStart({
@@ -184,7 +210,7 @@ export function createStreamingSpeechOutputController(
     void ensureStarted()
       .then(() => window.desktopPet!.ttsStreamFinish({ requestId }))
       .catch((error) => {
-        fail(error instanceof Error ? error : new Error('流式 TTS 结束失败。'))
+        fail(error instanceof Error ? error : new Error('Streaming TTS finalize failed.'))
       })
       .finally(() => {
         maybeResolve()
@@ -197,12 +223,56 @@ export function createStreamingSpeechOutputController(
       return
     }
 
+    const segmentIndex = segmentCounter++
     pendingSegments += 1
+    busEmit?.({
+      type: 'tts:segment_queued',
+      segmentIndex,
+      speechGeneration,
+      reason: VoiceReasonCodes.TTS_SEGMENT_QUEUED,
+      provider: providerId,
+      meta: { requestId, length: cleaned.length },
+    })
     ensureStarted()
       .then(() => window.desktopPet!.ttsStreamPushText({ requestId, text: cleaned }))
-      .then(() => undefined)
+      .then(() => {
+        // push_text IPC resolved — main has accepted this segment into its
+        // synthesis chain. Not the same as "audio started flowing"
+        // (tts:first_audio covers that), but the cleanest per-segment hook
+        // we have without a protocol change.
+        busEmit?.({
+          type: 'tts:segment_started',
+          segmentIndex,
+          speechGeneration,
+          reason: VoiceReasonCodes.TTS_SEGMENT_STARTED,
+          provider: providerId,
+          meta: { requestId },
+        })
+        recordTtsUsage({
+          providerId: speechSettings.speechOutputProviderId,
+          modelId: speechSettings.speechOutputModel,
+          text: cleaned,
+        })
+        busEmit?.({
+          type: 'tts:segment_finished',
+          segmentIndex,
+          speechGeneration,
+          reason: VoiceReasonCodes.TTS_SEGMENT_FINISHED,
+          provider: providerId,
+          meta: { requestId },
+        })
+      })
       .catch((error) => {
-        fail(error instanceof Error ? error : new Error('流式 TTS 发送文本失败。'))
+        busEmit?.({
+          type: 'tts:segment_error',
+          segmentIndex,
+          speechGeneration,
+          message: error instanceof Error ? error.message : 'Streaming TTS push-text failed.',
+          reason: VoiceReasonCodes.TTS_SEGMENT_NETWORK_ERROR,
+          provider: providerId,
+          meta: { requestId, stage: 'push_text' },
+        })
+        fail(error instanceof Error ? error : new Error('Streaming TTS push-text failed.'))
       })
       .finally(() => {
         pendingSegments = Math.max(0, pendingSegments - 1)
@@ -219,19 +289,25 @@ export function createStreamingSpeechOutputController(
         return
       }
 
-      const chunks = chunker.pushText(delta)
-      for (const chunk of chunks) {
-        queueSegment(chunk)
-      }
+      // Accumulate silently — no synthesis until finish(). This guarantees
+      // the whole reply becomes a single TTS request (or, for very long
+      // replies, a small number of sentence-boundary-split requests), so
+      // timbre stays consistent across the entire utterance.
+      accumulatedText += delta
     },
     finish() {
       if (finishRequested || settled || aborted) {
         return
       }
 
-      const remaining = chunker.flush()
-      for (const chunk of remaining) {
-        queueSegment(chunk)
+      const fullText = accumulatedText
+      accumulatedText = ''
+      if (fullText) {
+        const maxChars = getMaxRequestCharsForProvider(providerId)
+        const segments = splitLongTextAtSentences(fullText, maxChars)
+        for (const segment of segments) {
+          queueSegment(segment)
+        }
       }
 
       finishRequested = true
@@ -267,7 +343,7 @@ export function createStreamingSpeechOutputController(
       cleanup()
       player.stopAndClear()
       runtime.resetPlayer?.()
-      rejectAllPlayed?.(new Error('语音播报已停止。'))
+      rejectAllPlayed?.(new Error('Speech playback has been stopped.'))
       if (startPromise) {
         void startPromise
           .then(() => window.desktopPet!.ttsStreamAbort({ requestId }))

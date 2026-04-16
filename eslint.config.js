@@ -11,6 +11,7 @@ export default defineConfig([
     'public/vendor/**',
     '.venv-qwen3tts/**',
     '.hf-home/**',
+    '.claude/**',
   ]),
   {
     files: ['**/*.{ts,tsx}'],

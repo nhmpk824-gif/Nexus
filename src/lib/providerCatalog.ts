@@ -25,6 +25,12 @@ export type SpeechVoiceOption = {
   description?: string
 }
 
+export type SpeechStyleOption = {
+  value: string
+  label: string
+  description?: string
+}
+
 export type SpeechOutputAdjustmentSupport = {
   rate: boolean
   pitch: boolean
@@ -91,7 +97,9 @@ export const SPEECH_INPUT_PROVIDERS: SpeechInputProviderEntry[] = [
     protocol: 'volcengine',
     kind: 'remote',
     hidden: false,
-    modelOptions: [],
+    modelOptions: [
+      { value: 'bigmodel', label: '火山豆包大模型（推荐）' },
+    ],
   },
   {
     id: 'openai-stt',
@@ -102,7 +110,11 @@ export const SPEECH_INPUT_PROVIDERS: SpeechInputProviderEntry[] = [
     protocol: 'openai-compatible',
     kind: 'remote',
     hidden: false,
-    modelOptions: [],
+    modelOptions: [
+      { value: 'gpt-4o-mini-transcribe', label: 'gpt-4o-mini-transcribe（推荐，便宜更快）' },
+      { value: 'gpt-4o-transcribe', label: 'gpt-4o-transcribe（旗舰精度）' },
+      { value: 'whisper-1', label: 'whisper-1（旧版兼容）' },
+    ],
   },
   {
     id: 'elevenlabs-stt',
@@ -113,7 +125,9 @@ export const SPEECH_INPUT_PROVIDERS: SpeechInputProviderEntry[] = [
     protocol: 'elevenlabs',
     kind: 'remote',
     hidden: false,
-    modelOptions: [],
+    modelOptions: [
+      { value: 'scribe_v1', label: 'Scribe v1（官方唯一选项）' },
+    ],
   },
   {
     id: 'zhipu-stt',
@@ -194,10 +208,50 @@ export type SpeechOutputProviderEntry = {
   kind: 'local' | 'remote' | 'browser'
   hidden: boolean
   supportsStreaming: boolean
+  supportsCustomVoiceId: boolean
   modelOptions: SpeechModelOption[]
   fallbackVoiceOptions: SpeechVoiceOption[]
+  styleOptions: SpeechStyleOption[]
   adjustmentSupport: SpeechOutputAdjustmentSupport
 }
+
+const OPENAI_TTS_VOICE_OPTIONS: SpeechVoiceOption[] = [
+  { id: 'alloy', label: 'Alloy', description: '中性平衡声线，默认推荐。' },
+  { id: 'ash', label: 'Ash', description: '偏冷静的男声，低频扎实。' },
+  { id: 'ballad', label: 'Ballad', description: '叙事感较强，适合讲故事。' },
+  { id: 'coral', label: 'Coral', description: '温暖明亮的女声。' },
+  { id: 'echo', label: 'Echo', description: '成熟男声，偏对话风。' },
+  { id: 'fable', label: 'Fable', description: '英式男声，读故事感强。' },
+  { id: 'onyx', label: 'Onyx', description: '深沉权威男声，适合播报。' },
+  { id: 'nova', label: 'Nova', description: '轻快上扬的女声，节奏明快。' },
+  { id: 'sage', label: 'Sage', description: '稳重中性声线，叙事质感好。' },
+  { id: 'shimmer', label: 'Shimmer', description: '柔和温暖的女声，适合陪伴。' },
+]
+
+const OPENAI_TTS_STYLE_OPTIONS: SpeechStyleOption[] = [
+  { value: '', label: '默认（无指令）', description: '不追加风格指令，由模型自行选择。' },
+  { value: 'Speak in a warm, gentle tone like a caring companion. Keep the pacing natural and smile softly through the words.', label: '温柔陪伴', description: '温暖柔和，像好朋友在身边。' },
+  { value: 'Speak in a bright, cheerful, energetic tone with crisp articulation.', label: '欢快活泼', description: '元气、轻快、明亮。' },
+  { value: 'Speak in a calm, steady narrator voice with thoughtful pacing.', label: '沉稳叙述', description: '稳一点，适合讲解和叙述。' },
+  { value: 'Speak as if reading a bedtime story — warm, slow, full of emotion.', label: '温暖讲故事', description: '放慢节奏，带感情。' },
+  { value: 'Speak in a relaxed, casual conversational tone like chatting with a friend.', label: '轻松闲聊', description: '日常口吻，不正式。' },
+  { value: 'Speak in a clear, professional news-anchor tone.', label: '专业播报', description: '新闻主播感，正式清晰。' },
+]
+
+const ELEVENLABS_PRESET_VOICE_OPTIONS: SpeechVoiceOption[] = [
+  { id: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel — American female (calm)', description: '官方预设女声 Rachel，冷静知性。' },
+  { id: 'EXAVITQu4vr4xnSDxMaL', label: 'Bella — American female (soft)', description: '柔和女声 Bella，适合温柔陪伴。' },
+  { id: 'AZnzlk1XvdvUeBnXmlld', label: 'Domi — American female (strong)', description: '有力女声 Domi，偏自信。' },
+  { id: 'MF3mGyEYCl7XYWbV9V6O', label: 'Elli — American female (young)', description: '年轻女声 Elli，情绪表现力强。' },
+  { id: 'pNInz6obpgDQGcFmaJgB', label: 'Adam — American male (deep)', description: '深沉男声 Adam，权威稳重。' },
+  { id: 'ErXwobaYiN019PkySvjV', label: 'Antoni — American male (warm)', description: '温暖男声 Antoni，叙事感好。' },
+  { id: 'TxGEqnHWrfWFTfGW9XjX', label: 'Josh — American male (young)', description: '年轻男声 Josh，轻松日常。' },
+  { id: 'VR6AewLTigWG4xSOukaG', label: 'Arnold — American male (crisp)', description: '清晰男声 Arnold，适合播报。' },
+]
+
+const DASHSCOPE_VOICE_OPTIONS: SpeechVoiceOption[] = [
+  { id: 'Cherry', label: 'Cherry（推荐中文女声）', description: '阿里 Qwen-TTS 官方默认女声，中文最稳。' },
+]
 
 const VOLCENGINE_DIRECTLY_AVAILABLE_VOICE_IDS = new Set([
   'BV001_streaming',
@@ -245,8 +299,14 @@ export const SPEECH_OUTPUT_PROVIDERS: SpeechOutputProviderEntry[] = [
     kind: 'remote',
     hidden: false,
     supportsStreaming: false,
-    modelOptions: [],
-    fallbackVoiceOptions: [],
+    supportsCustomVoiceId: false,
+    modelOptions: [
+      { value: 'gpt-4o-mini-tts', label: 'gpt-4o-mini-tts（推荐，支持 instructions）' },
+      { value: 'tts-1', label: 'tts-1（低延迟）' },
+      { value: 'tts-1-hd', label: 'tts-1-hd（高质量）' },
+    ],
+    fallbackVoiceOptions: OPENAI_TTS_VOICE_OPTIONS,
+    styleOptions: OPENAI_TTS_STYLE_OPTIONS,
     adjustmentSupport: { rate: false, pitch: false, volume: false, note: '当前这条 TTS 链路暂时主要靠音色和风格指令控制，语速、语调和音量还没有稳定直通。' },
   },
   {
@@ -260,6 +320,8 @@ export const SPEECH_OUTPUT_PROVIDERS: SpeechOutputProviderEntry[] = [
     kind: 'remote',
     hidden: false,
     supportsStreaming: true,
+    supportsCustomVoiceId: true,
+    styleOptions: [],
     modelOptions: [
       { value: 'speech-2.8-turbo', label: 'speech-2.8-turbo（响应更快）' },
       { value: 'speech-2.8-hd', label: 'speech-2.8-hd（音质更好）' },
@@ -293,6 +355,8 @@ export const SPEECH_OUTPUT_PROVIDERS: SpeechOutputProviderEntry[] = [
     kind: 'remote',
     hidden: false,
     supportsStreaming: true,
+    supportsCustomVoiceId: true,
+    styleOptions: [],
     modelOptions: [],
     fallbackVoiceOptions: buildVolcengineVoiceOptions(),
     adjustmentSupport: { rate: true, pitch: true, volume: true, note: '当前提供商支持语速、语调和音量调节，适合直接细调说话风格。' },
@@ -308,8 +372,13 @@ export const SPEECH_OUTPUT_PROVIDERS: SpeechOutputProviderEntry[] = [
     kind: 'remote',
     hidden: false,
     supportsStreaming: true,
-    modelOptions: [],
-    fallbackVoiceOptions: [],
+    supportsCustomVoiceId: true,
+    modelOptions: [
+      { value: 'qwen3-tts-instruct-flash', label: 'qwen3-tts-instruct-flash（推荐）' },
+      { value: 'qwen3-tts-flash', label: 'qwen3-tts-flash（更快）' },
+    ],
+    fallbackVoiceOptions: DASHSCOPE_VOICE_OPTIONS,
+    styleOptions: [],
     adjustmentSupport: { rate: false, pitch: false, volume: false, note: '当前这条 TTS 链路暂时主要靠音色和风格指令控制，语速、语调和音量还没有稳定直通。' },
   },
   {
@@ -317,14 +386,20 @@ export const SPEECH_OUTPUT_PROVIDERS: SpeechOutputProviderEntry[] = [
     label: '[云端] ElevenLabs TTS',
     baseUrl: 'https://api.elevenlabs.io/v1',
     defaultModel: 'eleven_multilingual_v2',
-    defaultVoice: '',
-    notes: '适合更强调音色质感，或者准备复用克隆 `voice_id`。填 API Key 后可直接播报，也能接固定角色音色。',
+    defaultVoice: '21m00Tcm4TlvDq8ikWAM',
+    notes: '适合更强调音色质感。填 API Key 后可直接播报，也能手动填写自定义 voice_id 接角色音色。',
     protocol: 'elevenlabs',
     kind: 'remote',
     hidden: false,
     supportsStreaming: true,
-    modelOptions: [],
-    fallbackVoiceOptions: [],
+    supportsCustomVoiceId: true,
+    modelOptions: [
+      { value: 'eleven_multilingual_v2', label: 'eleven_multilingual_v2（推荐，多语种）' },
+      { value: 'eleven_turbo_v2_5', label: 'eleven_turbo_v2_5（更快）' },
+      { value: 'eleven_flash_v2_5', label: 'eleven_flash_v2_5（最低延迟）' },
+    ],
+    fallbackVoiceOptions: ELEVENLABS_PRESET_VOICE_OPTIONS,
+    styleOptions: [],
     adjustmentSupport: { rate: false, pitch: false, volume: false, note: '当前这条 TTS 链路暂时主要靠音色和风格指令控制，语速、语调和音量还没有稳定直通。' },
   },
   {
@@ -338,6 +413,8 @@ export const SPEECH_OUTPUT_PROVIDERS: SpeechOutputProviderEntry[] = [
     kind: 'remote',
     hidden: false,
     supportsStreaming: true,
+    supportsCustomVoiceId: false,
+    styleOptions: [],
     modelOptions: [],
     fallbackVoiceOptions: [
       { id: 'zh-CN-XiaoxiaoNeural', label: '晓晓（中文女，推荐）', description: '微软晓晓，最常用的中文女声。' },
@@ -362,6 +439,8 @@ export const SPEECH_OUTPUT_PROVIDERS: SpeechOutputProviderEntry[] = [
     kind: 'local',
     hidden: false,
     supportsStreaming: false,
+    supportsCustomVoiceId: true,
+    styleOptions: OPENAI_TTS_STYLE_OPTIONS,
     modelOptions: [
       { value: 'tts-1-hd', label: 'tts-1-hd（高质量，32步）' },
       { value: 'tts-1', label: 'tts-1（快速，16步）' },
@@ -399,33 +478,15 @@ export const SPEECH_OUTPUT_PROVIDERS: SpeechOutputProviderEntry[] = [
     kind: 'remote',
     hidden: false,
     supportsStreaming: false,
-    modelOptions: [],
-    fallbackVoiceOptions: [],
+    supportsCustomVoiceId: true,
+    modelOptions: [
+      { value: 'gpt-4o-mini-tts', label: 'gpt-4o-mini-tts' },
+      { value: 'tts-1', label: 'tts-1' },
+      { value: 'tts-1-hd', label: 'tts-1-hd' },
+    ],
+    fallbackVoiceOptions: OPENAI_TTS_VOICE_OPTIONS,
+    styleOptions: OPENAI_TTS_STYLE_OPTIONS,
     adjustmentSupport: { rate: false, pitch: false, volume: false, note: '当前这条 TTS 链路暂时主要靠音色和风格指令控制，语速、语调和音量还没有稳定直通。' },
-  },
-]
-
-// ── Voice clone provider catalog ──
-
-export type VoiceCloneProviderEntry = {
-  id: string
-  label: string
-  baseUrl: string
-  notes: string
-}
-
-export const VOICE_CLONE_PROVIDERS: VoiceCloneProviderEntry[] = [
-  {
-    id: 'none',
-    label: '暂不启用',
-    baseUrl: '',
-    notes: '如果你现在只想先跑通对话和播报，可以先不启用，后面再补固定角色音色。',
-  },
-  {
-    id: 'elevenlabs-ivc',
-    label: 'ElevenLabs Voice Clone',
-    baseUrl: 'https://api.elevenlabs.io/v1',
-    notes: '适合已经确定要做固定角色音色。上传几段干净样本后生成 `voice_id`，随后可直接复用到语音输出。',
   },
 ]
 
