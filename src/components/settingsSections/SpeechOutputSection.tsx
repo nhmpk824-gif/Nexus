@@ -22,7 +22,7 @@ import {
 } from '../../lib/audioProviders'
 import { SPEECH_OUTPUT_PROVIDERS } from '../../lib/providerCatalog'
 import { updateCurrentSpeechOutputProviderProfile } from '../../lib/speechProviderProfiles'
-import { resolveLocalizedText } from '../../lib/uiLanguage'
+import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type {
   AppSettings,
   ServiceConnectionCapability,
@@ -71,8 +71,8 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
   onRunSpeechOutputConnectionTest,
   renderSpeechOutputTestResult,
 }: SpeechOutputSectionProps) {
-  const t = (zhCN: string, enUS: string) =>
-    resolveLocalizedText(draft.uiLanguage, { 'zh-CN': zhCN, 'en-US': enUS })
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) =>
+    pickTranslatedUiText(draft.uiLanguage, key)
 
   const speechOutputProvider = getSpeechOutputProviderPreset(draft.speechOutputProviderId)
   const speechOutputAdjustmentSupport = getSpeechOutputAdjustmentSupport(draft.speechOutputProviderId)
@@ -84,13 +84,12 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
   const hideApiCredentials = isSpeechOutputKeyless(draft.speechOutputProviderId)
   const showCustomVoiceInput = supportsCustomSpeechOutputVoiceId(draft.speechOutputProviderId)
   const speechOutputVolcengineCredentials = parseVolcengineCredentialParts(draft.speechOutputApiKey)
-  const speechOutputBaseUrlLabel = t('语音输出接口地址', 'Speech output API base URL')
   const speechOutputModelLabel = isVolcengineSpeechOutput
-    ? t('语音业务集群', 'Speech service cluster')
-    : t('语音输出模型', 'Speech output model')
+    ? ti('settings.speech_output.cluster')
+    : ti('settings.speech_output.model')
   const speechOutputVoiceLabel = isVolcengineSpeechOutput
-    ? t('播报音色类型', 'Voice type')
-    : t('播报音色 / 音色 ID', 'Voice / Voice ID')
+    ? ti('settings.speech_output.voice_type')
+    : ti('settings.speech_output.voice')
 
   function updateSpeechOutputVolcengineCredential(partial: Partial<VolcengineCredentialParts>) {
     setDraft((prev) => {
@@ -108,12 +107,9 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
     <section className={`settings-section ${active ? 'is-active' : 'is-hidden'}`}>
       <div className="settings-section__title-row">
         <div>
-          <h4>{t('语音输出 TTS', 'Speech Output (TTS)')}</h4>
+          <h4>{ti('settings.speech_output.title')}</h4>
           <p className="settings-drawer__hint">
-            {t(
-              '浏览器本地播报是回退方案，云端 TTS 支持更稳定的内置声音。',
-              'Browser-local speech is the fallback. Cloud TTS provides more stable built-in voices.',
-            )}
+            {ti('settings.speech_output.hint')}
           </p>
         </div>
         <button
@@ -123,13 +119,13 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
           disabled={testingTarget === 'speech-output'}
         >
           {testingTarget === 'speech-output'
-            ? t('测试中...', 'Testing...')
-            : t('测试语音输出', 'Test speech output')}
+            ? ti('settings.speech_output.testing')
+            : ti('settings.speech_output.test')}
         </button>
       </div>
 
       <label>
-        <span>{t('语音输出提供商', 'Speech output provider')}</span>
+        <span>{ti('settings.speech_output.provider')}</span>
         <select
           value={draft.speechOutputProviderId}
           onChange={(event) => onApplySpeechOutputPreset(event.target.value)}
@@ -144,16 +140,16 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
       <p className="settings-drawer__hint">
         {speechOutputProvider.notes}
         {speechOutputProvider.baseUrl
-          ? ` ${t('默认地址：', 'Default URL: ')}${speechOutputProvider.baseUrl}`
+          ? ` ${ti('settings.speech_output.default_endpoint')}${speechOutputProvider.baseUrl}`
           : ''}
         {speechOutputProvider.defaultModel
-          ? `${t('，默认模型：', ', default model: ')}${speechOutputProvider.defaultModel}`
+          ? `${ti('settings.speech_output.default_model')}${speechOutputProvider.defaultModel}`
           : ''}
       </p>
 
       {!isEdgeTtsSpeechOutput ? (
         <label>
-          <span>{speechOutputBaseUrlLabel}</span>
+          <span>{ti('settings.speech_output.endpoint_url')}</span>
           <UrlInput
             value={draft.speechOutputApiBaseUrl}
             onChange={(event) =>
@@ -169,7 +165,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
         <>
           <div className="settings-grid settings-grid--two">
             <label>
-              <span>{t('火山 App ID', 'Volcengine App ID')}</span>
+              <span>{ti('settings.speech_output.volcengine_app_id')}</span>
               <input
                 value={speechOutputVolcengineCredentials.appId}
                 onChange={(event) =>
@@ -181,7 +177,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
             </label>
 
             <label>
-              <span>{t('火山访问令牌', 'Volcengine access token')}</span>
+              <span>{ti('settings.speech_output.volcengine_token')}</span>
               <input
                 type="password"
                 value={speechOutputVolcengineCredentials.accessToken}
@@ -195,15 +191,12 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
           </div>
 
           <p className="settings-drawer__hint">
-            {t(
-              '这里分开填写即可，保存时会自动拼成 `APP_ID:ACCESS_TOKEN`。如果你复制的是带标签的两行文本，也可以直接粘进"访问令牌"一栏试一下。',
-              'Fill these in separately — on save they are combined into `APP_ID:ACCESS_TOKEN`. If you copied a two-line labeled block, you can paste it straight into the access token field and it will try to parse.',
-            )}
+            {ti('settings.speech_output.volcengine_credential_hint')}
           </p>
         </>
       ) : !hideApiCredentials ? (
         <label>
-          <span>{t('语音输出密钥', 'Speech output API key')}</span>
+          <span>{ti('settings.speech_output.api_key')}</span>
           <input
             type="password"
             value={draft.speechOutputApiKey}
@@ -249,10 +242,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
 
       {isVolcengineSpeechOutput ? (
         <p className="settings-drawer__hint">
-          {t(
-            '火山 TTS 的"模型"这一栏实际填写的是业务集群，默认推荐 `volcano_tts`。如果你只是先验证能不能播报，音色先用 `BV001_streaming` 最稳；下拉里标了"需授权"的音色如果没有在控制台开通，程序会自动回退到 `BV001_streaming` 或 `BV002_streaming`。',
-            'The "model" field for Volcengine TTS is actually the service cluster — `volcano_tts` is the recommended default. To just verify playback works, `BV001_streaming` is the safest voice. Voices marked "needs authorization" in the dropdown will fall back to `BV001_streaming` or `BV002_streaming` if you have not enabled them in the console.',
-          )}
+          {ti('settings.speech_output.volcengine_cluster_hint')}
         </p>
       ) : null}
 
@@ -261,10 +251,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
           <div className="settings-section__title-row">
             <div>
               <p className="settings-drawer__hint">
-                {t(
-                  'MiniMax 已接入在线音色列表。保存前可以先刷新一次，确认下拉选项和当前密钥都正常。',
-                  'MiniMax supports a live voice catalog. Refresh once before saving to confirm the dropdown and your current API key both work.',
-                )}
+                {ti('settings.speech_output.minimax_hint')}
               </p>
             </div>
             <button
@@ -274,13 +261,13 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
               disabled={loadingSpeechVoices}
             >
               {loadingSpeechVoices
-                ? t('拉取中...', 'Fetching...')
-                : t('刷新 MiniMax 音色', 'Refresh MiniMax voices')}
+                ? ti('settings.speech_output.minimax_fetching')
+                : ti('settings.speech_output.minimax_refresh')}
             </button>
           </div>
 
           <label>
-            <span>{t('MiniMax 可选音色', 'Available MiniMax voices')}</span>
+            <span>{ti('settings.speech_output.minimax_voices_label')}</span>
             <select
               value={speechVoiceOptions.some((voice) => voice.id === draft.speechOutputVoice)
                 ? draft.speechOutputVoice
@@ -294,8 +281,8 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
             >
               <option value="__keep-current__">
                 {draft.speechOutputVoice
-                  ? `${t('保留当前值：', 'Keep current: ')}${draft.speechOutputVoice}`
-                  : t('请选择一个 MiniMax 音色', 'Select a MiniMax voice')}
+                  ? `${ti('settings.speech_output.keep_current')}${draft.speechOutputVoice}`
+                  : ti('settings.speech_output.select_minimax_voice')}
               </option>
               {speechVoiceOptions.map((voice) => (
                 <option key={voice.id} value={voice.id}>
@@ -308,10 +295,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
           {speechVoiceOptions.length ? (
             <p className="settings-drawer__hint">
               {speechVoiceOptions.find((voice) => voice.id === draft.speechOutputVoice)?.description
-                ?? t(
-                  '已加载 MiniMax 音色列表，也可以继续手动填写音色 ID。',
-                  'MiniMax voice catalog loaded. You can still enter a voice ID manually.',
-                )}
+                ?? ti('settings.speech_output.minimax_voices_loaded')}
             </p>
           ) : null}
         </>
@@ -320,7 +304,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
       {isEdgeTtsSpeechOutput ? (
         <>
           <label>
-            <span>{t('音色', 'Voice')}</span>
+            <span>{speechOutputVoiceLabel}</span>
             {speechVoiceOptions.length ? (
               <select
                 value={draft.speechOutputVoice}
@@ -347,10 +331,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
             )}
           </label>
           <p className="settings-drawer__hint">
-            {t(
-              'Edge TTS 免费，无需 API key。音色名称形如 `zh-CN-XiaoxiaoNeural`，可在微软文档查看所有支持的音色。',
-              'Edge TTS is free and needs no API key. Voice names look like `zh-CN-XiaoxiaoNeural`; see Microsoft docs for the full list.',
-            )}
+            {ti('settings.speech_output.edge_tts_hint')}
           </p>
         </>
       ) : null}
@@ -359,8 +340,8 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
         <>
           <label>
             <span>{isVolcengineSpeechOutput
-              ? t('火山推荐音色', 'Recommended Volcengine voices')
-              : t('播报音色', 'Voice')}</span>
+              ? ti('settings.speech_output.volcengine_voices_label')
+              : speechOutputVoiceLabel}</span>
             <select
               value={speechVoiceOptions.some((voice) => voice.id === draft.speechOutputVoice)
                 ? draft.speechOutputVoice
@@ -374,8 +355,8 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
             >
               <option value="__keep-current__">
                 {draft.speechOutputVoice
-                  ? `${t('保留当前值：', 'Keep current: ')}${draft.speechOutputVoice}`
-                  : t('请选择一个音色', 'Select a voice')}
+                  ? `${ti('settings.speech_output.keep_current')}${draft.speechOutputVoice}`
+                  : ti('settings.speech_output.select_voice')}
               </option>
               {speechVoiceOptions.map((voice) => (
                 <option key={voice.id} value={voice.id}>
@@ -387,10 +368,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
 
           <p className="settings-drawer__hint">
             {speechVoiceOptions.find((voice) => voice.id === draft.speechOutputVoice)?.description
-              ?? t(
-                '从内置音色列表里挑一个，避免手动输入错名导致播报失败。',
-                'Pick from the built-in voice catalog to avoid typos that break playback.',
-              )}
+              ?? ti('settings.speech_output.voice_catalog_hint')}
           </p>
         </>
       ) : null}
@@ -418,7 +396,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
       {speechOutputStyleOptions.length ? (
         <>
           <label>
-            <span>{t('播报风格', 'Speaking style')}</span>
+            <span>{ti('settings.speech_output.style')}</span>
             <select
               value={speechOutputStyleOptions.some((opt) => opt.value === draft.speechOutputInstructions)
                 ? draft.speechOutputInstructions
@@ -436,16 +414,13 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
           </label>
           <p className="settings-drawer__hint">
             {speechOutputStyleOptions.find((opt) => opt.value === draft.speechOutputInstructions)?.description
-              ?? t(
-                '从内置播报风格中选择一个，程序会自动发送对应的英文 prompt 给模型。',
-                'Choose a built-in speaking style — the app sends the matching English prompt to the model.',
-              )}
+              ?? ti('settings.speech_output.style_hint')}
           </p>
         </>
       ) : null}
 
       <label>
-        <span>{t('播报语言', 'Speech language')}</span>
+        <span>{ti('settings.speech_output.speech_lang')}</span>
         <input
           value={draft.speechSynthesisLang}
           onChange={(event) =>
@@ -460,7 +435,7 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
       <div className="settings-drawer__card">
         <div className="settings-section__title-row">
           <div>
-            <h5>{t('播报调校', 'Speech tuning')}</h5>
+            <h5>{ti('settings.speech_output.tuning_title')}</h5>
             <p className="settings-drawer__hint">{speechOutputAdjustmentSupport.note}</p>
           </div>
           <button
@@ -475,14 +450,14 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
               }))
             }
           >
-            {t('恢复默认', 'Restore defaults')}
+            {ti('settings.speech_output.restore_defaults')}
           </button>
         </div>
 
         <div className="settings-tts-tuning">
           <div className={`settings-tts-tuning__item ${speechOutputAdjustmentSupport.rate ? '' : 'is-disabled'}`}>
             <div className="settings-tts-tuning__header">
-              <strong>{t('语速', 'Rate')}</strong>
+              <strong>{ti('settings.speech_output.rate')}</strong>
               <span>{formatTtsAdjustmentValue('rate', draft.speechRate)}</span>
             </div>
             <div className="settings-tts-tuning__controls">
@@ -519,14 +494,14 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
             </div>
             <p className="settings-drawer__hint">
               {speechOutputAdjustmentSupport.rate
-                ? t('值越大，说话越快。', 'Higher values speak faster.')
-                : t('当前提供商暂不直通语速调节。', 'The current provider does not expose rate control.')}
+                ? ti('settings.speech_output.rate_hint')
+                : ti('settings.speech_output.rate_disabled_hint')}
             </p>
           </div>
 
           <div className={`settings-tts-tuning__item ${speechOutputAdjustmentSupport.pitch ? '' : 'is-disabled'}`}>
             <div className="settings-tts-tuning__header">
-              <strong>{t('语调', 'Pitch')}</strong>
+              <strong>{ti('settings.speech_output.pitch')}</strong>
               <span>{formatTtsAdjustmentValue('pitch', draft.speechPitch)}</span>
             </div>
             <div className="settings-tts-tuning__controls">
@@ -563,14 +538,14 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
             </div>
             <p className="settings-drawer__hint">
               {speechOutputAdjustmentSupport.pitch
-                ? t('值越大，整体音调越高。', 'Higher values raise the overall pitch.')
-                : t('当前提供商暂不支持直接调节语调。', 'The current provider does not support direct pitch control.')}
+                ? ti('settings.speech_output.pitch_hint')
+                : ti('settings.speech_output.pitch_disabled_hint')}
             </p>
           </div>
 
           <div className={`settings-tts-tuning__item ${speechOutputAdjustmentSupport.volume ? '' : 'is-disabled'}`}>
             <div className="settings-tts-tuning__header">
-              <strong>{t('音量', 'Volume')}</strong>
+              <strong>{ti('settings.speech_output.volume')}</strong>
               <span>{formatTtsAdjustmentValue('volume', draft.speechVolume)}</span>
             </div>
             <div className="settings-tts-tuning__controls">
@@ -607,15 +582,15 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
             </div>
             <p className="settings-drawer__hint">
               {speechOutputAdjustmentSupport.volume
-                ? t('这里只调 TTS 输出响度，不会改系统总音量。', 'This only adjusts TTS output loudness — system volume is unchanged.')
-                : t('当前提供商暂不支持直接调节音量。', 'The current provider does not support direct volume control.')}
+                ? ti('settings.speech_output.volume_hint')
+                : ti('settings.speech_output.volume_disabled_hint')}
             </p>
           </div>
         </div>
       </div>
 
       <label>
-        <span>{t('试听文本', 'Preview text')}</span>
+        <span>{ti('settings.speech_output.preview_text')}</span>
         <textarea
           rows={3}
           value={speechPreviewText}
@@ -630,8 +605,8 @@ export const SpeechOutputSection = memo(function SpeechOutputSection({
         disabled={previewingSpeech}
       >
         {previewingSpeech
-          ? t('试听中...', 'Previewing...')
-          : t('试听当前音色', 'Preview current voice')}
+          ? ti('settings.speech_output.previewing')
+          : ti('settings.speech_output.preview')}
       </button>
 
       {speechPreviewStatus ? (

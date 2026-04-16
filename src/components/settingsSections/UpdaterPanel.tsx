@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { useUpdater } from '../../features/updater'
-import { resolveLocalizedText } from '../../lib/uiLanguage'
+import { pickTranslatedUiText } from '../../lib/uiLanguage'
+import type { TranslationParams } from '../../i18n'
 import type { UiLanguage } from '../../types'
 
 type UpdaterPanelProps = {
@@ -24,8 +25,8 @@ function formatSpeed(bytesPerSecond: number): string {
 }
 
 export const UpdaterPanel = memo(function UpdaterPanel({ uiLanguage }: UpdaterPanelProps) {
-  const t = (zhCN: string, enUS: string) =>
-    resolveLocalizedText(uiLanguage, { 'zh-CN': zhCN, 'en-US': enUS })
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1], params?: TranslationParams) =>
+    pickTranslatedUiText(uiLanguage, key, params)
   const updater = useUpdater()
   const { event, busy, currentVersion, isPackaged } = updater
 
@@ -35,43 +36,34 @@ export const UpdaterPanel = memo(function UpdaterPanel({ uiLanguage }: UpdaterPa
   switch (event.type) {
     case 'idle':
       statusText = isPackaged
-        ? t('尚未检查更新', 'No update check yet')
-        : t('开发模式（自动更新已禁用）', 'Dev mode (auto-update disabled)')
+        ? ti('settings.updater.idle')
+        : ti('settings.updater.dev_mode')
       statusTone = 'idle'
       break
     case 'checking':
-      statusText = t('正在检查更新…', 'Checking for updates...')
+      statusText = ti('settings.updater.checking_status')
       statusTone = 'info'
       break
     case 'available':
-      statusText = t(
-        `发现新版本 v${event.version ?? '?'}，正在后台下载`,
-        `Found new version v${event.version ?? '?'}, downloading in background`,
-      )
+      statusText = ti('settings.updater.available', { version: event.version ?? '?' })
       statusTone = 'info'
       break
     case 'not-available':
-      statusText = t(
-        `已是最新版本（v${event.version}）`,
-        `Already up to date (v${event.version})`,
-      )
+      statusText = ti('settings.updater.up_to_date', { version: event.version ?? '?' })
       statusTone = 'success'
       break
     case 'progress': {
       const pct = Math.max(0, Math.min(100, Math.round(event.percent)))
-      statusText = `${t('下载中', 'Downloading')} ${pct}% · ${formatBytes(event.transferred)} / ${formatBytes(event.total)} · ${formatSpeed(event.bytesPerSecond)}`
+      statusText = `${ti('settings.updater.downloading')} ${pct}% · ${formatBytes(event.transferred)} / ${formatBytes(event.total)} · ${formatSpeed(event.bytesPerSecond)}`
       statusTone = 'info'
       break
     }
     case 'downloaded':
-      statusText = t(
-        `v${event.version ?? '?'} 已下载完成，重启即可生效`,
-        `v${event.version ?? '?'} downloaded, restart to apply`,
-      )
+      statusText = ti('settings.updater.downloaded', { version: event.version ?? '?' })
       statusTone = 'success'
       break
     case 'error':
-      statusText = `${t('更新失败：', 'Update failed: ')}${event.message}`
+      statusText = `${ti('settings.updater.error_prefix')}${event.message}`
       statusTone = 'error'
       break
   }
@@ -85,9 +77,9 @@ export const UpdaterPanel = memo(function UpdaterPanel({ uiLanguage }: UpdaterPa
     <section className="settings-updater-panel">
       <div className="settings-updater-panel__header">
         <div>
-          <h5 className="settings-updater-panel__title">{t('应用更新', 'App updates')}</h5>
+          <h5 className="settings-updater-panel__title">{ti('settings.updater.title')}</h5>
           <p className="settings-updater-panel__version">
-            {t('当前版本', 'Current version')} v{currentVersion ?? '—'}
+            {ti('settings.updater.version')} v{currentVersion ?? '—'}
           </p>
         </div>
         <div className="settings-updater-panel__actions">
@@ -97,7 +89,7 @@ export const UpdaterPanel = memo(function UpdaterPanel({ uiLanguage }: UpdaterPa
               className="primary-button"
               onClick={() => void updater.installAndRestart()}
             >
-              {t('立即重启并安装', 'Restart and install now')}
+              {ti('settings.updater.install')}
             </button>
           ) : (
             <button
@@ -105,9 +97,9 @@ export const UpdaterPanel = memo(function UpdaterPanel({ uiLanguage }: UpdaterPa
               className="ghost-button"
               onClick={() => void updater.checkForUpdates()}
               disabled={busy || !isPackaged}
-              title={!isPackaged ? t('仅在打包后的发行版本中可用', 'Only available in packaged releases') : undefined}
+              title={!isPackaged ? ti('settings.updater.only_packaged') : undefined}
             >
-              {busy ? t('检查中…', 'Checking...') : t('检查更新', 'Check for updates')}
+              {busy ? ti('settings.updater.checking') : ti('settings.updater.check')}
             </button>
           )}
         </div>

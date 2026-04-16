@@ -455,7 +455,7 @@ export function SettingsDrawer({
           setDraft={setDraft}
           testingTarget={connectionTests.testingTarget}
           textProvider={textProvider}
-          t={t}
+          uiLanguage={uiLanguage}
           onApplyTextProviderPreset={applyTextProviderPreset}
           onRunTextConnectionTest={() => void connectionTests.runConnectionTest('text')}
           renderTextTestResult={() => connectionTests.renderTestResult('text')}
@@ -572,6 +572,7 @@ export function SettingsDrawer({
           active={activeSectionId === 'autonomy'}
           draft={draft}
           setDraft={setDraft}
+          uiLanguage={uiLanguage}
           channels={notificationChannels}
           channelsLoading={notificationChannelsLoading}
           onAddChannel={onAddNotificationChannel}

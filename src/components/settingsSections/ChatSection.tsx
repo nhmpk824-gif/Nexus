@@ -8,7 +8,7 @@ import {
   syncCurrentToProfile,
   updateCharacterProfile,
 } from '../../features/character/profiles'
-import { resolveLocalizedText } from '../../lib/uiLanguage'
+import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type { AppSettings, CharacterProfile } from '../../types'
 
 type StatusMessage = {
@@ -35,9 +35,10 @@ export const ChatSection = memo(function ChatSection({
   petModelStatus,
   onImportPetModel,
 }: ChatSectionProps) {
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1], params?: Parameters<typeof pickTranslatedUiText>[2]) =>
+    pickTranslatedUiText(draft.uiLanguage, key, params)
+
   const petModel = petModelPresets.find((preset) => preset.id === draft.petModelId) ?? petModelPresets[0]
-  const t = (zhCN: string, enUS: string) =>
-    resolveLocalizedText(draft.uiLanguage, { 'zh-CN': zhCN, 'en-US': enUS })
 
   function handleCreateProfile() {
     const profile = createCharacterProfile(draft, draft.companionName)
@@ -79,21 +80,15 @@ export const ChatSection = memo(function ChatSection({
   }
 
   const profileCount = draft.characterProfiles.length
-  const profileCountLabel = t(
-    `${profileCount} 个角色`,
-    `${profileCount} profile${profileCount === 1 ? '' : 's'}`,
-  )
+  const profileCountLabel = ti('settings.chat.profiles_label', { count: profileCount })
 
   return (
     <section className={`settings-section ${active ? 'is-active' : 'is-hidden'}`}>
       <div className="settings-section__title-row">
         <div>
-          <h4>{t('角色与设定', 'Companion Profile')}</h4>
+          <h4>{ti('settings.chat.title')}</h4>
           <p className="settings-drawer__hint">
-            {t(
-              '创建多个角色档案，每个角色包含独立的名字、提示词、Live2D 模型和语音设置。',
-              'Create multiple companion profiles. Each one carries its own name, system prompt, Live2D model and voice.',
-            )}
+            {ti('settings.chat.note')}
           </p>
         </div>
       </div>
@@ -102,12 +97,9 @@ export const ChatSection = memo(function ChatSection({
         <div className="settings-drawer__card">
           <div className="settings-section__title-row">
             <div>
-              <h5>{t('角色档案', 'Profiles')}</h5>
+              <h5>{ti('settings.chat.profiles')}</h5>
               <p className="settings-drawer__hint">
-                {t(
-                  '点击卡片切换角色，编辑后用下方「更新当前档案」按钮写回。',
-                  'Click a card to switch profiles. Use "Update current profile" below to save edits back.',
-                )}
+                {ti('settings.chat.profiles_hint')}
               </p>
             </div>
             <div className="settings-page__meta">
@@ -147,7 +139,7 @@ export const ChatSection = memo(function ChatSection({
                       type="button"
                       className="settings-inline-delete"
                       onClick={() => handleDeleteProfile(profile.id)}
-                      title={t('删除此角色', 'Delete this profile')}
+                      title={ti('settings.chat.delete_profile')}
                     >
                       ×
                     </button>
@@ -160,7 +152,7 @@ export const ChatSection = memo(function ChatSection({
       ) : null}
 
       <label>
-        <span>{t('角色名字', 'Companion name')}</span>
+        <span>{ti('settings.chat.companion_name')}</span>
         <input
           value={draft.companionName}
           onChange={(event) =>
@@ -170,7 +162,7 @@ export const ChatSection = memo(function ChatSection({
       </label>
 
       <label>
-        <span>{t('你的名字', 'Your name')}</span>
+        <span>{ti('settings.chat.user_name')}</span>
         <input
           value={draft.userName}
           onChange={(event) =>
@@ -180,7 +172,7 @@ export const ChatSection = memo(function ChatSection({
       </label>
 
       <label>
-        <span>{t('系统提示词', 'System prompt')}</span>
+        <span>{ti('settings.chat.system_prompt')}</span>
         <textarea
           rows={6}
           value={draft.systemPrompt}
@@ -191,14 +183,11 @@ export const ChatSection = memo(function ChatSection({
       </label>
 
       <p className="settings-drawer__hint">
-        {t(
-          '这里定义的是角色的长期说话边界。建议重点写语气、关系感和回答风格，不要塞过长的一次性任务指令。',
-          'This is the long-term voice and relationship of the character. Focus on tone, persona, and how the character relates to you — avoid one-off task instructions.',
-        )}
+        {ti('settings.chat.system_prompt_hint')}
       </p>
 
       <div className="settings-choice-field settings-choice-field--pet-model">
-        <span className="settings-choice-field__label">{t('角色模型', 'Live2D model')}</span>
+        <span className="settings-choice-field__label">{ti('settings.chat.live2d_model')}</span>
         <div className="settings-choice-grid" role="list">
           {petModelPresets.map((preset) => {
             const selected = draft.petModelId === preset.id
@@ -228,21 +217,18 @@ export const ChatSection = memo(function ChatSection({
       <div className="settings-drawer__card">
         <div className="settings-section__title-row">
           <div>
-            <h5>{t('角色专属语音', 'Voice for this character')}</h5>
+            <h5>{ti('settings.chat.character_voice')}</h5>
             <p className="settings-drawer__hint">
-              {t(
-                '只改音色和朗读风格。完整的提供商和密钥配置请到「语音输出」选项卡。',
-                'Tune the voice id and speaking instructions. Provider and API credentials live in the Speech Output tab.',
-              )}
+              {ti('settings.chat.character_voice_hint')}
             </p>
           </div>
         </div>
 
         <label>
-          <span>{t('音色 / Voice ID', 'Voice ID')}</span>
+          <span>{ti('settings.chat.voice_id')}</span>
           <input
             value={draft.speechOutputVoice}
-            placeholder={t('例如 female-shaonv、zh-CN-XiaoxiaoNeural', 'e.g. female-shaonv, zh-CN-XiaoxiaoNeural')}
+            placeholder={ti('settings.chat.voice_id_placeholder')}
             onChange={(event) =>
               setDraft((prev) => ({ ...prev, speechOutputVoice: event.target.value }))
             }
@@ -250,14 +236,11 @@ export const ChatSection = memo(function ChatSection({
         </label>
 
         <label>
-          <span>{t('朗读风格说明', 'Speaking instructions')}</span>
+          <span>{ti('settings.chat.speaking_instructions')}</span>
           <textarea
             rows={3}
             value={draft.speechOutputInstructions}
-            placeholder={t(
-              '例如 "温柔，略带沙哑" —— 部分提供商支持',
-              'e.g. "gentle, slightly husky" — supported by some providers',
-            )}
+            placeholder={ti('settings.chat.speaking_instructions_placeholder')}
             onChange={(event) =>
               setDraft((prev) => ({ ...prev, speechOutputInstructions: event.target.value }))
             }
@@ -273,8 +256,8 @@ export const ChatSection = memo(function ChatSection({
           disabled={importingPetModel}
         >
           {importingPetModel
-            ? t('导入模型中...', 'Importing...')
-            : t('导入本地 Live2D 模型', 'Import local Live2D model')}
+            ? ti('settings.chat.importing_model')
+            : ti('settings.chat.import_model')}
         </button>
 
         <button
@@ -283,29 +266,26 @@ export const ChatSection = memo(function ChatSection({
           onClick={handleUpdateCurrentProfile}
           disabled={!hasActiveProfile}
           title={hasActiveProfile
-            ? t('把当前修改写回到选中的角色档案', 'Write current edits back to the selected profile')
-            : t('没有选中任何档案', 'No profile selected')}
+            ? ti('settings.chat.update_profile_title')
+            : ti('settings.chat.no_profile_selected')}
         >
-          {t('更新当前档案', 'Update current profile')}
+          {ti('settings.chat.update_profile')}
         </button>
 
         <button
           type="button"
           className="ghost-button"
           onClick={handleCreateProfile}
-          title={t('把当前设置另存为一个新的角色档案', 'Save current settings as a new profile')}
+          title={ti('settings.chat.new_profile_title')}
         >
-          {t('新建角色档案', 'New profile')}
+          {ti('settings.chat.new_profile')}
         </button>
       </div>
 
       <p className="settings-drawer__hint">
         {petModel?.description ?? ''}
         {' '}
-        {t(
-          '选择 `.model3.json` 文件后，应用会把整套模型复制到本地目录，后续切换不需要重新打包。',
-          'Pick a `.model3.json` file. The app copies the whole model folder into the local directory so you can switch between models without rebuilding.',
-        )}
+        {ti('settings.chat.model_import_hint')}
       </p>
 
       {petModelStatus ? (

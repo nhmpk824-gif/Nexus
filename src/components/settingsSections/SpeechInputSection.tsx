@@ -17,7 +17,7 @@ import {
   switchSpeechInputProvider,
   updateCurrentSpeechInputProviderProfile,
 } from '../../lib/speechProviderProfiles'
-import { resolveLocalizedText } from '../../lib/uiLanguage'
+import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type { AppSettings, ServiceConnectionCapability } from '../../types'
 import { UrlInput } from './UrlInput'
 
@@ -42,8 +42,8 @@ export const SpeechInputSection = memo(function SpeechInputSection({
   onRunSpeechInputConnectionTest,
   renderSpeechInputTestResult,
 }: SpeechInputSectionProps) {
-  const t = (zhCN: string, enUS: string) =>
-    resolveLocalizedText(draft.uiLanguage, { 'zh-CN': zhCN, 'en-US': enUS })
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) =>
+    pickTranslatedUiText(draft.uiLanguage, key)
   const speechInputProvider = getSpeechInputProviderPreset(draft.speechInputProviderId)
   const speechInputModelOptions = getSpeechInputModelOptions(draft.speechInputProviderId)
   const isSenseVoiceSpeechInput = isSenseVoiceSpeechInputProvider(draft.speechInputProviderId)
@@ -53,13 +53,10 @@ export const SpeechInputSection = memo(function SpeechInputSection({
   const showSpeechInputCredentials = !isLocalSpeechInput
   const speechInputVolcengineCredentials = parseVolcengineCredentialParts(draft.speechInputApiKey)
   const speechInputModelLabel = isSenseVoiceSpeechInput
-    ? t('SenseVoice 模型', 'SenseVoice model')
-    : t('语音输入模型', 'Speech input model')
+    ? ti('settings.speech_input.sense_voice_model')
+    : ti('settings.speech_input.model')
   const speechInputModelHint = isSenseVoiceSpeechInput
-    ? t(
-        '需要先把 sherpa-onnx-sense-voice-zh-en-2024-07-17 目录放到 `sherpa-models` 下。10秒音频仅需70ms，中文识别准确率极高。',
-        'First drop the `sherpa-onnx-sense-voice-zh-en-2024-07-17` directory into `sherpa-models`. 10 s of audio only takes ~70 ms and Chinese recognition accuracy is excellent.',
-      )
+    ? ti('settings.speech_input.sense_voice_hint')
     : ''
 
   function applySpeechInputPreset(providerId: string) {
@@ -82,12 +79,9 @@ export const SpeechInputSection = memo(function SpeechInputSection({
     <section className={`settings-section ${active ? 'is-active' : 'is-hidden'}`}>
       <div className="settings-section__title-row">
         <div>
-          <h4>{t('语音输入 STT', 'Speech Input (STT)')}</h4>
+          <h4>{ti('settings.speech_input.title')}</h4>
           <p className="settings-drawer__hint">
-            {t(
-              '支持浏览器本地识别，也支持内置云端语音转文字。',
-              'Supports in-browser recognition as well as built-in cloud speech-to-text.',
-            )}
+            {ti('settings.speech_input.hint')}
           </p>
         </div>
         <button
@@ -97,13 +91,13 @@ export const SpeechInputSection = memo(function SpeechInputSection({
           disabled={testingTarget === 'speech-input'}
         >
           {testingTarget === 'speech-input'
-            ? t('测试中...', 'Testing...')
-            : t('测试语音输入', 'Test speech input')}
+            ? ti('settings.speech_input.testing')
+            : ti('settings.speech_input.test')}
         </button>
       </div>
 
       <label>
-        <span>{t('语音输入提供商', 'Speech input provider')}</span>
+        <span>{ti('settings.speech_input.provider')}</span>
         <select
           value={draft.speechInputProviderId}
           onChange={(event) => applySpeechInputPreset(event.target.value)}
@@ -117,16 +111,16 @@ export const SpeechInputSection = memo(function SpeechInputSection({
       <p className="settings-drawer__hint">
         {speechInputProvider.notes}
         {speechInputProvider.baseUrl
-          ? ` ${t('默认地址：', 'Default endpoint: ')}${speechInputProvider.baseUrl}`
+          ? ` ${ti('settings.speech_input.default_endpoint')}${speechInputProvider.baseUrl}`
           : ''}
         {speechInputProvider.defaultModel
-          ? `${t('，默认模型：', ' · Default model: ')}${speechInputProvider.defaultModel}`
+          ? `${ti('settings.speech_input.default_model')}${speechInputProvider.defaultModel}`
           : ''}
       </p>
 
       {showSpeechInputBaseUrl ? (
         <label>
-          <span>{t('语音输入接口地址', 'Speech input endpoint URL')}</span>
+          <span>{ti('settings.speech_input.endpoint_url')}</span>
           <UrlInput
             value={draft.speechInputApiBaseUrl}
             onChange={(event) =>
@@ -142,7 +136,7 @@ export const SpeechInputSection = memo(function SpeechInputSection({
         <>
           <div className="settings-grid settings-grid--two">
             <label>
-              <span>{t('火山 App ID', 'Volcengine App ID')}</span>
+              <span>{ti('settings.speech_input.volcengine_app_id')}</span>
               <input
                 value={speechInputVolcengineCredentials.appId}
                 onChange={(event) =>
@@ -154,7 +148,7 @@ export const SpeechInputSection = memo(function SpeechInputSection({
             </label>
 
             <label>
-              <span>{t('火山访问令牌', 'Volcengine access token')}</span>
+              <span>{ti('settings.speech_input.volcengine_token')}</span>
               <input
                 type="password"
                 value={speechInputVolcengineCredentials.accessToken}
@@ -168,15 +162,12 @@ export const SpeechInputSection = memo(function SpeechInputSection({
           </div>
 
           <p className="settings-drawer__hint">
-            {t(
-              '这里分开填写即可，保存时会自动拼成 `APP_ID:ACCESS_TOKEN`。如果你复制的是带标签的两行文本，也可以直接粘进"访问令牌"一栏试一下。',
-              'Fill these in separately — on save they are combined into `APP_ID:ACCESS_TOKEN`. If you copied a labeled two-line block, you can also paste it straight into the access token field.',
-            )}
+            {ti('settings.speech_input.volcengine_credential_hint')}
           </p>
         </>
       ) : showSpeechInputCredentials ? (
         <label>
-          <span>{t('语音输入密钥', 'Speech input API key')}</span>
+          <span>{ti('settings.speech_input.api_key')}</span>
           <input
             type="password"
             value={draft.speechInputApiKey}
@@ -223,7 +214,7 @@ export const SpeechInputSection = memo(function SpeechInputSection({
       ) : null}
 
       <label>
-        <span>{t('识别语言', 'Recognition language')}</span>
+        <span>{ti('settings.speech_input.recognition_lang')}</span>
         <input
           value={draft.speechRecognitionLang}
           onChange={(event) =>
@@ -237,10 +228,10 @@ export const SpeechInputSection = memo(function SpeechInputSection({
 
       {draft.speechInputProviderId === 'zhipu-stt' ? (
         <label>
-          <span>{t('热词（提升人名/专有名词识别）', 'Hotwords (improves recognition of names and proper nouns)')}</span>
+          <span>{ti('settings.speech_input.hotwords')}</span>
           <input
             value={draft.speechInputHotwords}
-            placeholder={t('周传雄,黄昏,以逗号分隔', 'e.g. Steve Chou, Dusk, comma separated')}
+            placeholder={ti('settings.speech_input.hotwords_placeholder')}
             onChange={(event) =>
               setDraft((prev) => ({
                 ...prev,
@@ -249,10 +240,7 @@ export const SpeechInputSection = memo(function SpeechInputSection({
             }
           />
           <p className="settings-drawer__hint">
-            {t(
-              '容易被识别错的人名、歌名、专有名词，用逗号分隔，最多 100 个。',
-              'Easily misrecognized names, song titles and proper nouns, comma separated, up to 100 entries.',
-            )}
+            {ti('settings.speech_input.hotwords_hint')}
           </p>
         </label>
       ) : null}
