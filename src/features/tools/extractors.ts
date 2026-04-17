@@ -109,13 +109,21 @@ function cleanSttNoise(text: string) {
 // provider) handles 的/了/过/etc. natively, and our previous aggressive
 // pipeline kept shredding real queries into broken keyword soup. See
 // feedback_nexus_trust_downstream_providers.md.
-export function extractSearchQuery(content: string) {
-  const cleaned = normalizeToolText(
+//
+// Exported separately from extractSearchQuery so queryRewrite.ts can share the
+// same framing-strip logic — the two regex lists used to drift and the
+// downstream rewrite pipeline kept producing "能 XXX 的 吗 歌词"-style noise.
+export function stripSearchCommandFraming(content: string) {
+  return normalizeToolText(
     content
       .replace(SEARCH_QUERY_TITLE_BRACKET_PATTERN, '')
       .replace(SEARCH_META_PREFIX_PATTERN, '')
       .replace(SEARCH_QUERY_TRAILING_PARTICLE_PATTERN, ''),
   )
+}
+
+export function extractSearchQuery(content: string) {
+  const cleaned = stripSearchCommandFraming(content)
   if (!cleaned) {
     return ''
   }

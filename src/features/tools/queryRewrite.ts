@@ -1,4 +1,5 @@
 import { normalizeIntentText, stripConversationPrefix } from '../intent/preprocess.ts'
+import { stripSearchCommandFraming } from './extractors.ts'
 
 export type SearchQueryRewriteResult = {
   rawQuery: string
@@ -214,7 +215,14 @@ export function rewriteSearchQuery(query: string): SearchQueryRewriteResult {
   const rawQuery = String(query ?? '')
   const normalizedQuery = normalizeWhitespace(rawQuery)
   const isLyricsQuery = SEARCH_LYRICS_PATTERN.test(normalizedQuery)
-  const searchTopic = isLyricsQuery ? extractLyricsTopic(normalizedQuery) : stripSearchDecorations(normalizedQuery)
+  // Prefer the canonical command-framing stripper from extractors.ts — this
+  // file's SEARCH_META_PREFIX_PATTERN used to lag behind (missing 那/诶/嗯
+  // leading particles, missing 找一下 in the filler list), which let phrases
+  // like "那你能帮我找一下 X 的歌词吗" fall through and generate the
+  // "能 X 的 吗 歌词" garbage query that shipped to Tavily. Fallback to the
+  // raw normalized text if framing-strip eats the whole string.
+  const preCleaned = stripSearchCommandFraming(normalizedQuery) || normalizedQuery
+  const searchTopic = isLyricsQuery ? extractLyricsTopic(preCleaned) : stripSearchDecorations(preCleaned)
   const facet = isLyricsQuery
     ? '歌词'
     : (/(?:官网|官方网站|网址|链接)/iu.test(normalizedQuery)
