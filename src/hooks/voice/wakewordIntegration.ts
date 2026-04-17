@@ -103,7 +103,14 @@ const WAKEWORD_ACK_STATUS_PHRASES = [
 // produces during this window is lost (VAD doesn't buffer pre-subscribe
 // audio), so keep it as short as possible — just enough for the renderer
 // to set up the subscription before the next ScriptProcessor frame.
-const WAKEWORD_ACK_DELAY_MS = 120
+// ScriptProcessor emits frames every ~64 ms (1024 samples @ 16 kHz); one
+// macrotask turn (~4-8 ms typical) is plenty for the subscription to
+// register before the next frame, so 30 ms leaves ~34 ms of headroom
+// without swallowing a full audio frame of the user's follow-up command.
+// Also shortens how long `wakewordAcknowledgingRef` stays true, which is
+// what actually debounces a second wake hit if the user says the wake
+// word twice quickly.
+const WAKEWORD_ACK_DELAY_MS = 30
 
 function pickAckStatus() {
   return WAKEWORD_ACK_STATUS_PHRASES[

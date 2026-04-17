@@ -178,6 +178,12 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
 
     await new Promise((resolve) => {
       const stream = result.pcmStream
+      // Pass-local flag so we can distinguish "provider returned an empty
+      // stream" from "provider streamed some audio". Observed after long
+      // plays where the upstream socket is half-closed by the time the next
+      // segment lands — the stream fires `end` immediately without `data`,
+      // and the renderer ends up silently 'finishing without playback'.
+      let streamYieldedData = false
 
       const flushBufferedSamples = (force = false) => {
         while (bufferedSampleCount > 0) {
@@ -229,6 +235,7 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
           return
         }
 
+        streamYieldedData = true
         const merged = residual.length > 0 ? Buffer.concat([residual, chunk]) : chunk
         const usableLength = merged.length - (merged.length % 2)
         if (usableLength > 0) {
@@ -247,6 +254,21 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
           }
         }
         flushBufferedSamples(true)
+
+        if (!streamYieldedData && !session.closed) {
+          // Empty PCM stream — surface it as an explicit error so the
+          // renderer controller fails fast and upstream can fall back to
+          // direct-speech instead of silently 'finishing without playback'.
+          console.warn(
+            '[TTS-Stream] remote pcmStream ended without emitting any data for text:',
+            text?.slice(0, 80),
+          )
+          emit(session.sender, {
+            type: 'error',
+            requestId: session.requestId,
+            message: 'TTS 远端未返回任何音频数据。',
+          })
+        }
         resolve()
       })
 

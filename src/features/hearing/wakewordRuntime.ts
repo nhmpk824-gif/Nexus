@@ -50,7 +50,14 @@ type WakewordRuntimeOptions = {
   retryMaxMs?: number
 }
 
-const DEFAULT_TRIGGER_COOLDOWN_MS = 1_500
+// Lowered from 1500 ms: the 1.5 s cooldown was long enough that a user
+// repeating the wake word after a missed session (noSpeechTimer tore down
+// the VAD, user re-invokes) could still hit the cooldown guard on the
+// second call. 500 ms is still well above the ~300 ms typical gap between
+// two naturally-pronounced wake-word utterances, so it filters the real
+// double-fire (engine re-hits on the tail audio of a single invocation)
+// without blocking deliberate re-invocations.
+const DEFAULT_TRIGGER_COOLDOWN_MS = 500
 const DEFAULT_RETRY_BASE_MS = 1_200
 const DEFAULT_RETRY_MAX_MS = 10_000
 

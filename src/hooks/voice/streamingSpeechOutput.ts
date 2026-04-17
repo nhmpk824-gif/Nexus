@@ -45,6 +45,13 @@ export function createStreamingSpeechOutputController(
   const busEmit = options?.busEmit
   const speechGeneration = options?.speechGeneration ?? 0
   const providerId = speechSettings.speechOutputProviderId
+  // Hard ceiling on how long we'll wait for the first audio chunk after the
+  // stream has been started. Catches providers whose socket is half-closed
+  // after a long play — observed as the "text rendered but no audio on the
+  // next turn" bug. Shorter than the chat-turn wait (12 s) so the upstream
+  // handler can fall back to direct-speech before the user gives up.
+  const FIRST_AUDIO_TIMEOUT_MS = 6_000
+  let firstAudioWatchdog: ReturnType<typeof setTimeout> | null = null
   let segmentCounter = 0
   let firstAudioEmitted = false
   let started = false
@@ -76,6 +83,10 @@ export function createStreamingSpeechOutputController(
 
       if (!firstAudioEmitted) {
         firstAudioEmitted = true
+        if (firstAudioWatchdog !== null) {
+          clearTimeout(firstAudioWatchdog)
+          firstAudioWatchdog = null
+        }
         busEmit?.({
           type: 'tts:first_audio',
           speechGeneration,
@@ -129,6 +140,10 @@ export function createStreamingSpeechOutputController(
     // future regression where the bridge returns undefined cannot throw from
     // cancel/abort paths and strand the active controller.
     if (typeof unsubscribe === 'function') unsubscribe()
+    if (firstAudioWatchdog !== null) {
+      clearTimeout(firstAudioWatchdog)
+      firstAudioWatchdog = null
+    }
     runtime.setActiveController?.(null)
   }
 
@@ -198,6 +213,16 @@ export function createStreamingSpeechOutputController(
       volume: speechSettings.speechVolume,
     }).then(() => {
       streamStarted = true
+      // Arm the first-audio watchdog. If the provider never sends a chunk
+      // within FIRST_AUDIO_TIMEOUT_MS we fail the controller explicitly,
+      // which lets the upstream chat handler fall back to direct-speech.
+      if (firstAudioWatchdog === null && !settled && !aborted) {
+        firstAudioWatchdog = setTimeout(() => {
+          firstAudioWatchdog = null
+          if (firstAudioEmitted || settled || aborted) return
+          fail(new Error('流式 TTS 超过 6 秒仍未产出音频。'))
+        }, FIRST_AUDIO_TIMEOUT_MS)
+      }
     })
 
     return startPromise
