@@ -1,54 +1,108 @@
 name: Release Build
 
+# Two trigger modes:
+#
+#  - Automatic: push a `v*.*.*` tag (`git tag vX.Y.Z && git push origin vX.Y.Z`).
+#    Creates a GitHub Release for the tag if one doesn't already exist,
+#    then builds + uploads installers for all three platforms in parallel.
+#
+#  - Manual (`workflow_dispatch` with a `tag` input): lets you re-build
+#    installers for an already-published tag without deleting or re-pushing
+#    it. Useful when a platform build failed and you want to backfill its
+#    asset — e.g. the macOS .dmg for a version tagged on Windows.
+#
+# Upload is idempotent: `gh release upload --clobber` overwrites any asset
+# with the same filename, so rerunning is safe.
+#
+# Neither the Windows nor macOS builds are code-signed — Gatekeeper /
+# SmartScreen will warn on first launch. Wire in Apple Developer ID and
+# Windows signing certificates as repo secrets when available and flip
+# signAndEditExecutable back on.
+
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v0.1.4)"
-        required: true
+        description: 'Release tag (e.g. v0.2.4). Leave blank if triggered by tag push.'
+        required: false
 
 permissions:
   contents: write
 
 jobs:
-  create-draft:
+  ensure-release:
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create.outputs.upload_url }}
+      tag: ${{ steps.resolve.outputs.tag }}
     steps:
-      - name: Create draft release
-        id: create
+      - name: Resolve tag
+        id: resolve
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$REF_NAME"
+          fi
+          if [ -z "$tag" ] || [ "$tag" = "main" ]; then
+            echo "Tag is empty or looks like a branch name (got '$tag'). Specify the tag via workflow_dispatch input." >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create release if missing
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+        shell: bash
         run: |
-          upload_url=$(gh api repos/${{ github.repository }}/releases \
-            -f tag_name="${{ github.event.inputs.tag }}" \
-            -f target_commitish="main" \
-            -f name="${{ github.event.inputs.tag }}" \
-            -F draft=true \
-            -f body="## Nexus ${{ github.event.inputs.tag }}" \
-            --jq '.upload_url')
-          echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — will append assets to it."
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" \
+              --repo "${{ github.repository }}" \
+              --title "$TAG" \
+              --notes "## Nexus $TAG" \
+              --target "${{ github.sha }}"
+          fi
 
   build:
-    needs: create-draft
+    needs: ensure-release
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
             cmd: npx electron-builder --win nsis --publish never --config.win.signAndEditExecutable=false
+            assets: |
+              release/*.exe
+              release/*.exe.blockmap
           - os: macos-latest
             cmd: npx electron-builder --mac dmg zip --publish never
+            assets: |
+              release/*.dmg
+              release/*.zip
           - os: ubuntu-latest
-            cmd: npx electron-builder --linux AppImage deb --publish never
+            cmd: npx electron-builder --linux AppImage deb tar.gz --publish never
+            assets: |
+              release/*.AppImage
+              release/*.deb
+              release/*.tar.gz
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag }}
+          ref: ${{ needs.ensure-release.outputs.tag }}
 
       - uses: actions/setup-node@v4
         with:
@@ -60,31 +114,38 @@ jobs:
       - run: npm run build
         name: Vite build
 
-      - run: ${{ matrix.cmd }}
-        name: Package installer
+      - name: Package installer
+        env:
+          # Disable Apple codesign when no cert is configured so the build
+          # still produces a working (unnotarised) .app / .dmg.
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.os == 'macos-latest' && 'false' || '' }}
+        run: ${{ matrix.cmd }}
 
       - name: List built artifacts
         shell: bash
-        run: ls -lh release/
+        run: ls -lh release/ || true
 
-      - name: Upload assets to draft release
+      - name: Upload assets to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.ensure-release.outputs.tag }}
         shell: bash
         run: |
-          tag="${{ github.event.inputs.tag }}"
           shopt -s nullglob
-          files=(release/*.exe release/*.dmg release/*.zip release/*.AppImage release/*.deb)
-          for f in "${files[@]}"; do
-            echo "Uploading $f ..."
-            gh release upload "$tag" "$f"
-          done
+          files=()
+          while IFS= read -r line; do
+            # Expand each glob line against the workspace
+            for f in $line; do
+              [ -f "$f" ] && files+=("$f")
+            done
+          done <<< '${{ matrix.assets }}'
 
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ github.event.inputs.tag }}" --repo ${{ github.repository }} --draft=false
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No matching artifacts found for ${{ matrix.os }} — failing so the missing platform is visible." >&2
+            exit 1
+          fi
+
+          for f in "${files[@]}"; do
+            echo "Uploading $f"
+            gh release upload "$TAG" "$f" --clobber --repo "${{ github.repository }}"
+          done
