@@ -1,5 +1,11 @@
 const STAGE_DIRECTION_STRIP_PATTERN = /[[\uFF08(\u3010][^\uFF09)\u3011\]]{1,32}[\uFF09)\u3011\]]/gu
 const MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/giu
+// Paired markdown emphasis: **bold**, __bold__. Keeps the inner text,
+// drops the delimiters so TTS doesn't read "星星" or choke on the stars.
+// Deliberately non-greedy and single-line to avoid swallowing paragraphs.
+const MARKDOWN_EMPHASIS_PATTERN = /(\*\*|__)([^\n]+?)\1/gu
+// `inline code` — keep the contents, drop the backticks.
+const MARKDOWN_INLINE_CODE_PATTERN = /`([^`\n]+)`/gu
 const URL_PATTERN = /https?:\/\/[^\s)]+/giu
 const SOFT_SEPARATOR_PATTERN = /\s*[|·]+\s*/gu
 const SLASH_SEPARATOR_PATTERN = /\s*\/\s*/gu
@@ -21,6 +27,8 @@ export function normalizeVoiceDedupText(content: string) {
 export function prepareTextForTts(content: string) {
   const normalized = String(content ?? '')
     .replace(MARKDOWN_LINK_PATTERN, '$1')
+    .replace(MARKDOWN_EMPHASIS_PATTERN, '$2')
+    .replace(MARKDOWN_INLINE_CODE_PATTERN, '$1')
     .replace(URL_PATTERN, ' ')
     .replace(STAGE_DIRECTION_STRIP_PATTERN, ' ')
     .replace(SOFT_SEPARATOR_PATTERN, '，')

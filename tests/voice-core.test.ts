@@ -240,6 +240,23 @@ test('prepareTextForTts collapses duplicate weather labels and separators', () =
   )
 })
 
+test('prepareTextForTts strips markdown emphasis and inline code', () => {
+  // Observed in the wild — LLM replies are full of **bold** markers, and
+  // the TTS providers used to read them as "星星" or choke on the stars.
+  assert.equal(
+    prepareTextForTts('开车大约需要**2小时**，建议自驾过去'),
+    '开车大约需要2小时，建议自驾过去',
+  )
+  assert.equal(
+    prepareTextForTts('__重要提示__：路况可能会变化'),
+    '重要提示：路况可能会变化',
+  )
+  assert.equal(
+    prepareTextForTts('跑 `npm run build` 就行'),
+    '跑 npm run build 就行',
+  )
+})
+
 test('normalizeVoiceDedupText normalizes whitespace and case', () => {
   assert.equal(
     normalizeVoiceDedupText('  Hello   WORLD  '),
