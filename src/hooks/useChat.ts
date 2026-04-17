@@ -219,10 +219,18 @@ export function useChat(ctx: UseChatContext) {
   }, [])
 
   const appendSystemMessage = useCallback((content: string, tone: ChatMessageTone = 'neutral') => {
+    // Cap system-message length so a stack trace or serialized payload cannot
+    // tear the chat list layout even if the CSS guard regresses. 500 chars
+    // keeps the first line plus enough context to diagnose without the full
+    // wall of text — users who need more can copy from DevTools / logs.
+    const MAX_SYSTEM_MESSAGE_CHARS = 500
+    const trimmed = content.length > MAX_SYSTEM_MESSAGE_CHARS
+      ? `${content.slice(0, MAX_SYSTEM_MESSAGE_CHARS - 1)}…`
+      : content
     appendChatMessage({
       id: createId('msg'),
       role: 'system',
-      content,
+      content: trimmed,
       tone,
       createdAt: new Date().toISOString(),
     })
@@ -234,18 +242,22 @@ export function useChat(ctx: UseChatContext) {
     const speechContent = options.speechContent?.trim() ?? ''
     const createdAt = new Date().toISOString()
 
-    // Dedupe gate: drop identical broadcasts within 90s. StrictMode double-mount
-    // and race conditions between autonomy tick paths can otherwise produce
-    // twin 【早报】/【自主】 notices with the same content.
-    const dedupeKey = chatContent || bubbleContent || speechContent
+    // Dedupe gate: drop near-identical broadcasts within 10min. StrictMode
+    // double-mount and cross-category autonomy paths (proactive speak /
+    // scheduled / context trigger / brief) can otherwise produce twin
+    // notices for the same underlying thought. We key on bubbleContent —
+    // the label-free core text — so 【早报】X and 【自主】X collapse to
+    // one entry instead of bypassing the gate through their prefix.
+    const DEDUPE_WINDOW_MS = 10 * 60_000
+    const dedupeKey = bubbleContent || speechContent || chatContent
     if (dedupeKey) {
       const now = Date.now()
       const recent = recentCompanionNoticesRef.current
       for (const [key, ts] of recent) {
-        if (now - ts > 90_000) recent.delete(key)
+        if (now - ts > DEDUPE_WINDOW_MS) recent.delete(key)
       }
       const lastTs = recent.get(dedupeKey)
-      if (lastTs !== undefined && now - lastTs < 90_000) {
+      if (lastTs !== undefined && now - lastTs < DEDUPE_WINDOW_MS) {
         return
       }
       recent.set(dedupeKey, now)

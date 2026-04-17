@@ -452,6 +452,10 @@
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: none;
+  /* Let children honour their own max-width; without this flex children
+   * refuse to shrink below their intrinsic content width, which lets long
+   * error stacks push the whole list past the container edge. */
+  min-width: 0;
 }
 
 .message-list {
@@ -483,6 +487,11 @@
   backdrop-filter: blur(16px);
   animation: message-enter 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
   transition: all 0.2s ease-in-out;
+  /* Force long unbroken tokens (URLs, stack frames, base64 blobs) to wrap
+   * instead of overflowing the bubble and tearing the list layout. */
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .message-bubble.assistant {
