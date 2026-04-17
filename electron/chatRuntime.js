@@ -172,6 +172,17 @@ export function buildChatRequest(payload, options = {}) {
         }))
       : undefined
 
+    // Wrap system as a single text block with cache_control: ephemeral so the
+    // Anthropic prompt cache can reuse the rendered prefix across turns.
+    // Render order is tools → system → messages, so this one breakpoint
+    // caches tool definitions + system together. Volatile per-turn content
+    // (current date/time, correction hints) is injected into the last user
+    // message by systemPromptBuilder so the cached prefix stays byte-stable.
+    // Prompt caching is GA — no anthropic-beta header needed.
+    const systemBlocks = normalizedMessages.system
+      ? [{ type: 'text', text: normalizedMessages.system, cache_control: { type: 'ephemeral' } }]
+      : undefined
+
     return {
       providerId,
       protocol,
@@ -185,7 +196,7 @@ export function buildChatRequest(payload, options = {}) {
         messages: normalizedMessages.messages,
         max_tokens: payload?.maxTokens ?? 500,
         temperature: payload?.temperature ?? 0.8,
-        ...(normalizedMessages.system ? { system: normalizedMessages.system } : {}),
+        ...(systemBlocks ? { system: systemBlocks } : {}),
         ...(stream ? { stream: true } : {}),
         ...(anthropicTools ? { tools: anthropicTools } : {}),
       }),

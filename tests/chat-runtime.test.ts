@@ -41,7 +41,11 @@ test('anthropic requests use the messages endpoint and separate the system promp
 
   assert.equal(request.endpoint, 'https://api.anthropic.com/v1/messages')
   assert.equal(request.headers['x-api-key'], 'test-key')
-  assert.equal(body.system, 'You are helpful.')
+  // System is emitted as a single text block with cache_control: ephemeral so
+  // the Anthropic prompt cache can reuse the rendered prefix across turns.
+  assert.deepEqual(body.system, [
+    { type: 'text', text: 'You are helpful.', cache_control: { type: 'ephemeral' } },
+  ])
   assert.deepEqual(body.messages, [{ role: 'user', content: 'Hello there.' }])
 })
 

@@ -114,20 +114,16 @@ export async function buildSystemPrompt(
   // the model a continuous sense of "what we have been through together".
   const narrativeSection = formatNarrativeForPrompt()
 
-  const now = new Date()
-  const currentDateTime = now.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    weekday: 'long',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  // NOTE: currentDateTime is deliberately kept OUT of the system prompt so the
+  // prefix stays byte-stable across requests and the Anthropic prompt cache
+  // (see electron/chatRuntime.js `cache_control: ephemeral`) can actually hit.
+  // It is injected into the final user message as a <system-reminder> block
+  // below — the Claude Code-style pattern that keeps time-sensitive context
+  // fresh without invalidating the cached prefix.
 
   const header = [
     `你是用户的桌面 AI 陪伴体，名字叫 ${settings.companionName}。`,
     `用户名是 ${settings.userName}。`,
-    `当前日期时间：${currentDateTime}。`,
     '你的定位是 Live2D-first 的桌面伙伴，不是万能 Agent；请优先做好陪伴、回应、提醒与轻量协助。',
     '请保持温柔、自然、轻松，带一点二次元陪伴感，但不要过度表演，也不要机械复读。',
     '你的回答要简洁、直接，像真的在桌边陪伴和回应。只有在真正相关时，才自然引用记忆、桌面上下文或工具结果。',
@@ -245,6 +241,19 @@ function detectUserCorrection(messages: Array<{ role: string; content: ChatMessa
   return ''
 }
 
+function formatCurrentTimeReminder(): string {
+  const now = new Date()
+  const currentDateTime = now.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `<system-reminder>当前日期时间：${currentDateTime}。</system-reminder>`
+}
+
 async function toRequestMessages(
   settings: AppSettings,
   history: ChatMessage[],
@@ -272,12 +281,29 @@ async function toRequestMessages(
     systemContent = `${systemContent}\n\n${correctionHint}`
   }
 
+  // Inject current time as a <system-reminder> prefix on the most recent user
+  // message so the cached system prefix stays byte-stable. Mirrors the Claude
+  // Code pattern for time updates and mode transitions. Only the last user
+  // turn carries the reminder — earlier turns keep their historical content
+  // so conversation replay remains coherent.
+  const timeReminder = formatCurrentTimeReminder()
+  const augmentedMessages = contextMessages.slice()
+  for (let i = augmentedMessages.length - 1; i >= 0; i -= 1) {
+    if (augmentedMessages[i].role === 'user') {
+      augmentedMessages[i] = {
+        ...augmentedMessages[i],
+        content: `${timeReminder}\n\n${augmentedMessages[i].content}`,
+      }
+      break
+    }
+  }
+
   return [
     {
       role: 'system' as const,
       content: systemContent,
     },
-    ...contextMessages,
+    ...augmentedMessages,
   ]
 }
 
