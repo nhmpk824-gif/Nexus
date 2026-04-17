@@ -46,13 +46,27 @@ export type { UseChatContext } from './chat'
 const MAX_CHAT_MESSAGES = 500
 
 export function useChat(ctx: UseChatContext) {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => sanitizeLoadedMessages(loadChatMessages()))
-  // Timestamp marking when the current pane session started. Storage keeps
-  // the full archive (so the LLM still sees "what we talked about last
-  // night"), but the chat pane should only render messages produced after
-  // the user opened this pet instance. Callers filter the message array
-  // through this boundary before rendering; settings → 聊天记录 is how the
-  // user actually browses/searches the archived history.
+  // Snapshot the archive's message IDs on mount so the pane can filter
+  // them out. useChat lives at the app-root level (useAppController →
+  // useChat), so this ref seeds once at app start and never resets — in
+  // contrast to a PanelView-level snapshot which was wiped by React's
+  // remount cycle and ended up swallowing fresh STT transcripts.
+  //
+  // Storage (and the LLM context via messagesRef) still sees the full
+  // history; this ref only gates what the chat pane renders. Settings →
+  // 聊天记录 remains how the user browses older turns.
+  const initialArchiveRef = useRef<{ ids: Set<string>; messages: ChatMessage[] } | null>(null)
+  if (initialArchiveRef.current === null) {
+    const initial = sanitizeLoadedMessages(loadChatMessages())
+    initialArchiveRef.current = {
+      ids: new Set(initial.map((m) => m.id)),
+      messages: initial,
+    }
+  }
+  const [messages, setMessages] = useState<ChatMessage[]>(() => initialArchiveRef.current!.messages)
+  // Legacy field retained for backwards compatibility with any consumer
+  // still reading sessionStartAt; the real scoping now lives in
+  // archivedMessageIds (below).
   const sessionStartAtRef = useRef<number>(Date.now())
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -658,6 +672,7 @@ export function useChat(ctx: UseChatContext) {
   return {
     messages,
     sessionStartAt: sessionStartAtRef.current,
+    archivedMessageIds: initialArchiveRef.current.ids,
     input,
     busy,
     error,

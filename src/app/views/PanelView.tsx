@@ -78,15 +78,16 @@ export function PanelView({
             : runtimeSnapshot.petOnline || runtimeSnapshot.panelOnline
               ? '在线'
               : voiceStateLabel
-  // Pane-session scoping reverted — the ID-snapshot approach still
-  // stranded freshly appended STT/text messages in an edge case we
-  // didn't fully nail down on the first try, and a blank pane is much
-  // worse than a long one. Show the full list for now; revisit once we
-  // have a proper server-side session-bucketing layer instead of a
-  // render-time filter. The storage archive and the LLM's context path
-  // (messagesRef) were already operating on the full record, so nothing
-  // else regresses.
-  const visibleMessages = chat.messages
+  // Pane-session scoping: hide everything the archive already had when
+  // useChat mounted. useChat keeps the snapshot at app-root scope so it
+  // survives PanelView remounts (earlier attempts at 2b9134c / 8574360
+  // re-seeded on every remount and ended up eating freshly appended
+  // STT transcripts). Anything append()ed after boot — voice, text,
+  // tool result, system notice — has a fresh id and passes through.
+  const visibleMessages = useMemo(
+    () => chat.messages.filter((m) => !chat.archivedMessageIds.has(m.id)),
+    [chat.messages, chat.archivedMessageIds],
+  )
   const chatMessageCount = visibleMessages.filter((message) => message.role !== 'system').length
   const welcomeTitle = `${timeGreeting}，${settings.userName}`
   const welcomeBody = memory.memories[0]?.content
