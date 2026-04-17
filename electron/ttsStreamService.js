@@ -346,7 +346,22 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
     // chunks reuse the exact same combo instead of re-walking the fallback
     // chain (which otherwise stitches chunks together with different voices).
     if (result?.resolvedVoice && session.payload.voice !== result.resolvedVoice) {
+      // Loud warning: an in-session voice swap is the exact mechanism behind
+      // the "timbre changes when the pet speaks" reports. Pair this with the
+      // renderer-side [Voice] TTS dispatch log to see what the user asked for
+      // versus what the provider actually used.
+      console.warn('[TTS-Stream] provider swapped voice mid-session', {
+        requestId: session.requestId,
+        requestedVoice: session.payload.voice,
+        resolvedVoice: result.resolvedVoice,
+        usedFallback: Boolean(result.usedFallback),
+      })
       session.payload = { ...session.payload, voice: result.resolvedVoice }
+    } else if (result?.usedFallback) {
+      console.warn('[TTS-Stream] provider used fallback attempt', {
+        requestId: session.requestId,
+        voice: session.payload.voice,
+      })
     }
     if (result?.resolvedCluster && session.payload.model !== result.resolvedCluster) {
       session.payload = { ...session.payload, model: result.resolvedCluster }

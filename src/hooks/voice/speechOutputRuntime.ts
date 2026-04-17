@@ -61,6 +61,18 @@ export async function playSpeechOutputWithSettingsRuntime(
     throw new Error('当前环境未连接桌面客户端，无法使用内置语音播报。')
   }
 
+  // Trace which provider+voice is actually dispatching the turn. Timbre drift
+  // ("voice changes every time I speak") usually traces to the failover
+  // orchestrator picking a different candidate than the primary, or the
+  // Volcengine attempt plan falling back to BV001/BV002 on grantError. Pair
+  // this log with the [TTS-Stream] Volcengine fallback warning in
+  // electron/ttsStreamService.js to see the full story.
+  console.info('[Voice] TTS dispatch', {
+    provider: speechSettings.speechOutputProviderId,
+    model: speechSettings.speechOutputModel,
+    voice: speechSettings.speechOutputVoice,
+  })
+
   // Drive the streaming TTS controller with the full text so all segments
   // share a single TTS session. The electron side pins the resolved voice
   // and cluster after the first chunk, which prevents timbre drift across
