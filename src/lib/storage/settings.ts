@@ -72,7 +72,12 @@ const defaultSettings: AppSettings = {
   speechOutputFailoverEnabled: true,
   continuousVoiceModeEnabled: false,
   voiceActivityDetectionEnabled: true,
-  vadSensitivity: 'medium',
+  // Default raised to 'high' — the wake-word step already gates the
+  // session so aggressive VAD can't barge into dead air, and user reports
+  // on low-gain desktop mics consistently show the first post-wake command
+  // missed because 'medium' (threshold 0.3) waited for a louder onset
+  // than the speech actually had.
+  vadSensitivity: 'high',
   voiceInterruptionEnabled: false,
   voiceTriggerMode: 'direct_send',
   wakeWordEnabled: false,

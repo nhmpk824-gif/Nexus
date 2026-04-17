@@ -53,7 +53,12 @@ const VAD_PRESETS: Record<VadSensitivity, VadPreset> = {
     maxSpeechDuration: 20,
   },
   high: {
-    threshold: 0.22,
+    // Wake-word has already gated the session, so being aggressive here is
+    // low-risk. 0.18 picks up the first syllable on weak/desktop mics where
+    // the opening energy of a short command is commonly 0.1–0.3 peak — the
+    // user's report of "only the first sentence doesn't register" traces to
+    // a VAD that waited for a louder onset the first command never supplied.
+    threshold: 0.18,
     minSilenceDuration: 1.1,
     minSpeechDuration: 0.06,
     maxSpeechDuration: 20,
