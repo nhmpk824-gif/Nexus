@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { useUpdater } from '../../features/updater'
+import { useUpdater } from '../../features/updater/useUpdater'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type { TranslationParams } from '../../i18n'
 import type { UiLanguage } from '../../types'

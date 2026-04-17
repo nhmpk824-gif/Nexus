@@ -12,8 +12,8 @@ import { createBlinkState } from './live2d/blink'
 import { resolveExpressionSlot, resolveMotionGroup } from './live2d/expressions'
 import { applyLive2DFrame, type FrameRenderState } from './live2d/frameRender'
 import { layoutLive2DModel, MIN_CANVAS_HEIGHT, MIN_CANVAS_WIDTH } from './live2d/layout'
+import { clamp } from '../../../lib/common'
 import {
-  clamp,
   resolveAssetPath,
   type GazeTarget,
   type Live2DModelHandle,

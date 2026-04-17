@@ -1,4 +1,5 @@
 import type { AppSettings, ChatMessage, MemoryItem, PetMood, PresenceCategory } from '../../types'
+import { shorten } from '../../lib/common'
 
 export type PresenceLine = {
   text: string
@@ -15,11 +16,6 @@ type PresenceContext = {
 
 function pickRandom<T>(items: T[]) {
   return items[Math.floor(Math.random() * items.length)]
-}
-
-function shorten(text: string, maxLength: number) {
-  if (text.length <= maxLength) return text
-  return `${text.slice(0, maxLength - 1)}…`
 }
 
 function getTimePresenceLines(userName: string) {

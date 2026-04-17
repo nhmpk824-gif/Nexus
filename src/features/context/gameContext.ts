@@ -1,3 +1,5 @@
+import { shorten } from '../../lib/common'
+
 type GameContextSnapshot = {
   game: string
   connected: true
@@ -50,9 +52,4 @@ export function formatGameContext(ctx: GameContextSnapshot | null | undefined): 
     sections.join('\n\n'),
     'You can respond naturally to game events, like someone joining the game or a chat message. The user may also ask you to run game commands. Reply in the user\'s language.',
   ].join('\n\n')
-}
-
-function shorten(text: string, maxLength: number) {
-  if (text.length <= maxLength) return text
-  return `${text.slice(0, Math.max(0, maxLength - 1))}…`
 }

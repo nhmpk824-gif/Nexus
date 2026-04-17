@@ -56,7 +56,7 @@ const SettingsDrawer = lazy(async () => {
 })
 
 const OnboardingGuide = lazy(async () => {
-  const module = await import('../features/onboarding')
+  const module = await import('../features/onboarding/components/OnboardingGuide')
   return { default: module.OnboardingGuide }
 })
 

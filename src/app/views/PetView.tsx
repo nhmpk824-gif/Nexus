@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { hoverReactionMap, voiceStateLabelMap } from '../appSupport'
 import { MusicPopupCard, PetControlIcon, PetDialogBubble, PetThoughtBubble } from '../../components'
-import { resolveCharacterPreset } from '../../features/character'
+import { resolveCharacterPreset } from '../../features/character/presets'
 import { clamp } from '../../lib'
 import type { PetTouchZone } from '../../types'
 import type { UseAppControllerResult } from '../controllers/useAppController'

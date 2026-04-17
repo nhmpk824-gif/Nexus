@@ -1,4 +1,5 @@
 import type { DesktopContextRequest, DesktopContextSnapshot } from '../../types'
+import { shorten } from '../../lib/common'
 
 const MAX_ACTIVE_WINDOW_TITLE_LENGTH = 180
 const MAX_ACTIVE_WINDOW_APP_NAME_LENGTH = 80
@@ -78,9 +79,4 @@ export function formatDesktopContext(snapshot: DesktopContextSnapshot | null | u
     'Below is supplementary desktop context. Use it only when naturally relevant; do not force a reference. Reply in the user\'s language.',
     sections.join('\n\n'),
   ].join('\n\n')
-}
-
-function shorten(text: string, maxLength: number) {
-  if (text.length <= maxLength) return text
-  return `${text.slice(0, Math.max(0, maxLength - 1))}…`
 }

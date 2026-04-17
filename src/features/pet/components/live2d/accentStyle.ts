@@ -6,7 +6,7 @@
 // effects.
 
 import type { PetPerformanceAccent, PetPerformanceCue } from '../../performance'
-import { clamp } from './types'
+import { clamp } from '../../../../lib/common'
 
 export const PERFORMANCE_ACCENT_WINDOW_MS = 1_150
 

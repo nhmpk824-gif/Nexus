@@ -133,7 +133,11 @@ test('stt:finalizing from IDLE is a no-op (phase gate)', () => {
   const initial = createInitialVoiceSessionState()
   const result = reduceVoiceSession(initial, { type: 'stt:finalizing' })
   assert.equal(result.state.state, VoiceSessionStates.IDLE)
-  assert.deepEqual(result.effects, [])
+  // Emits a log warning so drift between the upstream STT driver and the
+  // reducer surfaces in the transition log instead of staying silent.
+  assert.equal(result.effects.length, 1)
+  assert.equal(result.effects[0].type, 'log')
+  assert.equal((result.effects[0] as { level: string }).level, 'warn')
 })
 
 test('stt:final from TRANSCRIBING advances to THINKING (LLM request in flight)', () => {
@@ -341,7 +345,8 @@ test('wake:detected from IDLE enters the transient WAKEWORD_DETECTED state', () 
 test('wake:detected outside IDLE is ignored (defensive)', () => {
   // If a wake hit arrives while we're already mid-session, the scheduler
   // is broken somewhere — don't let the reducer paper over it by flipping
-  // state out from under the active LISTENING.
+  // state out from under the active LISTENING. Emits a log warning so the
+  // broken scheduler signal surfaces in the transition log.
   const initial = withState(createInitialVoiceSessionState(), VoiceSessionStates.LISTENING)
   const result = reduceVoiceSession(initial, {
     type: 'wake:detected',
@@ -349,7 +354,9 @@ test('wake:detected outside IDLE is ignored (defensive)', () => {
     keyword: '小助手',
   })
   assert.equal(result.state.state, VoiceSessionStates.LISTENING)
-  assert.deepEqual(result.effects, [])
+  assert.equal(result.effects.length, 1)
+  assert.equal(result.effects[0].type, 'log')
+  assert.equal((result.effects[0] as { level: string }).level, 'warn')
 })
 
 test('wake:debounced from WAKEWORD_DETECTED rolls back to IDLE', () => {

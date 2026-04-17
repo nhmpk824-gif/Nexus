@@ -93,7 +93,14 @@ export function reduceVoiceSession(
 
     case 'stt:finalizing':
       if (current.state !== VoiceSessionStates.LISTENING) {
-        return { state: current, effects: [] }
+        return {
+          state: current,
+          effects: [{
+            type: 'log',
+            level: 'warn',
+            message: `voiceSession: stt:finalizing ignored from state=${current.state} (expected LISTENING)`,
+          }],
+        }
       }
       return {
         state: { ...current, state: VoiceSessionStates.TRANSCRIBING },
@@ -191,7 +198,14 @@ export function reduceVoiceSession(
       // Subsequent wake:debounced rolls us back; session:started promotes
       // to LISTENING.
       if (current.state !== VoiceSessionStates.IDLE) {
-        return { state: current, effects: [] }
+        return {
+          state: current,
+          effects: [{
+            type: 'log',
+            level: 'warn',
+            message: `voiceSession: wake:detected ignored from state=${current.state} (expected IDLE)`,
+          }],
+        }
       }
       return {
         state: {
@@ -205,9 +219,17 @@ export function reduceVoiceSession(
     case 'wake:debounced':
       // Rejected wake (cooldown / dedupe). If we were sitting in the
       // transient WAKEWORD_DETECTED, fall back to IDLE — the scheduler
-      // never actually opened a session.
+      // never actually opened a session. Other states are out-of-band
+      // debounce signals (no harm, but worth logging for drift detection).
       if (current.state !== VoiceSessionStates.WAKEWORD_DETECTED) {
-        return { state: current, effects: [] }
+        return {
+          state: current,
+          effects: [{
+            type: 'log',
+            level: 'warn',
+            message: `voiceSession: wake:debounced ignored from state=${current.state} (expected WAKEWORD_DETECTED)`,
+          }],
+        }
       }
       return {
         state: { ...current, state: VoiceSessionStates.IDLE },

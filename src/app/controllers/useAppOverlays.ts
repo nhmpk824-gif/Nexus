@@ -6,7 +6,7 @@ import {
   useState,
 } from 'react'
 import type { SettingsDrawerProps } from '../../components/SettingsDrawer'
-import type { OnboardingGuideProps } from '../../features/onboarding'
+import type { OnboardingGuideProps } from '../../features/onboarding/components/OnboardingGuide'
 import type { PetModelDefinition } from '../../features/pet'
 import {
   loadOnboardingCompleted,

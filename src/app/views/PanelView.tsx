@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { getLiveTranscriptLabel, getTimeGreeting, voiceStateLabelMap } from '../appSupport'
 import { ActivePlanStrip, MessageBubble } from '../../components'
-import { resolveCharacterPreset } from '../../features/character'
+import { resolveCharacterPreset } from '../../features/character/presets'
 import { shorten } from '../../lib'
 import type { UseAppControllerResult } from '../controllers/useAppController'
 

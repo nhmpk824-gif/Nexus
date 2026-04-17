@@ -14,7 +14,7 @@ import {
   resolvePerformanceAccentWindowMs,
 } from './accentStyle'
 import { updateBlink, type BlinkState } from './blink'
-import { clamp } from './types'
+import { clamp } from '../../../../lib/common'
 import type {
   CubismCoreModel,
   GazeTarget,

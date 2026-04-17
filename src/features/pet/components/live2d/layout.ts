@@ -4,7 +4,7 @@
 // card).  Live2DCanvas calls this from a useCallback wrapper.
 
 import type { PetModelDefinition } from '../../models'
-import { clamp } from './types'
+import { clamp } from '../../../../lib/common'
 import type { Live2DModelHandle, PixiApplication } from './types'
 
 export const MIN_CANVAS_WIDTH = 280

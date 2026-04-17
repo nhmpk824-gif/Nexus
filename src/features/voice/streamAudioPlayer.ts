@@ -1,3 +1,5 @@
+import { clamp } from '../../lib/common'
+
 type StreamAudioPlayerOptions = {
   initialBufferSeconds?: number
   onPlaybackStart?: () => void
@@ -11,10 +13,6 @@ const SCHEDULE_LOOKAHEAD_SECONDS = 0.02
 const CHUNK_TRANSITION_SMOOTH_MS = 2
 const STREAM_START_PREROLL_MS = 12
 const STREAM_START_RAMP_MS = 1
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
 
 function calculateChunkLevel(samples: Float32Array) {
   if (!samples.length) {

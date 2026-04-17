@@ -125,7 +125,10 @@ export function createStreamingSpeechOutputController(
   })
 
   function cleanup() {
-    unsubscribe()
+    // Preload contract returns an unsubscribe function, but guard the call so a
+    // future regression where the bridge returns undefined cannot throw from
+    // cancel/abort paths and strand the active controller.
+    if (typeof unsubscribe === 'function') unsubscribe()
     runtime.setActiveController?.(null)
   }
 

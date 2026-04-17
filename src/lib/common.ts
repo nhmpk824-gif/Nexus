@@ -4,7 +4,7 @@ export function clamp(value: number, min: number, max: number) {
 
 export function shorten(text: string, maxLength: number) {
   if (text.length <= maxLength) return text
-  return `${text.slice(0, maxLength - 1)}…`
+  return `${text.slice(0, Math.max(0, maxLength - 1))}…`
 }
 
 export function blobToBase64(blob: Blob) {

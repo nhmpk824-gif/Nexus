@@ -69,10 +69,6 @@ declare global {
   }
 }
 
-export function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
-
 export function resolveAssetPath(relativePath: string) {
   const normalizedPath = relativePath.replace(/^\.\//, '')
   return new URL(normalizedPath, new URL(import.meta.env.BASE_URL, window.location.href)).toString()

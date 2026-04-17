@@ -1,6 +1,4 @@
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
+import { clamp } from '../../lib/common'
 
 export type SpeechLevelControllerOptions = {
   onLevelChange: (level: number) => void

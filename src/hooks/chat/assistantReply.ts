@@ -1,6 +1,6 @@
 import { PromptModeStreamFilter } from '../../features/chat/promptModeMcp'
 import { selectToolDeliveryMode } from '../../features/chat/systemPromptBuilder'
-import { requestAssistantReplyStreaming } from '../../core/agent'
+import { requestAssistantReplyStreaming } from '../../features/chat/runtime'
 import { recordUsage } from '../../features/metering/contextMeter'
 import { formatGameContext, loadGameContext } from '../../features/context/gameContext'
 import {
@@ -185,7 +185,10 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
       const [desktopContext, mcpTools, gameContext, memoryContext, pluginSkillContext] = await Promise.all([
         dependencies.ctx.loadDesktopContextSnapshot(),
         loadAvailableTools(currentSettings),
-        loadGameContext().then(formatGameContext).catch(() => ''),
+        loadGameContext().then(formatGameContext).catch((err) => {
+          console.warn('[assistantReply] loadGameContext failed; continuing without game context.', err)
+          return ''
+        }),
         buildMemoryRecallContext({
           query: content,
           longTermMemories: nextMemories,
@@ -197,13 +200,17 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           semanticLimit: currentSettings.memorySemanticRecallCount,
           retentionDays: currentSettings.memoryDiaryRetentionDays,
         }),
-        loadRelevantSkills(content).catch(() => ''),
+        loadRelevantSkills(content).catch((err) => {
+          console.warn('[assistantReply] loadRelevantSkills failed; continuing without skill context.', err)
+          return ''
+        }),
       ])
 
       const coreSkillContext = (() => {
         try {
           return matchCoreSkills(content, nextMessages.length)
-        } catch {
+        } catch (err) {
+          console.warn('[assistantReply] matchCoreSkills failed; continuing without core skill context.', err)
           return ''
         }
       })()

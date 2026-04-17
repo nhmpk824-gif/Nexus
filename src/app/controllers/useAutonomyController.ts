@@ -15,10 +15,6 @@ import { useAutonomyTick } from '../../hooks/useAutonomyTick'
 import { useMemoryDream } from '../../hooks/useMemoryDream'
 import { useContextScheduler } from '../../hooks/useContextScheduler'
 import { useNotificationBridge } from '../../hooks/useNotificationBridge'
-import { useTelegramGateway, type TelegramIncoming } from '../../hooks/useTelegramGateway'
-import { useDiscordGateway, type DiscordIncoming } from '../../hooks/useDiscordGateway'
-import { rememberDiscordChannelId, rememberTelegramChatId } from '../../lib/coreRuntime'
-import { isActionAllowed } from '../../features/integrations/permissions'
 import {
   buildMonologuePrompt,
   computeAdaptiveMonologueInterval,
@@ -35,70 +31,21 @@ import {
   type DecisionFeedbackState,
 } from '../../features/autonomy/decisionFeedback'
 import {
-  type EmotionSignal,
-  type EmotionState,
-  applyEmotionSignal as applySignal,
-  createDefaultEmotionState,
-  decayEmotion,
-  emotionToPetMood,
-  formatEmotionForPrompt,
-} from '../../features/autonomy/emotionModel'
-import {
   type DecisionQueue,
   createDecisionQueue,
   dequeueReady,
   enqueueDecision,
   pruneStale,
 } from '../../features/autonomy/intentPredictor'
-import {
-  type RelationshipState,
-  applyAbsenceDecay,
-  createDefaultRelationshipState,
-  formatRelationshipForPrompt,
-  markDailyInteraction,
-} from '../../features/autonomy/relationshipTracker'
-import {
-  type RhythmProfile,
-  applyWeeklyDecay,
-  createDefaultRhythmProfile,
-  formatRhythmSummary,
-  recordInteraction,
-  shouldAllowProactiveSpeech,
-} from '../../features/autonomy/rhythmLearner'
-import { AUTONOMY_RELATIONSHIP_STORAGE_KEY, AUTONOMY_RHYTHM_STORAGE_KEY, readJson, writeJson } from '../../lib/storage'
+import { canBroadcast, markBroadcast } from './broadcastGate'
+import { useEmotionState } from './useEmotionState'
+import { useRelationshipState } from './useRelationshipState'
+import { useRhythmState } from './useRhythmState'
+import { useTelegramBridge } from './useTelegramBridge'
+import { useDiscordBridge } from './useDiscordBridge'
 import { recordUsage } from '../../features/metering/contextMeter'
 import { openGoalsStore } from '../../features/agent/openGoalsStore'
 import type { DailyMemoryStore, Goal, ReminderTask } from '../../types'
-
-// ── Broadcast dedupe gate ────────────────────────────────────────────────────
-// Module-level so it survives React StrictMode remounts (useRef does not).
-// Each category has its own min-interval; firing twice within the window is
-// silently dropped. The chat-side text dedupe (useChat:recentCompanionNotices)
-// remains as a second safety net.
-
-type BroadcastCategory = 'speak' | 'brief' | 'suggest' | 'monologue' | 'open_goal_followup' | 'scheduled'
-
-const BROADCAST_MIN_INTERVAL_MS: Record<BroadcastCategory, number> = {
-  speak: 60_000,
-  brief: 4 * 60 * 60_000,
-  suggest: 5 * 60_000,
-  monologue: 90_000,
-  open_goal_followup: 30 * 60_000,
-  scheduled: 30_000,
-}
-
-const broadcastLastFiredAt = new Map<BroadcastCategory, number>()
-
-function canBroadcast(category: BroadcastCategory): boolean {
-  const last = broadcastLastFiredAt.get(category) ?? 0
-  return Date.now() - last >= BROADCAST_MIN_INTERVAL_MS[category]
-}
-
-function markBroadcast(category: BroadcastCategory): void {
-  broadcastLastFiredAt.set(category, Date.now())
-}
-
-// ── Types ────────────────────────────────────────────────────────────────────
 
 type ChatBridge = {
   pushCompanionNotice: (payload: {
@@ -137,22 +84,6 @@ export type UseAutonomyControllerOptions = {
   debugConsole: DebugConsoleBridge
 }
 
-// Parse a comma-separated string of IDs (chatIds/userIds) into a Set of
-// trimmed non-empty strings. Used to match bridge senders against the
-// owner whitelist, so the system prompt can treat the master's own
-// Telegram/Discord messages as coming from the master rather than an
-// external contact.
-function parseCsvIdSet(csv: string): Set<string> {
-  const result = new Set<string>()
-  for (const raw of csv.split(',')) {
-    const trimmed = raw.trim()
-    if (trimmed) result.add(trimmed)
-  }
-  return result
-}
-
-// ── Hook ─────────────────────────────────────────────────────────────────────
-
 export function useAutonomyController({
   settings,
   settingsRef,
@@ -170,6 +101,10 @@ export function useAutonomyController({
     enabled: settings.autonomyEnabled && settings.autonomyFocusAwarenessEnabled,
   })
 
+  const emotionState = useEmotionState()
+  const relationshipState = useRelationshipState()
+  const rhythmState = useRhythmState()
+
   const lastProactiveCategoryRef = useRef<string | null>(null)
   const runDreamRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const evaluateTriggersRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -178,17 +113,8 @@ export function useAutonomyController({
   const monologueRunningRef = useRef(false)
   const decisionFeedbackRef = useRef<DecisionFeedbackState>(createInitialFeedbackState())
   const speakCooldownRef = useRef(0)
-  const emotionStateRef = useRef<EmotionState>(createDefaultEmotionState())
-  const lastTimeSignalHourRef = useRef<number>(-1)
   const lastBriefDateRef = useRef<string>('')
-  const relationshipRef = useRef<RelationshipState>(
-    readJson<RelationshipState>(AUTONOMY_RELATIONSHIP_STORAGE_KEY, createDefaultRelationshipState()),
-  )
-  const lastAbsenceCheckDateRef = useRef<string>('')
   const decisionQueueRef = useRef<DecisionQueue>(createDecisionQueue())
-  const rhythmRef = useRef<RhythmProfile>(
-    readJson<RhythmProfile>(AUTONOMY_RHYTHM_STORAGE_KEY, createDefaultRhythmProfile()),
-  )
 
   const handleAutonomyTick = useCallback((tickState: AutonomyTickState) => {
     const currentSettings = settingsRef.current
@@ -218,11 +144,9 @@ export function useAutonomyController({
     // Resolve expired pending decisions
     decisionFeedbackRef.current = resolvePending(decisionFeedbackRef.current)
 
-    // Apply weekly rhythm decay (at most once per week)
-    rhythmRef.current = applyWeeklyDecay(rhythmRef.current)
-
-    // Rhythm-based gating: suppress speech in low-activity windows
-    const rhythmAllowed = shouldAllowProactiveSpeech(rhythmRef.current)
+    // Apply weekly rhythm decay and check rhythm-based gating
+    rhythmState.decayOnTick()
+    const rhythmAllowed = rhythmState.isProactiveSpeechAllowed()
 
     // Adaptive speak cooldown based on effective rate
     if (speakCooldownRef.current > 0) speakCooldownRef.current--
@@ -307,32 +231,9 @@ export function useAutonomyController({
       })
     }
 
-    // ── Emotion state ─────────────────────────────────────────────────────────
-    emotionStateRef.current = decayEmotion(emotionStateRef.current)
-
-    // Time-based signals (fire once per hour boundary)
-    const hour = new Date().getHours()
-    if (hour !== lastTimeSignalHourRef.current) {
-      lastTimeSignalHourRef.current = hour
-      if (hour >= 6 && hour <= 9) {
-        emotionStateRef.current = applySignal(emotionStateRef.current, 'morning')
-      } else if (hour >= 23 || hour < 4) {
-        emotionStateRef.current = applySignal(emotionStateRef.current, 'late_night')
-      }
-    }
-
-    // Idle-based signal
-    if (tickState.idleSeconds > 600) {
-      emotionStateRef.current = applySignal(emotionStateRef.current, 'long_idle')
-    }
-
-    // ── Relationship absence decay (once per day boundary) ──────────────────
-    const today = new Date().toISOString().slice(0, 10)
-    if (today !== lastAbsenceCheckDateRef.current) {
-      lastAbsenceCheckDateRef.current = today
-      relationshipRef.current = applyAbsenceDecay(relationshipRef.current)
-      writeJson(AUTONOMY_RELATIONSHIP_STORAGE_KEY, relationshipRef.current)
-    }
+    // ── Emotion & relationship decay ────────────────────────────────────────
+    emotionState.decayOnTick(tickState.idleSeconds)
+    relationshipState.decayOnTick()
 
     // ── Inner monologue ──────────────────────────────────────────────────────
     monologueTickCounterRef.current++
@@ -464,7 +365,7 @@ export function useAutonomyController({
 
     // Evaluate context triggers on each tick
     void evaluateTriggersRef.current()
-  }, [busyRef, chat, debugConsole, focusAwareness.focusStateRef, goalsRef, memory.memoriesRef, messagesRef, reminderTasksRef, settingsRef])
+  }, [busyRef, chat, debugConsole, emotionState, focusAwareness.focusStateRef, goalsRef, memory.memoriesRef, messagesRef, relationshipState, reminderTasksRef, rhythmState, settingsRef])
 
   const autonomyTick = useAutonomyTick({
     settingsRef,
@@ -550,149 +451,23 @@ export function useAutonomyController({
     enabled: settings.autonomyEnabled && settings.autonomyNotificationsEnabled,
   })
 
-  // ── Telegram Gateway ────────────────────────────────────────────────────────
-
-  const telegramSendMessageRef = useRef<(chatId: number, text: string, replyTo?: number) => Promise<void>>(undefined)
-
-  const handleTelegramMessage = useCallback((msg: TelegramIncoming) => {
-    const ownerChatIds = parseCsvIdSet(settingsRef.current.ownerTelegramChatIds)
-    // Default: until the master explicitly declares their own chatId(s),
-    // every incoming Telegram message is treated as an external contact
-    // (named bridge prefix). Only chatIds that match the configured owner
-    // list are promoted to "master via Telegram".
-    const isOwner = ownerChatIds.has(String(msg.chatId))
-
-    debugConsole.appendDebugConsoleEvent({
-      source: 'autonomy',
-      title: 'Telegram message',
-      detail: `[${msg.chatTitle}] ${msg.fromUser}${isOwner ? '（主人）' : ''}: ${msg.text}`,
-    })
-
-    // Forward to companion chat as a Telegram-sourced message.
-    // Owner-match → prefix without a name so the system prompt treats it as
-    // the master speaking via Telegram. Otherwise keep the named prefix so
-    // the model responds to the external contact directly.
-    if (chat.sendMessage) {
-      const prefixedText = isOwner
-        ? `【Telegram】${msg.text}`
-        : `【Telegram · ${msg.fromUser}】${msg.text}`
-      void chat.sendMessage(prefixedText, { source: 'telegram' })
-    }
-
-    // Store chatId and messageId so the companion can reply
-    const chatEntry = { chatId: msg.chatId, messageId: msg.messageId }
-    lastTelegramChatRef.current = chatEntry
-    telegramChatMapRef.current.set(msg.chatId, chatEntry)
-    rememberTelegramChatId(msg.chatId)
-  }, [chat, debugConsole, settingsRef])
-
-  const lastTelegramChatRef = useRef<{ chatId: number; messageId: number } | null>(null)
-  /** Per-chatId tracking so concurrent Telegram chats don't overwrite each other. */
-  const telegramChatMapRef = useRef<Map<number, { chatId: number; messageId: number }>>(new Map())
-
-  const telegramGateway = useTelegramGateway({
+  const { gateway: telegramGateway, replyTo: replyToTelegram } = useTelegramBridge({
     settingsRef,
-    onMessage: handleTelegramMessage,
     enabled: settings.telegramIntegrationEnabled,
+    chat,
+    debugConsole,
   })
 
-  useEffect(() => {
-    telegramSendMessageRef.current = telegramGateway.sendMessage
-  }, [telegramGateway.sendMessage])
-
-  /** Send a reply back to a Telegram chat. If chatId is provided, replies to that
-   *  specific chat; otherwise falls back to the most recent incoming chat. */
-  const replyToTelegram = useCallback(async (text: string, chatId?: number) => {
-    const target = chatId != null
-      ? telegramChatMapRef.current.get(chatId) ?? lastTelegramChatRef.current
-      : lastTelegramChatRef.current
-    if (!target || !telegramSendMessageRef.current) return
-    if (!isActionAllowed(settingsRef.current, 'telegram', 'send')) {
-      debugConsole.appendDebugConsoleEvent({
-        source: 'autonomy',
-        title: 'Telegram reply blocked',
-        detail: `permission mode "${settingsRef.current.telegramPermissionMode}" does not allow sending messages`,
-      })
-      return
-    }
-    await telegramSendMessageRef.current(target.chatId, text)
-  }, [debugConsole, settingsRef])
-
-  // ── Discord Gateway ──────────────────────────────────────────────────────
-
-  const discordSendMessageRef = useRef<(channelId: string, text: string, replyTo?: string) => Promise<void>>(undefined)
-
-  const handleDiscordMessage = useCallback((msg: DiscordIncoming) => {
-    const ownerUserIds = parseCsvIdSet(settingsRef.current.ownerDiscordUserIds)
-    // Default: empty ownerDiscordUserIds means every incoming Discord message
-    // is treated as an external contact. Only fromUserIds that match the
-    // configured owner list are promoted to "master via Discord".
-    const isOwner = ownerUserIds.has(msg.fromUserId)
-
-    debugConsole.appendDebugConsoleEvent({
-      source: 'autonomy',
-      title: 'Discord message',
-      detail: `[${msg.channelName}] ${msg.fromUser}${isOwner ? '（主人）' : ''}: ${msg.text}`,
-    })
-
-    // Forward to companion chat as a Discord-sourced message.
-    // Owner-match → prefix without a name so the system prompt treats it as
-    // the master speaking via Discord. Otherwise use the named prefix for
-    // external contacts.
-    if (chat.sendMessage) {
-      const prefixedText = isOwner
-        ? `【Discord】${msg.text}`
-        : `【Discord · ${msg.fromUser}】${msg.text}`
-      void chat.sendMessage(prefixedText, { source: 'discord' })
-    }
-
-    // Store channelId and messageId so the companion can reply
-    const channelEntry = { channelId: msg.channelId, messageId: msg.messageId }
-    lastDiscordChannelRef.current = channelEntry
-    discordChannelMapRef.current.set(msg.channelId, channelEntry)
-    rememberDiscordChannelId(msg.channelId)
-  }, [chat, debugConsole, settingsRef])
-
-  const lastDiscordChannelRef = useRef<{ channelId: string; messageId: string } | null>(null)
-  /** Per-channelId tracking so concurrent Discord channels don't overwrite each other. */
-  const discordChannelMapRef = useRef<Map<string, { channelId: string; messageId: string }>>(new Map())
-
-  const discordGateway = useDiscordGateway({
+  const { gateway: discordGateway, replyTo: replyToDiscord } = useDiscordBridge({
     settingsRef,
-    onMessage: handleDiscordMessage,
     enabled: settings.discordIntegrationEnabled,
+    chat,
+    debugConsole,
   })
-
-  useEffect(() => {
-    discordSendMessageRef.current = discordGateway.sendMessage
-  }, [discordGateway.sendMessage])
-
-  /** Send a reply back to a Discord channel. If channelId is provided, replies to that
-   *  specific channel; otherwise falls back to the most recent incoming channel. */
-  const replyToDiscord = useCallback(async (text: string, channelId?: string) => {
-    const target = channelId != null
-      ? discordChannelMapRef.current.get(channelId) ?? lastDiscordChannelRef.current
-      : lastDiscordChannelRef.current
-    if (!target || !discordSendMessageRef.current) return
-    if (!isActionAllowed(settingsRef.current, 'discord', 'send')) {
-      debugConsole.appendDebugConsoleEvent({
-        source: 'autonomy',
-        title: 'Discord reply blocked',
-        detail: `permission mode "${settingsRef.current.discordPermissionMode}" does not allow sending messages`,
-      })
-      return
-    }
-    await discordSendMessageRef.current(target.channelId, text)
-  }, [debugConsole, settingsRef])
 
   /** Call when user sends a message — resolves pending proactive decision as effective/ignored. */
   const markUserResponse = useCallback(() => {
     decisionFeedbackRef.current = onUserResponse(decisionFeedbackRef.current)
-  }, [])
-
-  /** Apply an emotion signal to the current state. */
-  const applyEmotionSignal = useCallback((signal: EmotionSignal) => {
-    emotionStateRef.current = applySignal(emotionStateRef.current, signal)
   }, [])
 
   /** Schedule a proactive decision to fire after a delay. */
@@ -702,22 +477,9 @@ export function useAutonomyController({
 
   /** Mark daily interaction — grants relationship score bonus and records rhythm. */
   const markInteraction = useCallback(() => {
-    const prev = relationshipRef.current
-    relationshipRef.current = markDailyInteraction(prev)
-    if (relationshipRef.current !== prev) {
-      writeJson(AUTONOMY_RELATIONSHIP_STORAGE_KEY, relationshipRef.current)
-    }
-
-    rhythmRef.current = recordInteraction(rhythmRef.current)
-    writeJson(AUTONOMY_RHYTHM_STORAGE_KEY, rhythmRef.current)
-  }, [])
-
-  // Stable getter callbacks — these read from refs so the returned function
-  // identity never changes, yet always returns the latest state.
-  const getEmotionMood = useCallback(() => emotionToPetMood(emotionStateRef.current), [])
-  const getEmotionPrompt = useCallback(() => formatEmotionForPrompt(emotionStateRef.current), [])
-  const getRelationshipPrompt = useCallback(() => formatRelationshipForPrompt(relationshipRef.current), [])
-  const getRhythmPrompt = useCallback(() => formatRhythmSummary(rhythmRef.current), [])
+    relationshipState.markInteraction()
+    rhythmState.recordInteractionInRhythm()
+  }, [relationshipState, rhythmState])
 
   return useMemo(() => ({
     focusAwareness,
@@ -730,15 +492,15 @@ export function useAutonomyController({
     discordGateway,
     replyToDiscord,
     markUserResponse,
-    applyEmotionSignal,
-    emotionStateRef,
-    getEmotionMood,
-    getEmotionPrompt,
+    applyEmotionSignal: emotionState.applyEmotionSignal,
+    emotionStateRef: emotionState.emotionStateRef,
+    getEmotionMood: emotionState.getEmotionMood,
+    getEmotionPrompt: emotionState.getEmotionPrompt,
     markInteraction,
-    relationshipRef,
-    getRelationshipPrompt,
-    rhythmRef,
-    getRhythmPrompt,
+    relationshipRef: relationshipState.relationshipRef,
+    getRelationshipPrompt: relationshipState.getRelationshipPrompt,
+    rhythmRef: rhythmState.rhythmRef,
+    getRhythmPrompt: rhythmState.getRhythmPrompt,
     scheduleDecision,
     setGoals,
   }), [
@@ -752,12 +514,15 @@ export function useAutonomyController({
     discordGateway,
     replyToDiscord,
     markUserResponse,
-    applyEmotionSignal,
-    getEmotionMood,
-    getEmotionPrompt,
+    emotionState.applyEmotionSignal,
+    emotionState.emotionStateRef,
+    emotionState.getEmotionMood,
+    emotionState.getEmotionPrompt,
     markInteraction,
-    getRelationshipPrompt,
-    getRhythmPrompt,
+    relationshipState.relationshipRef,
+    relationshipState.getRelationshipPrompt,
+    rhythmState.rhythmRef,
+    rhythmState.getRhythmPrompt,
     scheduleDecision,
     setGoals,
   ])
