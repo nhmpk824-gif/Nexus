@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react'
 import {
@@ -53,20 +52,6 @@ import type {
 import { getSettingsSnapshot } from '../store/settingsStore'
 import { setRuntimeSnapshot as persistRuntimeSnapshot } from '../store/runtimeStore'
 import { commitSettingsUpdate } from '../store/commitSettingsUpdate'
-
-// Primitive-only shallow equality. RuntimeStateSnapshot is a flat record of
-// scalars (strings, booleans, mood enum), so comparing every field directly
-// is the cheapest correct way to decide whether a broadcast echo carries new
-// information or is redundant with what we already applied.
-function isShallowEqualRuntimeSnapshot(a: RuntimeStateSnapshot, b: RuntimeStateSnapshot): boolean {
-  if (a === b) return true
-  const keys = Object.keys(a) as Array<keyof RuntimeStateSnapshot>
-  if (keys.length !== Object.keys(b).length) return false
-  for (const key of keys) {
-    if (a[key] !== b[key]) return false
-  }
-  return true
-}
 
 const DEFAULT_RUNTIME_SNAPSHOT: RuntimeStateSnapshot = {
   mood: 'idle',
@@ -167,9 +152,6 @@ export function useDesktopBridge({
   const [runtimeSnapshot, setRuntimeSnapshotState] = useState<RuntimeStateSnapshot>(
     DEFAULT_RUNTIME_SNAPSHOT,
   )
-  // Used by the runtime-state subscribe effect below to short-circuit broadcast
-  // echoes from the main-process hub. See the comment on that effect for why.
-  const lastAppliedRuntimeSnapshotRef = useRef<RuntimeStateSnapshot | null>(null)
 
   // Settings are persisted explicitly by applySettingsSave → setSettingsSnapshot.
   // Cross-window sync is handled by subscribeToSettings in useAppController.
@@ -332,39 +314,16 @@ export function useDesktopBridge({
   }, [chat, memory, pet, setDebugConsoleEvents, setReminderTasks, setSettings, setClickThrough, setIsPinned, voice])
 
   // Runtime-state bridge: listens for cross-window snapshot pushes and writes
-  // them into local state.
-  //
-  // Two issues this effect must defend against:
-  //
-  // (1) Dep instability. `pet` is `usePetBehavior`'s useMemo return, whose
-  //     identity changes whenever pet state does. Depending on the whole
-  //     object here used to self-feed: pet.setMood inside → mood changes →
-  //     pet re-memos → effect re-subscribes → pending promise fires again →
-  //     setMood called again. Now we depend only on `pet.setMood`, which is
-  //     a React useState setter and referentially stable by contract.
-  //
-  // (2) Broadcast echo. The main-process runtime-state hub fans out every
-  //     updateRuntimeState write back to ALL subscribers, including the same
-  //     window that sent it. The upstream pusher (line ~414 below) emits on
-  //     every voice-state/wakeword-state change, so without a guard here we
-  //     call setRuntimeSnapshotState with a fresh object reference on every
-  //     echo. That forces a React re-render, which churns useVoice's return
-  //     useMemo deps downstream, which re-fires the upstream pusher, which
-  //     triggers another echo — "Maximum update depth exceeded" at
-  //     wakeword-frame cadence. Guard with a shallow-equal check against the
-  //     last applied snapshot and bail out when nothing observable changed.
-  //     The per-field setters that follow already noop on equal values, but
-  //     only after React has paid the re-render cost of the snapshot state
-  //     update; short-circuiting here skips the whole loop.
+  // them into local state. Depends only on `pet.setMood` — not the whole
+  // `pet` object. `pet` is `usePetBehavior`'s useMemo return, whose identity
+  // changes whenever `mood` (and other inputs) changes. Depending on `pet`
+  // here used to self-feed: pet.setMood inside → mood changes → pet re-memos
+  // → effect re-subscribes → pending promise fires again → setMood called
+  // again. `pet.setMood` is a React useState setter and referentially stable
+  // by contract — safe to depend on.
   useEffect(() => {
     const setMood = pet.setMood
     const applyRuntimeState = (state: RuntimeStateSnapshot) => {
-      const previous = lastAppliedRuntimeSnapshotRef.current
-      if (previous && isShallowEqualRuntimeSnapshot(previous, state)) {
-        // Broadcast echo — no observable change from the last apply.
-        return
-      }
-      lastAppliedRuntimeSnapshotRef.current = state
       setRuntimeSnapshotState(state)
       persistRuntimeSnapshot(state)
 
