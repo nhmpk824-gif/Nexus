@@ -120,13 +120,11 @@ export function useDesktopBridge({
   clickThrough,
   setClickThrough,
   reminderTasks,
-  // setReminderTasks + setDebugConsoleEvents are kept in the options type
-  // because the call site still wires them through, but they're only used
-  // for cross-window sync that we deliberately dropped (see the comment on
-  // the CHAT_STORAGE_KEY subscription below). Leave as no-ops here rather
-  // than refactor callers.
-  setReminderTasks: _setReminderTasks,
-  setDebugConsoleEvents: _setDebugConsoleEvents,
+  // setReminderTasks / setDebugConsoleEvents remain in the options type
+  // (callers still pass them through) but are intentionally not destructured
+  // here — they were only used by cross-window storage sync that we dropped
+  // (see CHAT_STORAGE_KEY subscription comment below for why). Keep the
+  // caller-facing prop shape stable rather than refactoring every caller.
   memory,
   chat,
   pet,
