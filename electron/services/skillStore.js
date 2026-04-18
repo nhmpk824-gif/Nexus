@@ -4,7 +4,7 @@
  * Each skill has a trigger phrase and summary for retrieval.
  */
 
-import { readFile, writeFile, readdir, mkdir, unlink } from 'node:fs/promises'
+import { readFile, writeFile, readdir, mkdir, unlink, rename } from 'node:fs/promises'
 import path from 'node:path'
 import { app } from 'electron'
 import { tokenize, Bm25Index } from './bm25Search.js'
@@ -30,6 +30,28 @@ let _entries = []
 let _loaded = false
 const _bm25 = new Bm25Index()
 let _bm25Dirty = true
+
+// Serialise mutating operations so concurrent IPC calls (two saveSkill, or
+// saveSkill + removeSkill, etc.) don't interleave their read-modify-write of
+// _entries. Without this, two writes to skills-index.json race — the later
+// one clobbers the earlier, losing whichever save happened to finish last.
+let _mutationChain = Promise.resolve()
+function serialMutation(fn) {
+  const next = _mutationChain.then(fn, fn)
+  _mutationChain = next.catch(() => undefined)
+  return next
+}
+
+// Write to a sibling temp file and then rename — rename is atomic on POSIX
+// and reliably atomic on modern Windows filesystems. Prevents a crash
+// mid-writeFile from leaving a zero-length or truncated skills-index.json,
+// which the load path silently recovers by resetting _entries to [] (i.e.
+// losing every skill the user has ever added).
+async function atomicWriteFile(destPath, data) {
+  const tmpPath = `${destPath}.tmp-${process.pid}-${Date.now()}`
+  await writeFile(tmpPath, data)
+  await rename(tmpPath, destPath)
+}
 
 function getSkillsDir() {
   return path.join(app.getPath('userData'), SKILLS_DIR)
@@ -65,7 +87,7 @@ async function ensureLoaded() {
 
 async function saveIndex() {
   await mkdir(getSkillsDir(), { recursive: true })
-  await writeFile(getIndexPath(), JSON.stringify({ version: 1, entries: _entries }))
+  await atomicWriteFile(getIndexPath(), JSON.stringify({ version: 1, entries: _entries }))
 }
 
 function ensureBm25() {
@@ -78,7 +100,11 @@ function ensureBm25() {
   _bm25Dirty = false
 }
 
-export async function saveSkill(id, title, trigger, summary, markdownContent) {
+export function saveSkill(id, title, trigger, summary, markdownContent) {
+  return serialMutation(() => _saveSkill(id, title, trigger, summary, markdownContent))
+}
+
+async function _saveSkill(id, title, trigger, summary, markdownContent) {
   await ensureLoaded()
 
   const existing = _entries.findIndex((e) => e.id === id)
@@ -144,13 +170,15 @@ export async function searchSkills(query, limit = 3) {
   return matched
 }
 
-export async function markSkillUsed(id) {
-  await ensureLoaded()
-  const entry = _entries.find((e) => e.id === id)
-  if (!entry) return
-  entry.usedCount++
-  entry.lastUsedAt = new Date().toISOString()
-  await saveIndex()
+export function markSkillUsed(id) {
+  return serialMutation(async () => {
+    await ensureLoaded()
+    const entry = _entries.find((e) => e.id === id)
+    if (!entry) return
+    entry.usedCount++
+    entry.lastUsedAt = new Date().toISOString()
+    await saveIndex()
+  })
 }
 
 export async function listSkills() {
@@ -173,16 +201,18 @@ export async function getSkill(id) {
   }
 }
 
-export async function removeSkill(id) {
-  await ensureLoaded()
-  const index = _entries.findIndex((e) => e.id === id)
-  if (index < 0) return false
+export function removeSkill(id) {
+  return serialMutation(async () => {
+    await ensureLoaded()
+    const index = _entries.findIndex((e) => e.id === id)
+    if (index < 0) return false
 
-  _entries.splice(index, 1)
-  _bm25Dirty = true
-  await unlink(getSkillPath(id)).catch(() => {})
-  await saveIndex()
-  return true
+    _entries.splice(index, 1)
+    _bm25Dirty = true
+    await unlink(getSkillPath(id)).catch(() => {})
+    await saveIndex()
+    return true
+  })
 }
 
 export async function getStats() {

@@ -148,6 +148,16 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
     return session
   }
 
+  // Same lookup as getSession but returns null instead of throwing.
+  // pushText/finish/abort must use this because an earlier synthesize failure
+  // (or an out-of-order IPC arriving after `end`/`error`) can clear the
+  // session before the renderer's next call lands — throwing surfaces to the
+  // renderer as an unhandled IPC rejection for a path we deliberately want
+  // to be idempotent.
+  function getSessionOrNull(requestId) {
+    return sessions.get(String(requestId ?? '')) ?? null
+  }
+
   function clearSession(requestId) {
     sessions.delete(requestId)
   }
@@ -411,8 +421,8 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
     },
 
     pushText(sender, payload) {
-      const session = getSession(payload?.requestId)
-      if (session.sender !== sender || session.closed) {
+      const session = getSessionOrNull(payload?.requestId)
+      if (!session || session.sender !== sender || session.closed) {
         return { ok: false }
       }
 
@@ -444,8 +454,8 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
     },
 
     async finish(sender, payload) {
-      const session = getSession(payload?.requestId)
-      if (session.sender !== sender) {
+      const session = getSessionOrNull(payload?.requestId)
+      if (!session || session.sender !== sender) {
         return { ok: false }
       }
 
@@ -463,8 +473,8 @@ export function createTtsStreamService({ synthesizeRemote, warmupRemote }) {
     },
 
     abort(sender, payload) {
-      const session = getSession(payload?.requestId)
-      if (session.sender !== sender) {
+      const session = getSessionOrNull(payload?.requestId)
+      if (!session || session.sender !== sender) {
         return { ok: false }
       }
 

@@ -352,12 +352,20 @@ export function extractChatStreamingDeltaToolCalls(providerId, payload) {
       payload?.type === 'content_block_start'
       && payload?.content_block?.type === 'tool_use'
     ) {
-      return [{
-        index: Number(payload?.index ?? 0),
-        id: payload.content_block.id,
-        type: 'function',
-        function: { name: payload.content_block.name, arguments: '' },
-      }]
+      // Validate each field the same way the OpenAI branch does. Anthropic
+      // generally sends id + name on the start event, but some proxies
+      // (minimax's /anthropic adapter, self-hosted Claude gateways) have
+      // been observed dropping one or the other — passing `undefined`
+      // through would create a malformed tool_call the accumulator can't
+      // serialise cleanly.
+      const fragment = { index: Number(payload?.index ?? 0), type: 'function' }
+      const blockId = payload.content_block.id
+      const blockName = payload.content_block.name
+      if (typeof blockId === 'string' && blockId) fragment.id = blockId
+      const fn = { arguments: '' }
+      if (typeof blockName === 'string' && blockName) fn.name = blockName
+      fragment.function = fn
+      return [fragment]
     }
     if (
       payload?.type === 'content_block_delta'
