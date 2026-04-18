@@ -92,13 +92,17 @@ export function register() {
   ipcMain.handle('runtime-state:heartbeat', (event, payload) => {
     requireTrustedSender(event)
     const view = payload?.view === 'panel' ? 'panel' : 'pet'
-    updateHeartbeat(view)
+    // Pass the sender's webContents id so syncRuntimeState skips rebroadcasting
+    // to this exact window — origin already has the new state and bouncing it
+    // back to React causes the self-feeding render loop (see windowManager
+    // syncRuntimeState comment).
+    updateHeartbeat(view, event.sender.id)
     return buildRuntimeStateSnapshot()
   })
 
   ipcMain.handle('runtime-state:update', (event, partialState) => {
     requireTrustedSender(event)
-    updateRuntimeState(partialState)
+    updateRuntimeState(partialState, event.sender.id)
   })
 
   ipcMain.handle('app:get-launch-on-startup', (event) => {

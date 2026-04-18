@@ -121,10 +121,27 @@ export function buildRuntimeStateSnapshot() {
   }
 }
 
-export function syncRuntimeState() {
+// Broadcast the latest runtime-state snapshot to every live window EXCEPT the
+// one that originated this change.
+//
+// Skipping the sender is the classical sender-ID pattern for cross-context
+// pub-sub (see e.g. BroadcastChannel tutorials). The renderer-side React
+// effect that handles `runtime-state:changed` unconditionally calls
+// setRuntimeSnapshotState, which forces a re-render, which re-runs the
+// upstream `useEffect` that pushed this very state. Without sender-skip,
+// every renderer-originated update bounces back to itself at wakeword-frame
+// cadence and trips React's "Maximum update depth exceeded" guard. A
+// shallow-equal guard on the receive side doesn't help because `updatedAt`
+// is stamped on every update, so the echo is never byte-equal to what the
+// sender already has.
+//
+// Windows that DIDN'T originate the change still need to see it (that's the
+// whole point of cross-window sync), so we only skip the exact sender.
+export function syncRuntimeState(originWebContentsId = null) {
   const snapshot = buildRuntimeStateSnapshot()
   for (const win of [mainWindow, panelWindow]) {
     if (!win || win.isDestroyed()) continue
+    if (originWebContentsId !== null && win.webContents.id === originWebContentsId) continue
     win.webContents.send('runtime-state:changed', snapshot)
   }
 }
@@ -145,22 +162,25 @@ function sanitizePartialState(partialState) {
   return safe
 }
 
-export function updateRuntimeState(partialState) {
+export function updateRuntimeState(partialState, originWebContentsId = null) {
   const safe = sanitizePartialState(partialState)
   runtimeState = {
     ...runtimeState,
     ...safe,
     updatedAt: new Date().toISOString(),
   }
-  syncRuntimeState()
+  syncRuntimeState(originWebContentsId)
 }
 
-export function updateHeartbeat(view) {
+export function updateHeartbeat(view, originWebContentsId = null) {
   runtimeClientHeartbeat = {
     ...runtimeClientHeartbeat,
     [view]: Date.now(),
   }
-  syncRuntimeState()
+  // Heartbeat broadcasts only matter for the OTHER window's
+  // `petOnline`/`panelOnline` flags; the originator already knows it is
+  // online, so skipping it avoids a pointless re-render on every 10 s tick.
+  syncRuntimeState(originWebContentsId)
 }
 
 export function applyPetWindowState() {
