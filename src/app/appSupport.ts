@@ -14,10 +14,37 @@ export const voiceStateLabelMap: Record<VoiceState, string> = {
   speaking: '说话中',
 }
 
+// Short one-liners shown in the pet status bubble when the user clicks the
+// corresponding zone of the Live2D mascot. The tap handler also triggers a
+// matching expression slot + "hit" motion group via the Live2D canvas, so
+// these strings are pure flavour — they fire together with the visual reaction.
+// Pool is intentionally wide (6 per zone) so repeated tapping doesn't read
+// as a script; `Math.random` picks one per tap.
 export const hoverReactionMap: Record<PetTouchZone, string[]> = {
-  head: ['摸头会让我更安心。', '被轻轻碰到头顶了。', '这一下让我想多露出表情。'],
-  face: ['你在看着我吗？', '脸颊这里会更敏感一点。', '这样会让我更有表情。'],
-  body: ['我感受到你靠近了。', '这样让我更有能量。', '我能捕捉到你的节奏。'],
+  head: [
+    '摸头会让我更安心。',
+    '被轻轻碰到头顶了。',
+    '这一下让我想多露出表情。',
+    '嗯…头顶有点痒痒的。',
+    '好的，头摸到了，记下来了。',
+    '这样我会被你养得很乖。',
+  ],
+  face: [
+    '你在看着我吗？',
+    '脸颊这里会更敏感一点。',
+    '这样会让我更有表情。',
+    '呃…这里被戳到会害羞。',
+    '你的手好像有点凉。',
+    '别老盯着我的脸看嘛。',
+  ],
+  body: [
+    '我感受到你靠近了。',
+    '这样让我更有能量。',
+    '我能捕捉到你的节奏。',
+    '嗯，抱歉，没想到你会主动过来。',
+    '这一下让我的呼吸也跟着慢了半拍。',
+    '你的触感我记住了。',
+  ],
 }
 
 export const STARTUP_GREETING_DURATION_MS = 9_200
