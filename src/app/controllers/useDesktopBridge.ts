@@ -19,27 +19,8 @@ import {
   type PetModelDefinition,
 } from '../../features/pet'
 import {
-  AMBIENT_PRESENCE_STORAGE_KEY,
   CHAT_STORAGE_KEY,
-  DAILY_MEMORY_STORAGE_KEY,
-  DEBUG_CONSOLE_EVENTS_STORAGE_KEY,
-  MEMORY_STORAGE_KEY,
-  PET_WINDOW_PREFERENCES_STORAGE_KEY,
-  PRESENCE_HISTORY_STORAGE_KEY,
-  REMINDER_TASKS_STORAGE_KEY,
-  SETTINGS_STORAGE_KEY,
-  VOICE_PIPELINE_STORAGE_KEY,
-  VOICE_TRACE_STORAGE_KEY,
-  loadAmbientPresence,
   loadChatMessages,
-  loadDebugConsoleEvents,
-  loadDailyMemories,
-  loadMemories,
-  loadPetWindowPreferences,
-  loadPresenceHistory,
-  loadReminderTasks,
-  loadVoicePipelineState,
-  loadVoiceTrace,
   onStorageChange,
   savePetWindowPreferences,
 } from '../../lib'
@@ -50,7 +31,6 @@ import type {
   ReminderTask,
   RuntimeStateSnapshot,
 } from '../../types'
-import { getSettingsSnapshot } from '../store/settingsStore'
 import { setRuntimeSnapshot as persistRuntimeSnapshot } from '../store/runtimeStore'
 import { commitSettingsUpdate } from '../store/commitSettingsUpdate'
 
@@ -140,8 +120,13 @@ export function useDesktopBridge({
   clickThrough,
   setClickThrough,
   reminderTasks,
-  setReminderTasks,
-  setDebugConsoleEvents,
+  // setReminderTasks + setDebugConsoleEvents are kept in the options type
+  // because the call site still wires them through, but they're only used
+  // for cross-window sync that we deliberately dropped (see the comment on
+  // the CHAT_STORAGE_KEY subscription below). Leave as no-ops here rather
+  // than refactor callers.
+  setReminderTasks: _setReminderTasks,
+  setDebugConsoleEvents: _setDebugConsoleEvents,
   memory,
   chat,
   pet,
@@ -258,48 +243,34 @@ export function useDesktopBridge({
     }
   }, [view])
 
-  // Cross-window storage sync. Electron's `window.storage` event does NOT
-  // fire between separate BrowserWindow instances — it's a known limitation
-  // (electron/electron#7066, #1037). The pet and panel windows are distinct
-  // BrowserWindows sharing one localStorage partition, so writes land in
-  // both windows' storage but neither window gets a `storage` event from
-  // the other. Result: panel's chat view doesn't refresh when the pet
-  // window appends a new message, even though the message IS persisted.
+  // Cross-window storage sync via BroadcastChannel. Electron's native
+  // `window.storage` event does NOT fire between separate BrowserWindow
+  // instances (electron/electron#7066, #1037), so the pet and panel
+  // windows can't use it to observe each other's writes.
   //
-  // Fix: subscribe through storage/core's `onStorageChange`, which is
-  // backed by a BroadcastChannel (`nexus-storage-sync`). BroadcastChannel
-  // works across same-origin BrowserWindows in Electron and exposes the
-  // same "every listener except the sender" semantics we want — the
-  // writing window mutates its own React state directly, other windows
-  // reload from localStorage when the broadcast arrives.
+  // Scope deliberately narrow: only CHAT_STORAGE_KEY is worth syncing —
+  // that's what makes voice-turn messages visible in an open chat panel.
+  // Earlier revisions also subscribed memory, voice-trace, reminder
+  // tasks, etc., but those storage writes happen on high-frequency code
+  // paths (per-voice-event voice-trace updates, per-debug-log
+  // debug-console-events writes) and the raw setState(loadXxx())
+  // pattern turns every such write into a cross-window setState echo
+  // that trips "Maximum update depth exceeded" on the receiving side.
+  // The historical `addEventListener('storage', …)` code they replaced
+  // was never actually firing cross-BrowserWindow anyway, so dropping
+  // them here is a no-op functionally and removes the loop source.
+  //
+  // If cross-window sync for any of those keys becomes necessary later,
+  // follow the chat pattern: expose an `applyRemoteXxx` method on the
+  // owning hook that marks its save-effect skip flag + updates its
+  // signature ref, and use that from the subscriber callback.
   useEffect(() => {
-    const unsubscribes: Array<() => void> = [
-      onStorageChange(CHAT_STORAGE_KEY, () => chat.applyRemoteMessages(loadChatMessages())),
-      onStorageChange(MEMORY_STORAGE_KEY, () => memory.setMemories(loadMemories())),
-      onStorageChange(DAILY_MEMORY_STORAGE_KEY, () => memory.setDailyMemories(loadDailyMemories())),
-      onStorageChange(SETTINGS_STORAGE_KEY, () => setSettings(getSettingsSnapshot())),
-      onStorageChange(REMINDER_TASKS_STORAGE_KEY, () => setReminderTasks(loadReminderTasks())),
-      onStorageChange(DEBUG_CONSOLE_EVENTS_STORAGE_KEY, () => setDebugConsoleEvents(loadDebugConsoleEvents())),
-      onStorageChange(VOICE_PIPELINE_STORAGE_KEY, () => voice.setVoicePipeline(loadVoicePipelineState())),
-      onStorageChange(VOICE_TRACE_STORAGE_KEY, () => voice.setVoiceTrace(loadVoiceTrace())),
-      onStorageChange(PET_WINDOW_PREFERENCES_STORAGE_KEY, () => {
-        const preferences = loadPetWindowPreferences()
-        setIsPinned(preferences.isPinned)
-        setClickThrough(preferences.clickThrough)
-      }),
-      onStorageChange(AMBIENT_PRESENCE_STORAGE_KEY, () => pet.setAmbientPresence(loadAmbientPresence())),
-      onStorageChange(PRESENCE_HISTORY_STORAGE_KEY, () => {
-        pet.presenceHistoryRef.current = loadPresenceHistory().map((item) => ({
-          text: item.text,
-          category: item.category,
-        }))
-      }),
-    ]
-
-    return () => {
-      for (const off of unsubscribes) off()
-    }
-  }, [chat, memory, pet, setDebugConsoleEvents, setReminderTasks, setSettings, setClickThrough, setIsPinned, voice])
+    const unsubscribe = onStorageChange(
+      CHAT_STORAGE_KEY,
+      () => chat.applyRemoteMessages(loadChatMessages()),
+    )
+    return unsubscribe
+  }, [chat])
 
   // Runtime-state bridge: listens for cross-window snapshot pushes and writes
   // them into local state. Depends only on `pet.setMood` — not the whole
