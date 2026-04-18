@@ -1,0 +1,100 @@
+# Autonomy engine
+
+The companion's inner life: when it feels awake/drowsy/asleep, how it tracks
+emotion and the relationship with the user over time, and (eventually) whether
+it should proactively speak.
+
+## Where things live
+
+Autonomy logic is deliberately split across three layers:
+
+```
+src/features/autonomy/          ← pure engine, no React, no Electron
+    emotionModel.ts                  4-dimension emotion state + signal math
+    relationshipTracker.ts           score/level/streak over days
+    rhythmLearner.ts                 per-hour activity probability learning
+    tickLoop.ts                      awake/drowsy/sleeping/dreaming state machine
+    focusAwareness.ts                quiet-hours / locked-screen gates
+    memoryDream.ts                   nightly consolidation cycle
+    goalTracker.ts                   explicit user goals
+    proactiveEngine.ts               (LEGACY v1) rule-based decision tree
+    innerMonologue.ts                (LEGACY v1) inner-voice LLM calls
+    intentPredictor.ts               (LEGACY v1) "what will the user say next"
+    contextScheduler.ts              context-triggered task runner
+    decisionFeedback.ts              learns from user reactions
+    skillDistillation.ts             autoskill extraction
+    v2/                          ← NEW, LLM-driven decision engine (Phase 2+)
+        contextGatherer.ts           pure signal aggregator
+
+src/app/controllers/            ← React bindings that hold refs + persistence
+    useAutonomyController.ts         top-level wiring (529 lines — big because
+                                     it glues all the pieces together)
+    useEmotionState.ts               emotion ref + persist + signal API
+    useRelationshipState.ts          relationship ref + persist
+    useRhythmState.ts                rhythm ref + persist + decay
+
+src/hooks/                      ← other React hooks that consume autonomy state
+    useAutonomyTick.ts               drives the tick loop at a configurable interval
+    useMemoryDream.ts                schedules the nightly dream
+    usePetBehavior.ts                maps autonomy state into pet visuals
+
+src/types/autonomy.ts           ← shared type surface (AutonomyTickState,
+                                  ProactiveDecision, Goal, etc.)
+```
+
+## Layering rule
+
+1. **features/autonomy/** is pure — no React, no IPC, no `window`. Anything
+   imported here should work in a plain Node test without mocking.
+2. **app/controllers/** owns `useRef`, storage reads/writes, and the
+   serialised side-effects the engine triggers (e.g. "emit bus event").
+3. **hooks/** is free to consume controllers but shouldn't import engine
+   files directly — go through the controller so persistence/state flows
+   stay in one place.
+
+Breaking this layering is usually what makes autonomy hard to navigate. If
+you find yourself importing `useRef` from `features/autonomy/*`, stop.
+
+## v2 engine migration (in progress)
+
+The legacy decision path (`proactiveEngine.ts` + `innerMonologue.ts` +
+`intentPredictor.ts`, ~900 lines) is a rule-based tree over hand-written
+templates. It produces formulaic "主动行为幼稚" output — emotion and
+relationship are tracked but barely influence the words that come out.
+
+The v2 engine replaces that tree with a small LLM call gated by the same
+tick loop. Structure:
+
+```
+tick (eligible?) → gather context → decision LLM → persona guardrail → speak
+```
+
+Phases:
+
+- **Phase 0** — v2 feature flag in settings (done, dormant)
+- **Phase 1** — state persistence audit + fixes (done: emotion, rhythm)
+- **Phase 2** — `v2/contextGatherer.ts` pure aggregator (done)
+- **Phase 3** — `v2/decisionEngine.ts` LLM prompt + call
+- **Phase 4** — `v2/personaGuardrail.ts` signature + optional LLM-judge
+- **Phase 5** — wire to chat/TTS delivery behind the feature flag
+- **Phase 6** — flip default, delete v1 code
+
+Legacy files stay untouched until Phase 6 so the two paths can run in
+parallel during validation. Don't delete `proactiveEngine.ts` until both
+engines have been tested side-by-side.
+
+## Settings surface
+
+v1 engine reads:
+- `autonomyEnabled`, `autonomyTickIntervalSeconds`, `autonomySleepAfterIdleMinutes`,
+- `autonomyQuietHoursStart/End`, `autonomyCostLimitDailyTicks`,
+- `autonomyMonologueEnabled` (+ interval + threshold).
+
+v2 engine adds (dormant until Phase 3):
+- `autonomyEngineV2` — opt-in toggle.
+- `autonomyLevelV2` — `off | low | med | high`, tick density and speech rate.
+- `autonomyModelV2` — chat provider id, empty means reuse primary chat model.
+- `autonomyPersonaStrictnessV2` — `loose | med | strict`, guardrail aggression.
+
+See `src/types/autonomy.ts` for the full `AutonomySettings` interface and
+`src/lib/storage/settings.ts` for defaults.
