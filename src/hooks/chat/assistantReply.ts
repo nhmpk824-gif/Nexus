@@ -14,7 +14,7 @@ import {
 import { buildMemoryRecallContext } from '../../features/memory/recall'
 import { loadRelevantSkills, shouldGenerateSkill, generateAndSaveSkill } from '../../features/skills/autoSkillGenerator'
 import { matchCoreSkills } from '../../lib/coreRuntime'
-import { parseAssistantPerformanceContent } from '../../features/pet/performance'
+import { extractExpressionOverrides, parseAssistantPerformanceContent } from '../../features/pet/performance'
 import { buildBuiltInToolDescriptors } from '../../features/tools/builtInToolSchemas'
 import { toChatToolResult, type BuiltInToolResult } from '../../features/tools/toolTypes.ts'
 import { logVoiceEvent } from '../../features/voice/shared'
@@ -366,10 +366,18 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
       // output (strip <thinking>, drop *actions*, normalise quirks) take
       // effect before the perf parser pulls displayContent vs spokenContent
       // apart. An empty / missing rule list is a no-op.
-      const rawAssistantText = applyChatOutputTransforms(
+      const transformedAssistantText = applyChatOutputTransforms(
         response.response.content,
         currentSettings.chatOutputTransforms,
       )
+      // Inline [expr:name] overrides — ephemeral per-reply expression cues.
+      // Tags are stripped here so they never leak into displayContent /
+      // spokenContent, and the collected cues get queued alongside whatever
+      // the stage-direction parser emits (see queuePetPerformanceCue below).
+      const {
+        content: rawAssistantText,
+        cues: inlineExpressionOverrideCues,
+      } = extractExpressionOverrides(transformedAssistantText)
       const assistantPerformance = parseAssistantPerformanceContent(rawAssistantText)
       const assistantMessageContent = assistantPerformance.displayContent
         || (assistantPerformance.stageDirections.length ? '（轻轻做了个动作）' : '……')
@@ -413,7 +421,10 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           (entry): entry is NonNullable<ReturnType<typeof createDailyMemoryEntry>> => Boolean(entry),
         ),
       )
-      dependencies.ctx.queuePetPerformanceCue(assistantPerformance.cues)
+      dependencies.ctx.queuePetPerformanceCue([
+        ...assistantPerformance.cues,
+        ...inlineExpressionOverrideCues,
+      ])
       dependencies.ctx.setMood('happy')
 
       // Auto-generate skill document if the response was complex enough

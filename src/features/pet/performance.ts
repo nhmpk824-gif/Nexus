@@ -625,3 +625,49 @@ export function parseAssistantPerformanceContent(content: string): ParsedAssista
     spokenContent: presentationSections.spokenContent,
   }
 }
+
+// ── Expression override tags ───────────────────────────────────────────────
+//
+// LLMs can emit inline `[expr:name]` markers to request a one-shot
+// expression change for the current reply — SillyTavern-style. The
+// override is ephemeral: unlike setMood it doesn't persist into the
+// emotion model, it just queues a single performance cue that the Live2D
+// canvas plays for its default duration, then the pet falls back to
+// whatever mood the main emotion engine has decided.
+//
+// Only the seven "speakable" moods are accepted (matching the PetMood
+// union). Slots like `listening` / `speaking` / `touchHead` are reserved
+// for voice and tap paths — firing them from chat output would confuse
+// the existing lifecycle wiring.
+const EXPRESSION_OVERRIDE_TAG_PATTERN = /\[expr\s*:\s*([a-zA-Z_-]+)\s*\]/giu
+const EXPRESSION_OVERRIDE_DURATION_MS = 2_400
+const PUBLIC_EXPRESSION_SLOTS: ReadonlySet<PetExpressionSlot> = new Set([
+  'idle', 'thinking', 'happy', 'sleepy', 'surprised', 'confused', 'embarrassed',
+])
+
+/**
+ * Pull `[expr:name]` override tags out of raw LLM text. Returns the
+ * stripped text (tags removed entirely, whether the slot was valid or
+ * not, so no leakage into chat bubbles) plus one performance cue per
+ * valid tag. Unknown slot names drop silently — we prefer quiet
+ * no-ops to visible noise.
+ */
+export function extractExpressionOverrides(content: string): {
+  content: string
+  cues: PetPerformancePlan[]
+} {
+  if (!content) return { content: '', cues: [] }
+  const cues: PetPerformancePlan[] = []
+  const cleaned = content.replace(EXPRESSION_OVERRIDE_TAG_PATTERN, (_match, rawSlot: string) => {
+    const slot = String(rawSlot ?? '').toLowerCase().trim() as PetExpressionSlot
+    if (PUBLIC_EXPRESSION_SLOTS.has(slot)) {
+      cues.push({
+        expressionSlot: slot,
+        durationMs: EXPRESSION_OVERRIDE_DURATION_MS,
+        stageDirection: `(expr:${slot})`,
+      })
+    }
+    return ''
+  })
+  return { content: cleaned, cues }
+}

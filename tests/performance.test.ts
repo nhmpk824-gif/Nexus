@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { parseAssistantPerformanceContent } from '../src/features/pet/performance.ts'
+import { extractExpressionOverrides, parseAssistantPerformanceContent } from '../src/features/pet/performance.ts'
 
 test('removes recognized task and silent stage directions from spoken content', () => {
   const parsed = parseAssistantPerformanceContent(
@@ -60,4 +60,27 @@ test('allows silent-only stage directions without forcing spoken fallback text',
   assert.equal(parsed.spokenContent, '')
   assert.equal(parsed.cue, null)
   assert.deepEqual(parsed.stageDirections, ['操作音效'])
+})
+
+test('extractExpressionOverrides strips [expr:name] tags and emits matching cues', () => {
+  const result = extractExpressionOverrides('我来了[expr:happy]！发现了点东西[expr:surprised]。')
+
+  assert.equal(result.content, '我来了！发现了点东西。')
+  assert.equal(result.cues.length, 2)
+  assert.equal(result.cues[0]?.expressionSlot, 'happy')
+  assert.equal(result.cues[1]?.expressionSlot, 'surprised')
+})
+
+test('extractExpressionOverrides drops unknown slot names but still strips the tag', () => {
+  const result = extractExpressionOverrides('等一下[expr:bogus]好了。')
+
+  assert.equal(result.content, '等一下好了。')
+  assert.equal(result.cues.length, 0)
+})
+
+test('extractExpressionOverrides is a no-op when no tags are present', () => {
+  const result = extractExpressionOverrides('普通的一句话。')
+
+  assert.equal(result.content, '普通的一句话。')
+  assert.equal(result.cues.length, 0)
 })
