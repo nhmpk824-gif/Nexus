@@ -116,18 +116,38 @@ export function useChat(ctx: UseChatContext) {
 
   const sessionIdRef = useRef<string | null>(null)
   const mirroredMessageIdsRef = useRef<Set<string>>(new Set())
+  // Fingerprint of the last messages payload we *persisted*. Used by the
+  // save effect below to skip rewriting when the current `messages` state
+  // came in via cross-window BroadcastChannel sync (useDesktopBridge loads
+  // from storage and calls setMessages). Without this guard, the save
+  // effect in the receiving window re-broadcasts the same content, the
+  // originating window receives it, calls setMessages again with yet
+  // another array reference, and both windows loop forever — a render
+  // storm distinct from the runtime-state echo but triggered by the same
+  // cross-window sync work.
+  const lastSavedMessagesSignatureRef = useRef<string>('')
 
   useEffect(() => {
     if (messagesSaveSkipRef.current) {
       messagesSaveSkipRef.current = false
+      lastSavedMessagesSignatureRef.current = JSON.stringify(messages)
       return
     }
+    // Skip if the messages we're about to persist are byte-identical to
+    // what we already persisted (typically because BroadcastChannel just
+    // handed us the storage payload that WAS already saved elsewhere).
+    const signature = JSON.stringify(messages)
+    if (signature === lastSavedMessagesSignatureRef.current) {
+      return
+    }
+    lastSavedMessagesSignatureRef.current = signature
     // Cross-window sync. Voice turns run entirely inside the pet window —
     // STT → sendMessage → setMessages all happen there, never touching the
-    // chat panel's React state. The panel listens for `storage` events on
-    // CHAT_STORAGE_KEY (see useDesktopBridge) and reloads its message list
-    // from there, so we need to actually write that key. Without this, the
-    // pet window's voice turns are invisible to an open chat panel.
+    // chat panel's React state. The panel listens for BroadcastChannel
+    // updates on CHAT_STORAGE_KEY (see useDesktopBridge) and reloads its
+    // message list from storage, so we need to actually write that key.
+    // Without this, the pet window's voice turns are invisible to an open
+    // chat panel.
     saveChatMessages(messages)
     upsertChatSession({
       id: currentSessionIdRef.current,
