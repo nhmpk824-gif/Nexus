@@ -337,6 +337,78 @@ function getWeatherPlacePopulationScore(population) {
   return 1
 }
 
+// Nominatim (OpenStreetMap) returns a different result shape than open-meteo's
+// geocoding API. Adapt each Nominatim hit into the shape `pickBestWeatherPlace`
+// already knows how to score, so swapping the provider at the request level
+// doesn't require touching any of the scoring / formatting logic below.
+//
+// We switched away from `geocoding-api.open-meteo.com` because that subdomain's
+// TLS cert started being reissued with notBefore dates several hours in the
+// future, failing handshake on correctly-clocked clients worldwide — not a
+// user or client bug. Nominatim is the canonical OSM geocoding endpoint and
+// is hosted on stable infrastructure.
+function normalizeNominatimPlace(item) {
+  const address = item?.address ?? {}
+  // Prefer the most specific populated-place field OSM gave us for `name`;
+  // fall back through the administrative ladder to the first comma-separated
+  // piece of display_name so tiny hamlets still end up with SOMETHING usable.
+  const displayHead = typeof item?.display_name === 'string'
+    ? item.display_name.split(',')[0]?.trim() ?? ''
+    : ''
+  const name = String(
+    item?.name
+    || address.city
+    || address.town
+    || address.village
+    || address.hamlet
+    || address.suburb
+    || address.county
+    || address.state
+    || displayHead
+    || '',
+  ).trim()
+  const admin1 = String(address.state || address.province || address.region || '').trim()
+  const admin2 = String(address.county || address.municipality || address.city_district || '').trim()
+  const country = String(address.country || '').trim()
+  const countryCode = String(address.country_code || '').toUpperCase()
+  // Nominatim doesn't expose GeoNames feature codes. `place_rank` gives a
+  // rough equivalent (lower = more important / larger admin area): capitals
+  // and first-level admin centres usually rank 4-12, cities 12-16, towns and
+  // villages 16-20. Map to the feature-code tiers the existing scorer
+  // already understands.
+  const placeRank = Number(item?.place_rank)
+  let featureCode = 'PPL'
+  if (Number.isFinite(placeRank)) {
+    if (placeRank <= 8) featureCode = 'PPLC'
+    else if (placeRank <= 12) featureCode = 'PPLA'
+    else if (placeRank <= 14) featureCode = 'PPLA2'
+    else if (placeRank <= 16) featureCode = 'PPLA3'
+    else featureCode = 'PPL'
+  }
+  // No population in Nominatim, but `importance` (0-1 relevance score) is a
+  // reasonable proxy for "how major is this place" in the scorer.
+  const importance = Number(item?.importance)
+  let population = 0
+  if (Number.isFinite(importance)) {
+    if (importance >= 0.8) population = 5_000_000
+    else if (importance >= 0.6) population = 1_000_000
+    else if (importance >= 0.4) population = 300_000
+    else if (importance >= 0.25) population = 100_000
+    else if (importance > 0) population = 20_000
+  }
+  return {
+    name,
+    admin1,
+    admin2,
+    country,
+    country_code: countryCode,
+    feature_code: featureCode,
+    population,
+    latitude: Number(item?.lat),
+    longitude: Number(item?.lon),
+  }
+}
+
 function pickBestWeatherPlace(results, query) {
   if (!Array.isArray(results) || !results.length) {
     return null
@@ -417,15 +489,29 @@ export async function lookupWeatherByLocation(location, fallbackLocation = '') {
   let bestScore = Number.NEGATIVE_INFINITY
 
   for (const candidate of locationCandidates) {
+    // Use Nominatim instead of open-meteo's geocoding subdomain. See
+    // `normalizeNominatimPlace` for why: open-meteo's geocoding cert has
+    // been getting re-issued with notBefore timestamps in the future,
+    // breaking TLS handshake on correctly-clocked clients globally. The
+    // forecast endpoint (`api.open-meteo.com`) still works fine and keeps
+    // serving a valid cert, so we only replace the geocoding leg.
+    //
+    // Nominatim's usage policy requires a User-Agent that identifies this
+    // app, and throttles anonymous callers to ~1 req/sec. Occasional
+    // user-driven weather lookups easily fit inside that budget.
     const geocodingResponse = await performNetworkRequest(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(candidate)}&count=5&language=zh&format=json`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(candidate)}&format=jsonv2&limit=5&addressdetails=1&accept-language=zh`,
       {
         method: 'GET',
         timeoutMs: TOOL_WEATHER_TIMEOUT_MS,
         timeoutMessage: '天气定位超时，请稍后再试。',
-        // Bypass Chromium's bundled CA verifier — open-meteo serves a valid
-        // Let's Encrypt cert that OS curl accepts but Electron's net.fetch
-        // rejects with ERR_CERT_DATE_INVALID on some versions.
+        headers: {
+          'User-Agent': 'Nexus-Companion/0.2.7 (https://github.com/FanyinLiu/Nexus)',
+          Accept: 'application/json',
+        },
+        // Route via Node's undici fetch so TLS verification uses the OS
+        // trust store (same rationale as every other public-API call made
+        // from the main process — see `forceNativeFetch` in electron/net.js).
         forceNativeFetch: true,
       },
     )
@@ -435,7 +521,10 @@ export async function lookupWeatherByLocation(location, fallbackLocation = '') {
     }
 
     const geocodingData = await readJsonSafe(geocodingResponse)
-    const matchedResult = pickBestWeatherPlace(geocodingData?.results, candidate)
+    const normalizedPlaces = Array.isArray(geocodingData)
+      ? geocodingData.map(normalizeNominatimPlace)
+      : []
+    const matchedResult = pickBestWeatherPlace(normalizedPlaces, candidate)
     if (matchedResult && matchedResult.score > bestScore) {
       place = matchedResult.place
       resolvedLocation = candidate
