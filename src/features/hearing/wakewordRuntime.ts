@@ -69,16 +69,23 @@ const DEFAULT_RETRY_MAX_MS = 10_000
 const DEFAULT_RETRY_MAX_ATTEMPTS = 5
 
 // Errors that indicate the environment genuinely can't support wakeword
-// listening — no audio input device, permission permanently denied, etc.
-// Short-circuit retries for these so we don't burn CPU on a known-dead path.
+// listening — permission permanently denied, runtime doesn't ship the
+// wakeword model, etc. Short-circuit retries for these so we don't burn
+// CPU on a known-dead path.
+//
+// Device-level errors (`NotFoundError` / "requested device not found") are
+// *not* permanent even though they sound like it: Bluetooth headsets
+// transiently report "no input device" while macOS switches them between
+// A2DP (music) and HFP (call) profiles on startup. Under the old rule
+// wakeword would die permanently on every Nexus launch if the user was
+// wearing AirPods. The normal retry-with-backoff path (5 attempts over
+// ~30 s) is exactly what that class of error wants — the `MAX_ATTEMPTS`
+// cap still bounds CPU usage on a truly mic-less machine.
 export function isPermanentWakewordError(message: string): boolean {
   const normalized = String(message ?? '').toLowerCase()
   if (!normalized) return false
   return (
-    normalized.includes('device not found')
-    || normalized.includes('notfounderror')
-    || normalized.includes('requested device not found')
-    || normalized.includes('permission denied')
+    normalized.includes('permission denied')
     || normalized.includes('notallowederror')
     || normalized.includes('当前环境不支持唤醒词')
   )

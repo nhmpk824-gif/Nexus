@@ -40,13 +40,17 @@ test('wakeword trigger dedupe ignores hits that arrive inside the cooldown windo
   }), false)
 })
 
-test('isPermanentWakewordError flags getUserMedia-style terminal failures', () => {
-  assert.equal(isPermanentWakewordError('Requested device not found'), true)
-  assert.equal(isPermanentWakewordError('NotFoundError: audio device missing'), true)
+test('isPermanentWakewordError flags only truly unrecoverable conditions', () => {
+  // Permission-class errors require user action — no point retrying.
   assert.equal(isPermanentWakewordError('NotAllowedError: user denied'), true)
   assert.equal(isPermanentWakewordError('permission denied'), true)
   assert.equal(isPermanentWakewordError('当前环境不支持唤醒词检测'), true)
-  // Transient failures keep retrying
+  // Device-not-found is transient on Bluetooth headsets (A2DP↔HFP profile
+  // switch takes a second on startup) so the retry loop, not the give-up
+  // path, is the right place for it.
+  assert.equal(isPermanentWakewordError('Requested device not found'), false)
+  assert.equal(isPermanentWakewordError('NotFoundError: audio device missing'), false)
+  // Other transient network/timeout failures keep retrying too.
   assert.equal(isPermanentWakewordError('fetch failed'), false)
   assert.equal(isPermanentWakewordError('timeout'), false)
   assert.equal(isPermanentWakewordError(''), false)
@@ -65,7 +69,7 @@ test('runtime gives up into unavailable phase when startListener fails repeatedl
       reason: '',
     }),
     startListener: async () => {
-      throw new Error('Requested device not found')
+      throw new Error('NotAllowedError: permission denied')
     },
     onStateChange: (next) => {
       states.push({
