@@ -129,11 +129,26 @@ export interface RunGuardrailOptions {
   onError?: (error: unknown) => void
 }
 
+/**
+ * The text we actually want to guard: the spoken words for `speak`, the
+ * announcement (if any) for `spawn`, null for `silent` or `spawn` without
+ * an announcement. Task / purpose on `spawn` are internal dispatcher
+ * fields — they never reach the user's ears, so guardrail skips them.
+ */
+function extractGuardableText(result: DecisionResult): string | null {
+  if (result.kind === 'silent') return null
+  if (result.kind === 'speak') return result.text
+  if (result.kind === 'spawn') return result.announcement ?? null
+  return null
+}
+
 export async function runPersonaGuardrail(
   opts: RunGuardrailOptions,
 ): Promise<GuardrailOutcome> {
-  // Silent always passes — we never invent content.
-  if (opts.result.kind === 'silent') {
+  const candidateText = extractGuardableText(opts.result)
+
+  // No user-facing text — silent, or spawn without announcement. Pass.
+  if (candidateText === null) {
     return { verdict: 'pass', result: opts.result }
   }
 
@@ -143,7 +158,7 @@ export async function runPersonaGuardrail(
   }
 
   // Pattern checks (med + strict)
-  const pattern = runPatternChecks(opts.result.text, opts.persona)
+  const pattern = runPatternChecks(candidateText, opts.persona)
   if (pattern.verdict === 'fail') {
     return { verdict: 'fail', reason: pattern.reason, result: opts.result }
   }
@@ -160,7 +175,7 @@ export async function runPersonaGuardrail(
       personaName: opts.persona.id,
       signaturePhrases: opts.persona.style.signaturePhrases ?? [],
       forbiddenPhrases: opts.persona.style.forbiddenPhrases ?? [],
-      candidateText: opts.result.text,
+      candidateText,
       examples: opts.persona.examples.slice(0, 4),
     })
   } catch (error) {

@@ -46,6 +46,20 @@ export interface DecisionPromptHints {
     reason: string
     rejectedText: string
   }
+  /**
+   * Runtime availability of the subagent dispatcher. When provided, the
+   * prompt exposes the `spawn` action so the companion can dispatch a
+   * background helper agent (e.g. to look something up). When omitted or
+   * `enabled: false` the `spawn` action is hidden from the contract — the
+   * model only sees `silent` / `speak`.
+   */
+  subagentAvailability?: {
+    enabled: boolean
+    activeCount: number
+    maxConcurrent: number
+    /** null means "no daily budget configured" (treat as unlimited). */
+    dailyBudgetRemainingUsd: number | null
+  }
 }
 
 export interface ChatMessage {
@@ -55,12 +69,12 @@ export interface ChatMessage {
 
 // ── System prompt: persona + behavioural contract ─────────────────────────
 
-const RESPONSE_CONTRACT = `# Response contract
+const RESPONSE_CONTRACT_BASE = `# Response contract
 
 Always reply with a single JSON object and nothing else. No markdown fence,
 no reasoning text before or after, no explanation — just the JSON.
 
-Two valid shapes:
+Valid shapes:
 
   {"action": "silent"}
 
@@ -72,10 +86,39 @@ Two valid shapes:
 
     Use this when you *would* naturally say something to the user right
     now. The text field is exactly the words you say — no role labels,
-    no markdown, no stage directions. Keep it short (1-3 sentences).
+    no markdown, no stage directions. Keep it short (1-3 sentences).`
 
-Anything else in the response — reasoning, apology, self-narration, multi-
+const RESPONSE_CONTRACT_SPAWN = `  {"action": "spawn", "task": "...", "purpose": "...", "announcement": "..."}
+
+    Use this when the user would genuinely benefit from you doing
+    something behind the scenes — looking a fact up, checking a site,
+    summarising a doc they mentioned. A background helper agent runs
+    the task and returns a summary to the chat when done.
+
+    - task: a clear natural-language instruction for the helper. Be
+      specific ("查今晚北京天气，含温度和降水概率"), not vague ("帮我查东西").
+    - purpose: one short sentence the user sees, explaining why you're
+      doing this now. Stay in character.
+    - announcement: OPTIONAL. If you want to verbally acknowledge it
+      ("让我查查" / "等我一下"), put it here — it will be spoken in your
+      voice. Omit when silent dispatch feels more natural. Keep it short.
+
+    Only spawn when the task clearly helps. Don't spawn to fill air, don't
+    spawn when you can just answer from context, don't spawn for things the
+    user can answer faster themselves.`
+
+const RESPONSE_CONTRACT_TAIL = `Anything else in the response — reasoning, apology, self-narration, multi-
 line commentary — will be discarded and treated as silent. So don't.`
+
+function buildResponseContract(
+  subagentAvailability: DecisionPromptHints['subagentAvailability'],
+): string {
+  const canSpawn = Boolean(subagentAvailability?.enabled)
+  const parts = [RESPONSE_CONTRACT_BASE]
+  if (canSpawn) parts.push(RESPONSE_CONTRACT_SPAWN)
+  parts.push(RESPONSE_CONTRACT_TAIL)
+  return parts.join('\n\n')
+}
 
 function formatPersonaSystemPrompt(persona: LoadedPersona): string {
   const sections: string[] = []
@@ -217,6 +260,26 @@ function formatContextSections(context: AutonomyContextV2, hints: DecisionPrompt
     )
   }
 
+  // ── Subagent capacity ──
+  if (hints.subagentAvailability?.enabled) {
+    const a = hints.subagentAvailability
+    const capacityLine = `后台子代理占用：${a.activeCount}/${a.maxConcurrent}`
+    const budgetLine = a.dailyBudgetRemainingUsd !== null
+      ? `今日剩余预算：$${a.dailyBudgetRemainingUsd.toFixed(2)}`
+      : '今日预算：未设置上限'
+    const nearCapacity = a.activeCount >= a.maxConcurrent - 1
+    const lowBudget = a.dailyBudgetRemainingUsd !== null && a.dailyBudgetRemainingUsd < 0.05
+    const cautions: string[] = []
+    if (nearCapacity) cautions.push('接近并发上限，只在明确受益时才 spawn。')
+    if (lowBudget) cautions.push('预算吃紧，除非高价值任务否则别 spawn。')
+    sections.push(
+      `## 后台任务状态\n`
+      + capacityLine + '\n'
+      + budgetLine
+      + (cautions.length ? '\n' + cautions.join(' ') : ''),
+    )
+  }
+
   return sections.join('\n\n')
 }
 
@@ -247,7 +310,10 @@ export function buildDecisionPrompt(
   persona: LoadedPersona,
   hints: DecisionPromptHints = {},
 ): ChatMessage[] {
-  const systemParts: string[] = [formatPersonaSystemPrompt(persona), RESPONSE_CONTRACT]
+  const systemParts: string[] = [
+    formatPersonaSystemPrompt(persona),
+    buildResponseContract(hints.subagentAvailability),
+  ]
   if (hints.forceSilent) {
     systemParts.push(
       '# Override\n\n'
