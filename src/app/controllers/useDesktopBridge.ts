@@ -40,6 +40,7 @@ import {
   loadReminderTasks,
   loadVoicePipelineState,
   loadVoiceTrace,
+  onStorageChange,
   savePetWindowPreferences,
 } from '../../lib'
 import type {
@@ -257,60 +258,47 @@ export function useDesktopBridge({
     }
   }, [view])
 
+  // Cross-window storage sync. Electron's `window.storage` event does NOT
+  // fire between separate BrowserWindow instances — it's a known limitation
+  // (electron/electron#7066, #1037). The pet and panel windows are distinct
+  // BrowserWindows sharing one localStorage partition, so writes land in
+  // both windows' storage but neither window gets a `storage` event from
+  // the other. Result: panel's chat view doesn't refresh when the pet
+  // window appends a new message, even though the message IS persisted.
+  //
+  // Fix: subscribe through storage/core's `onStorageChange`, which is
+  // backed by a BroadcastChannel (`nexus-storage-sync`). BroadcastChannel
+  // works across same-origin BrowserWindows in Electron and exposes the
+  // same "every listener except the sender" semantics we want — the
+  // writing window mutates its own React state directly, other windows
+  // reload from localStorage when the broadcast arrives.
   useEffect(() => {
-    function handleStorage(event: StorageEvent) {
-      if (!event.key || event.key === CHAT_STORAGE_KEY) {
-        chat.setMessages(loadChatMessages())
-      }
-
-      if (!event.key || event.key === MEMORY_STORAGE_KEY) {
-        memory.setMemories(loadMemories())
-      }
-
-      if (!event.key || event.key === DAILY_MEMORY_STORAGE_KEY) {
-        memory.setDailyMemories(loadDailyMemories())
-      }
-
-      if (!event.key || event.key === SETTINGS_STORAGE_KEY) {
-        setSettings(getSettingsSnapshot())
-      }
-
-      if (!event.key || event.key === REMINDER_TASKS_STORAGE_KEY) {
-        setReminderTasks(loadReminderTasks())
-      }
-
-      if (!event.key || event.key === DEBUG_CONSOLE_EVENTS_STORAGE_KEY) {
-        setDebugConsoleEvents(loadDebugConsoleEvents())
-      }
-
-      if (!event.key || event.key === VOICE_PIPELINE_STORAGE_KEY) {
-        voice.setVoicePipeline(loadVoicePipelineState())
-      }
-
-      if (!event.key || event.key === VOICE_TRACE_STORAGE_KEY) {
-        voice.setVoiceTrace(loadVoiceTrace())
-      }
-
-      if (!event.key || event.key === PET_WINDOW_PREFERENCES_STORAGE_KEY) {
+    const unsubscribes: Array<() => void> = [
+      onStorageChange(CHAT_STORAGE_KEY, () => chat.setMessages(loadChatMessages())),
+      onStorageChange(MEMORY_STORAGE_KEY, () => memory.setMemories(loadMemories())),
+      onStorageChange(DAILY_MEMORY_STORAGE_KEY, () => memory.setDailyMemories(loadDailyMemories())),
+      onStorageChange(SETTINGS_STORAGE_KEY, () => setSettings(getSettingsSnapshot())),
+      onStorageChange(REMINDER_TASKS_STORAGE_KEY, () => setReminderTasks(loadReminderTasks())),
+      onStorageChange(DEBUG_CONSOLE_EVENTS_STORAGE_KEY, () => setDebugConsoleEvents(loadDebugConsoleEvents())),
+      onStorageChange(VOICE_PIPELINE_STORAGE_KEY, () => voice.setVoicePipeline(loadVoicePipelineState())),
+      onStorageChange(VOICE_TRACE_STORAGE_KEY, () => voice.setVoiceTrace(loadVoiceTrace())),
+      onStorageChange(PET_WINDOW_PREFERENCES_STORAGE_KEY, () => {
         const preferences = loadPetWindowPreferences()
         setIsPinned(preferences.isPinned)
         setClickThrough(preferences.clickThrough)
-      }
-
-      if (!event.key || event.key === AMBIENT_PRESENCE_STORAGE_KEY) {
-        pet.setAmbientPresence(loadAmbientPresence())
-      }
-
-      if (!event.key || event.key === PRESENCE_HISTORY_STORAGE_KEY) {
+      }),
+      onStorageChange(AMBIENT_PRESENCE_STORAGE_KEY, () => pet.setAmbientPresence(loadAmbientPresence())),
+      onStorageChange(PRESENCE_HISTORY_STORAGE_KEY, () => {
         pet.presenceHistoryRef.current = loadPresenceHistory().map((item) => ({
           text: item.text,
           category: item.category,
         }))
-      }
-    }
+      }),
+    ]
 
-    window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    return () => {
+      for (const off of unsubscribes) off()
+    }
   }, [chat, memory, pet, setDebugConsoleEvents, setReminderTasks, setSettings, setClickThrough, setIsPinned, voice])
 
   // Runtime-state bridge: listens for cross-window snapshot pushes and writes

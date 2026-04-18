@@ -423,6 +423,10 @@ export async function lookupWeatherByLocation(location, fallbackLocation = '') {
         method: 'GET',
         timeoutMs: TOOL_WEATHER_TIMEOUT_MS,
         timeoutMessage: '天气定位超时，请稍后再试。',
+        // Bypass Chromium's bundled CA verifier — open-meteo serves a valid
+        // Let's Encrypt cert that OS curl accepts but Electron's net.fetch
+        // rejects with ERR_CERT_DATE_INVALID on some versions.
+        forceNativeFetch: true,
       },
     )
 
@@ -452,6 +456,8 @@ export async function lookupWeatherByLocation(location, fallbackLocation = '') {
       method: 'GET',
       timeoutMs: TOOL_WEATHER_TIMEOUT_MS,
       timeoutMessage: '天气查询超时，请稍后再试。',
+      // Same CA-bundle workaround as the geocoding call above.
+      forceNativeFetch: true,
     },
   )
 

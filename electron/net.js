@@ -57,6 +57,7 @@ export async function performNetworkRequest(url, options = {}) {
     timeoutMs = CONNECTION_TEST_TIMEOUT_MS,
     timeoutMessage = '请求超时，请检查网络、代理或服务状态。',
     signal,
+    forceNativeFetch = false,
     ...rest
   } = options
 
@@ -69,11 +70,21 @@ export async function performNetworkRequest(url, options = {}) {
   // certain request combinations. Any non-loopback POST that hand-builds a
   // multipart Buffer (e.g. Zhipu/OpenAI-compatible STT through audioIpc.js)
   // must bypass Chromium too, not just loopback URLs.
+  //
+  // `forceNativeFetch: true` is an explicit opt-in for endpoints whose TLS
+  // certificates validate fine against the OS trust store (confirmed via
+  // `curl`) but fail inside Chromium's bundled CA verifier with
+  // ERR_CERT_DATE_INVALID. Electron pins its own Chromium-vendored root
+  // bundle, so when an upstream CA rotates (Let's Encrypt is the typical
+  // offender) requests through net.fetch can fail on the same machine where
+  // every other tool succeeds. Routing the request through Node's undici
+  // fetch picks up Node's OpenSSL + the OS/NSS trust store, which restores
+  // the working cert path without weakening verification anywhere else.
   const isBinaryBody =
     body instanceof Uint8Array ||
     (typeof Buffer !== 'undefined' && Buffer.isBuffer?.(body))
   const loopback = isLoopbackUrl(url)
-  const useNativeFetch = body instanceof FormData || isBinaryBody || loopback
+  const useNativeFetch = forceNativeFetch || body instanceof FormData || isBinaryBody || loopback
   const targetUrl = loopback ? canonicalizeLoopbackUrl(url) : url
 
   return withRequestTimeout(
