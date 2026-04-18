@@ -308,6 +308,10 @@ export function createVoiceBindings(bag: VoiceRuntimeBag): VoiceBindings {
       continuousVoiceActiveRef: refs.continuousVoiceActiveRef,
       settingsRef: ctx.settingsRef,
       speechLevelValueRef: refs.speechLevelValueRef,
+      // When KWS is listening, the monitor subscribes to its existing mic
+      // frames instead of opening a second getUserMedia. See
+      // `startSpeechInterruptMonitor` for the full rationale.
+      wakewordRuntimeRef: refs.wakewordRuntimeRef,
       clearPendingVoiceRestart,
       stopActiveSpeechOutput,
       onInterrupted: () => {

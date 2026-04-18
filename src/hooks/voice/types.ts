@@ -45,11 +45,20 @@ export type VadConversationSession = {
 }
 
 export type SpeechInterruptMonitorSession = {
-  stream: MediaStream
-  audioContext: AudioContext
-  analyser: AnalyserNode
-  source: MediaStreamAudioSourceNode
+  // Legacy capture path — only populated when the monitor opened its own
+  // getUserMedia (wakeword not listening). All four fields move in lockstep:
+  // either all set or all null.
+  stream: MediaStream | null
+  audioContext: AudioContext | null
+  analyser: AnalyserNode | null
+  source: MediaStreamAudioSourceNode | null
   dataArray: Float32Array<ArrayBuffer>
+  // Frame-driver path — populated when monitor subscribes to the wakeword
+  // runtime's existing mic frames (avoids a second getUserMedia, which on
+  // macOS sometimes contends with the KWS listener). When active, the
+  // subscribe callback keeps `currentRms` fresh; the raf tick reads it.
+  unsubscribeFrames: (() => void) | null
+  currentRms: number
   animationFrameId: number | null
   startedAt: number
   speechStartedAt: number | null
