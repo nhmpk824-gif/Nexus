@@ -100,7 +100,7 @@ type StartSpeechInterruptMonitorOptions = {
   scheduleVoiceRestart: (statusText?: string, delay?: number, force?: boolean) => void
 }
 
-export function destroySpeechInterruptMonitor(
+function destroySpeechInterruptMonitor(
   speechInterruptMonitorRef: MutableRefObject<SpeechInterruptMonitorSession | null>,
   session: SpeechInterruptMonitorSession | null,
 ) {
@@ -211,7 +211,7 @@ export function clearSpeechInterruptedFlag(
   }
 }
 
-export function shouldMonitorSpeechInterruptions(
+function shouldMonitorSpeechInterruptions(
   options: {
     shouldResumeContinuousVoice: boolean
   } & ContinuousVoiceOptions,
