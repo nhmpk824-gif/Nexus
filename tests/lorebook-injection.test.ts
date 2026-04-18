@@ -30,40 +30,40 @@ function userMessage(content: string, id = 'm'): ChatMessage {
   }
 }
 
-test('selectTriggeredLorebookEntries fires on a single keyword match', () => {
+test('selectTriggeredLorebookEntries fires on a single keyword match', async () => {
   const entries = [
     makeEntry({ id: 'mom', keywords: ['\u5988\u5988'], content: '用户的母亲住在上海。' }),
   ]
   const messages = [userMessage('\u6211\u5988\u5988\u4eca\u5929\u6253\u7535\u8bdd\u6765\u4e86')]
-  const hits = selectTriggeredLorebookEntries(entries, messages)
+  const hits = await selectTriggeredLorebookEntries(entries, messages)
   assert.equal(hits.length, 1)
   assert.equal(hits[0].id, 'mom')
 })
 
-test('disabled entries never fire', () => {
+test('disabled entries never fire', async () => {
   const entries = [makeEntry({ id: 'mom', keywords: ['\u5988\u5988'], content: 'x', enabled: false })]
-  const hits = selectTriggeredLorebookEntries(entries, [userMessage('\u5988\u5988\u6765\u4e86')])
+  const hits = await selectTriggeredLorebookEntries(entries, [userMessage('\u5988\u5988\u6765\u4e86')])
   assert.equal(hits.length, 0)
 })
 
-test('scanner only looks at the last N user messages', () => {
+test('scanner only looks at the last N user messages', async () => {
   const entries = [makeEntry({ id: 'old', keywords: ['\u9c7c'], content: 'x' })]
   const messages: ChatMessage[] = []
   messages.push(userMessage('\u6211\u559c\u6b22\u5403\u9c7c', 'm-old'))
   for (let i = 0; i < 8; i += 1) {
     messages.push(userMessage(`\u5929\u6c14\u4e0d\u9519 ${i}`, `m-${i}`))
   }
-  const hits = selectTriggeredLorebookEntries(entries, messages)
+  const hits = await selectTriggeredLorebookEntries(entries, messages)
   // "鱼" in the distant past should be out of the 4-message window.
   assert.equal(hits.length, 0)
 })
 
-test('priority ordering beats match length', () => {
+test('priority ordering beats match length', async () => {
   const entries = [
     makeEntry({ id: 'low', keywords: ['\u9c7c'], content: 'low-priority short-keyword' }),
     makeEntry({ id: 'high', keywords: ['\u9c7c\u7c7b'], content: 'high-priority', priority: 10 }),
   ]
-  const hits = selectTriggeredLorebookEntries(entries, [userMessage('\u6211\u5728\u67e5\u9c7c\u7c7b\u8d44\u6599')])
+  const hits = await selectTriggeredLorebookEntries(entries, [userMessage('\u6211\u5728\u67e5\u9c7c\u7c7b\u8d44\u6599')])
   assert.equal(hits.length, 2)
   assert.equal(hits[0].id, 'high')
 })

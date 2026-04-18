@@ -1,9 +1,9 @@
-import { LOCAL_HASH_MEMORY_MODEL_ID } from './constants'
+import { LOCAL_HASH_MEMORY_MODEL_ID } from './constants.ts'
 
 const localHashDimensions = 256
 const MAX_CACHE_SIZE = 1000
 const embeddingCache = new Map<string, Promise<number[]>>()
-let remoteVectorRuntimePromise: Promise<typeof import('./vectorSearchRuntime')> | null = null
+let remoteVectorRuntimePromise: Promise<typeof import('./vectorSearchRuntime.ts')> | null = null
 
 function setEmbeddingCache(key: string, value: Promise<number[]>): void {
   if (embeddingCache.size >= MAX_CACHE_SIZE) {
@@ -79,7 +79,7 @@ export function isLocalHashMemoryModel(model: string) {
 
 async function getRemoteVectorRuntime() {
   if (!remoteVectorRuntimePromise) {
-    remoteVectorRuntimePromise = import('./vectorSearchRuntime')
+    remoteVectorRuntimePromise = import('./vectorSearchRuntime.ts')
   }
 
   return remoteVectorRuntimePromise
