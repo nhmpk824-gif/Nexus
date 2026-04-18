@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.zh-TW.md">繁體中文</a> · <a href="docs/README.ja.md">日本語</a>
+  <b>English</b> · <a href="docs/README.zh-CN.md">简体中文</a> · <a href="docs/README.zh-TW.md">繁體中文</a> · <a href="docs/README.ja.md">日本語</a> · <a href="docs/README.ko.md">한국어</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/FanyinLiu/Nexus/releases/latest/download/Nexus-Setup-0.2.5.exe"><img src="https://img.shields.io/badge/Windows-Download-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows"></a>
+  <a href="https://github.com/FanyinLiu/Nexus/releases/latest/download/Nexus-Setup-0.2.6.exe"><img src="https://img.shields.io/badge/Windows-Download-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows"></a>
   <a href="https://github.com/FanyinLiu/Nexus/releases/latest"><img src="https://img.shields.io/badge/macOS-Download-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS"></a>
   <a href="https://github.com/FanyinLiu/Nexus/releases/latest"><img src="https://img.shields.io/badge/Linux-Download-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux"></a>
 </p>
@@ -36,7 +36,8 @@ The design goal is persistence of relationship, not just chat. A nightly **dream
 
 ## News
 
-- **2025.04.19** — **v0.2.5 released.** Autonomy Engine V2 now default-on (LLM-driven decision + persona guardrail replacing the hand-written rule tree). Chat pane now opens fresh each launch with past sessions browsable under Settings → 聊天记录. Voice/TTS reliability pass (Edge TTS unblocked, Pipecat pipeline race conditions fixed, wake-word sensitivity tuned for weak mics). New `system-dark` theme preset. See [What's new in v0.2.5](#whats-new-in-v025) below for full notes.
+- **2026.04.19** — **v0.2.6 released.** Subagent dispatcher lands — the companion can now spawn a background research helper from autonomy ticks or chat tool calls, surfaced in the chat panel as a live status strip. Barge-in monitor hardened: any TTS reply (voice *or* typed-text) is interruptible, and the wake-word listener's mic is reused to avoid macOS contention. Fixes a render-storm bug that made long STT utterances stall the second turn, and the matching cross-window sync bug that made voice messages invisible to an open chat panel. [What's new in v0.2.6](#whats-new-in-v026) below.
+- **2025.04.19** — v0.2.5 released. Autonomy Engine V2 now default-on (LLM-driven decision + persona guardrail replacing the hand-written rule tree). Chat pane opens fresh each launch with past sessions browsable under Settings → 聊天记录. Voice/TTS reliability pass. New `system-dark` theme preset. [Changelog →](https://github.com/FanyinLiu/Nexus/releases/tag/v0.2.5)
 - **2025.04.16** — v0.2.4 released. Big voice/TTS reliability pass (tool-call TTS, markdown stripping, empty-stream detection, first-audio watchdog), Anthropic prompt caching wired on the system + tools prefix, wake-word gaps tightened, 20+ bug fixes. [Changelog →](https://github.com/FanyinLiu/Nexus/releases/tag/v0.2.4)
 - **2025.04.15** — Wake-word + VAD rewrite (Plan C): main-process Silero VAD + sherpa-onnx-node, single mic stream. Fixes the "only fires once" wake bug.
 - **2025.04.14** — TTS intermittency fixes: retry / per-segment events / sender teardown.
@@ -52,7 +53,9 @@ The design goal is persistence of relationship, not just chat. A nightly **dream
 
 - 🧠 **Memory that dreams.** Three-tier hot / warm / cold with hybrid BM25 + vector search. A nightly dream cycle clusters conversations into *narrative threads* so the companion's sense of you compounds over time instead of resetting each session.
 
-- 🤖 **Autonomous inner life (V2).** Single LLM decision call per tick, fed a layered snapshot (emotion · relationship · rhythm · desktop · recent chat) and filtered through a per-persona guardrail. No more formulaic template output — it writes in its own voice, and can also choose to stay silent. See [What's new in v0.2.5](#whats-new-in-v025).
+- 🤖 **Autonomous inner life (V2).** Single LLM decision call per tick, fed a layered snapshot (emotion · relationship · rhythm · desktop · recent chat) and filtered through a per-persona guardrail. No more formulaic template output — it writes in its own voice, can choose to stay silent, and — as of v0.2.6 — can dispatch a background research helper when a task would actually benefit from it.
+
+- 🧰 **Subagent dispatcher (v0.2.6).** The companion can fire a bounded research loop behind the scenes — web search or MCP tools — and weave the summary into its next reply. Capacity + daily budget enforced; opt-in via Settings. See [What's new in v0.2.6](#whats-new-in-v026).
 
 - 🔧 **Built-in tools.** Web search, weather, reminders. Works with native function calling **and** a prompt-mode fallback for models that don't support `tools`.
 
@@ -68,146 +71,126 @@ The design goal is persistence of relationship, not just chat. A nightly **dream
 
 - 💰 **Cost-aware.** Built-in budget metering + Anthropic prompt caching on the system + tools prefix (30-50% input token reduction on long sessions).
 
-## What's new in v0.2.5
+## What's new in v0.2.6
 
-> Autonomy engine rewrite is the headline; three other items landed this
-> cycle — chat bucketing, a voice/TTS reliability pass, and a new
-> `system-dark` theme. This section is refreshed each release; older notes
-> live in [Releases](https://github.com/FanyinLiu/Nexus/releases).
+> Subagent dispatcher is the headline; barge-in got a hardening pass so
+> it actually works on every TTS reply; and a render-storm bug that made
+> voice turns invisible to an open chat panel is fixed. This section is
+> refreshed each release — older notes live in
+> [Releases](https://github.com/FanyinLiu/Nexus/releases).
 
-### 🤖 Autonomy Engine V2 — headline
+### 🧰 Subagent dispatcher — headline
 
-> **TL;DR** — The old rule-based decision tree (~900 lines of templates) has
-> been replaced by a single LLM call per tick, wrapped in a per-persona
-> guardrail. Proactive speech now sounds like the persona instead of like a
-> template. Feature flag was flipped on by default in this release.
+> **TL;DR** — The companion can now spawn a bounded background research
+> agent when a task would genuinely benefit from it (web lookup,
+> doc-reading, fact checks). Two entry points: the autonomy engine can
+> choose `spawn` in place of `speak`, or the chat LLM can call the
+> `spawn_subagent` tool mid-turn. Status is surfaced as a live chip above
+> the chat message list; the summary is woven into the companion's
+> reply. Default off — opt-in per-user.
 
-#### Why we rewrote it
-
-The v1 autonomy pipeline was three pieces of hand-written logic bolted
-together:
-
-- `proactiveEngine.ts` — a decision tree over hard-coded templates
-- `innerMonologue.ts` — a separate LLM call for "what is the pet thinking?"
-- `intentPredictor.ts` — another LLM call for "what will the user say next?"
-
-Emotion, relationship, and rhythm were all tracked faithfully — but they
-barely flowed into the words that came out, because the output layer was a
-template picker, not a writer. Users reported the proactive lines felt
-"childish" and "formulaic" regardless of persona. That's what V2 fixes.
-
-#### What V2 actually does
+Turning on:
 
 ```
-tick (eligible?) → contextGatherer → decisionEngine → personaGuardrail → delivery
-      │                 │                  │                │              │
-      └─ legacy gates   └─ pure signal    └─ one LLM       └─ forbidden   └─ speak via
-         (awake, VAD,      aggregator        call that        phrase +       the same
-          quiet hours,     (no IO, no        returns          density        streaming
-          cost limit)      React)            {speak, text,    checks, LLM    TTS path as
-                                             silence_reason}  judge option   manual chat
+Settings → Subagents → Enable
+  maxConcurrent:    1–3 (hard cap 3)
+  perTaskBudgetUsd: soft cap per task
+  dailyBudgetUsd:   soft cap across all tasks today
+  modelOverride:    optional — point research at a cheaper tier
 ```
 
-Key shifts from V1:
+Three-tier model fallback: `subagentSettings.modelOverride →
+autonomyModelV2 → settings.model`. So you can route research through a
+small fast model (Haiku / Flash / a cheap OpenRouter entry) while the
+main chat stays on whatever you've configured.
 
-| | V1 | V2 |
-|---|---|---|
-| Decision surface | Rule tree picks from templates | Single LLM call writes the line |
-| Context | Scattered reads inside the tree | One pure `contextGatherer` snapshot |
-| Persona voice | Prompt glue, no enforcement | Multi-file persona + guardrail layer |
-| Silence | "No rule fired" | First-class `silence_reason` output |
-| Cost | 2–3 LLM calls (monologue + intent + speak) | 1 LLM call, reuses primary or dedicated model |
-| Testability | React-entangled | Pure modules, tested in plain Node |
+Decision engine integration: the autonomy prompt now sees live
+`subagentAvailability` (enabled + current capacity + remaining daily
+budget) on every tick, and the `spawn` action is only advertised when
+the gate is actually open. When the LLM chooses `spawn`, the
+orchestrator can optionally speak a short announcement ("let me look
+that up") via the usual TTS path, **concurrently** with starting the
+research loop — no serial delay before work begins.
 
-#### Persona files
+Chat-tool integration: when subagents are enabled, `spawn_subagent` is
+added to the LLM's tool list. The tool call blocks for the research
+turn (usually 10-30s) and returns a summary, which the main LLM weaves
+into its reply. Users see the live strip the whole time so the wait
+isn't silent.
 
-Per-persona config is now file-based instead of stuffed into a JSON field.
-Look at `src/features/autonomy/v2/personas/xinghui/` for the reference
-layout:
+UI: `SubagentTaskStrip` renders queued / running tasks as a thin
+glassmorphism chip above the chat list, with a pulsing indicator dot.
+Completed tasks don't appear there — their summaries arrive as normal
+chat bubbles. Failed tasks stay visible for 60 s so the reason is
+legible.
 
-```
-soul.md       — first-person backstory, voice, values
-style.json    — tone knobs (temperature hints, emoji policy, register)
-examples.md   — few-shot exemplars the decision prompt reads
-voice.json    — TTS voice id / provider overrides for this persona
-tools.json    — which tools the persona is allowed to call
-memory.md     — long-term facts the persona "remembers"
-```
+Source tour: `src/features/autonomy/subagents/`
+(`subagentRuntime.ts` state machine, `subagentDispatcher.ts` LLM loop,
+`spawnSubagentTool.ts` + `dispatcherRegistry.ts` for the chat bridge,
+`src/components/SubagentTaskStrip.tsx` UI). Six unit tests cover the
+runtime state machine (admission, budget, concurrency cap, onChange).
 
-The guardrail reads `style.json`'s forbidden phrases + density caps and
-can optionally re-prompt an LLM judge if the output feels off-voice.
-Strictness is user-tunable (`autonomyPersonaStrictnessV2`: `loose | med | strict`).
+### 🎙️ Barge-in anywhere
 
-#### Tuning
+Before: the speech-interrupt monitor only armed when the current turn
+originated from a continuous voice session. Typed-text replies played
+uninterruptibly, which felt wrong — if you can speak to the companion,
+you should also be able to speak *over* it.
 
-Settings → **Autonomy**:
+- Monitor arms on every TTS playback once `voiceInterruptionEnabled` is
+  on, not only on voice-originated turns.
+- When the wake-word listener is already running, the monitor now
+  *reuses* its mic frames via `subscribeMicFrames` instead of opening a
+  second `getUserMedia`. macOS occasionally serializes two streams on
+  the default input and produced sporadic monitor silence; this path
+  is now the default whenever KWS is listening.
+- After a successful barge-in, non-wake-word modes force a VAD restart
+  so your continuation is captured without needing to re-wake. Wake-word
+  + always-on KWS modes keep the old behaviour (let KWS reacquire —
+  forcing a second VAD would contend with the listener).
 
-- **Enable V2** (`autonomyEngineV2`) — on by default in this release. Toggle
-  off to fall back to the V1 tree (still shipped during the migration).
-- **Activity level** (`autonomyLevelV2`) — `off | low | med | high`. Controls
-  both tick density and how often the LLM is allowed to pick `speak`.
-- **Model** (`autonomyModelV2`) — leave empty to share the primary chat
-  provider, or pin a cheaper / faster model for the decision call.
-- **Strictness** (`autonomyPersonaStrictnessV2`) — `loose | med | strict`
-  for the guardrail.
+### 🐛 Render-storm + cross-window sync
 
-#### What still lives on V1
+The headline bug was subtle and came in two layers.
 
-Emotion model, relationship tracker, rhythm learner, focus awareness, dream
-cycle, goal tracker — all unchanged and feeding into V2's context snapshot.
-The V1 decision path (`proactiveEngine.ts` + `innerMonologue.ts` +
-`intentPredictor.ts`) stays in the tree until it has been side-by-side
-validated; Phase 6 of the migration deletes it.
+**Render storm**: every parent render handed `useChat` / `useMemory` /
+`usePetBehavior` / `useVoice` consumers a fresh object literal.
+Downstream memos (`chatWithAutonomy`, `petView`, `overlays`,
+`panelView`) invalidated on every render, cascading into children
+whose effects wrote state back — the classic "Maximum update depth
+exceeded" loop. Observed as log spam the moment a chat turn settled;
+the second STT utterance would then stall because the renderer was
+starved and VAD's `speech_end` callback never drained. Fixed by
+memoizing the return bag in each hook and — in `useVoice` — explicitly
+excluding `lifecycle.*` / `bindings.*` / `testEntries.*` from the memo
+deps (those factories are reconstructed every render but route through
+stable refs, so old captures still work).
 
-See `src/features/autonomy/README.md` for the internal layering rules and
-`src/features/autonomy/v2/` for the source.
+**Cross-window sync**: the pet window and chat panel are separate
+Electron renderers with separate React state. They sync chat through
+a `storage` event on `CHAT_STORAGE_KEY` (`nexus:chat`). But `useChat`'s
+save effect was only calling `upsertChatSession`, which writes
+`CHAT_SESSIONS_STORAGE_KEY` (`nexus:chat-sessions`) — `nexus:chat` was
+never written by anyone. Voice turns, which happen inside the pet
+window, never became visible to an open chat panel. Now
+`saveChatMessages(messages)` is called alongside `upsertChatSession`
+so the key the panel listens on actually updates.
 
-### 💬 Chat now buckets per launch
+### 🔧 Startup fixes
 
-Every app launch opens a fresh chat pane instead of dragging the full
-history list back into view. Past sessions are preserved under
-`Settings → 聊天记录 → 往期会话` with click-to-expand browsing and a
-per-row delete.
-
-- Storage schema moved from a single flat `nexus:chat` array to a
-  per-session layout (`nexus:chat:sessions`, cap 30 sessions × 500
-  messages each; inline image data URLs stripped before persist to stay
-  under the localStorage quota).
-- One-shot migration wraps your existing flat history into one "legacy
-  archive" session — nothing is lost, and the old key is left intact for
-  safe rollback.
-- LLM context is now scoped to the current session; cross-launch
-  continuity is carried by the memory + dream system (hot / warm / cold
-  tiers + nightly thread clustering), not by dragging raw message
-  history forward.
-
-### 🔊 Voice / TTS reliability pass
-
-- **Edge TTS unblocked.** The "please fill in the speech output base URL"
-  gate used to reject Edge TTS — which talks to a fixed Microsoft
-  WebSocket and doesn't use an HTTP base URL. Fixed by returning a marker
-  URL that passes the non-empty check; the Edge branch never reads it.
-- **Pipecat pipeline race conditions fixed** (still opt-in; flip via
-  `localStorage.setItem('nexus:useTtsPipeline', 'true')` then reload).
-  Three overlapping bugs had previously stalled `waitForCompletion()` for
-  12s without any audio: (1) frame pushes are now serialized so
-  `StartFrame` fully propagates before any `TextDeltaFrame` enters — no
-  more "first sentence dropped as stale turn", (2) the audio observer
-  moved downstream so it actually sees `AudioFrame`s emitted by the TTS
-  IPC callback, (3) `waitForDrain()` is wrapped in a 10 s safety timeout
-  so a dropped-chunk path can no longer hang the completion promise past
-  the upstream chat timeout. The flag stays default-off until opt-in
-  testers validate; this release unblocks that validation.
-- **Wake-word sensitivity loosened** for weak headset microphones
-  (`keywordsThreshold` 0.15 → 0.10, `keywordsScore` 2.0 → 2.5). If you
-  were having to shout to trigger the wake word, this tuning pass helps.
-
-### 🎨 New `system-dark` theme preset
-
-Added a `system-dark` preset to the theme registry and expanded the
-token surface that presets drive, so darker palettes render correctly
-across the whole UI (cssVariables + tokens + index.css + registry all
-updated together). Switch in `Settings → 外观 → 主题`.
+- **Silero VAD now actually runs.** `browserVad.ts` points
+  `onnxWASMBasePath` at `public/vendor/ort/`, but that folder never
+  existed — `setup-vendor.mjs` only copied Live2D assets. Without the
+  ORT runtime, `vad-web` fell back to a CJS `require()` that Vite's
+  ESM dev server can't service, and the whole Silero path failed with
+  a "legacy recording" fallback. `setup-vendor.mjs` now copies the
+  four wasm + mjs bundles vad-web needs from `node_modules` on
+  postinstall.
+- **`mcp:sync-servers` handler registers eagerly.** The handler was
+  deferred-loaded ~1.5 s after app-ready, but `useMcpServerSync` fires
+  on first render and raced the registration. `sherpaIpc` /
+  `notificationIpc` had the same issue earlier; `mcpIpc` now joins
+  them on the eager path.
 
 ## Install
 
@@ -217,7 +200,7 @@ Grab the latest installer from the [releases page](https://github.com/FanyinLiu/
 
 | Platform | Asset |
 |---|---|
-| Windows | `Nexus-Setup-0.2.5.exe` (NSIS, unsigned — click *More info → Run anyway* on first launch) |
+| Windows | `Nexus-Setup-0.2.6.exe` (NSIS, unsigned — click *More info → Run anyway* on first launch) |
 | macOS | `.dmg` or `.zip` (unsigned — see macOS steps below) |
 | Linux | `.AppImage` / `.deb` / `.tar.gz` (AppImage: `chmod +x` then run) |
 

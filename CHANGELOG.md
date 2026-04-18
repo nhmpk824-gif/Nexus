@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.2.6] - 2026-04-19
+
+### Added
+- **Subagent dispatcher** — companion can spawn a bounded background research loop (web search + MCP tools) from two entry points: autonomy engine chooses `spawn` in place of `speak`, or main chat LLM calls the `spawn_subagent` tool mid-turn. Live status rendered in `SubagentTaskStrip` above the chat message list; summary woven back into the final reply.
+  - Three-tier model fallback: `SubagentSettings.modelOverride → autonomyModelV2 → settings.model`.
+  - Capacity + daily USD budget enforced; opt-in via `Settings → Subagents`.
+  - `spawn_subagent` tool only exposed to chat LLM when the feature is enabled.
+  - 6 unit tests covering runtime state-machine admission / budget / concurrency / onChange fan-out.
+- **Autonomy V2 `spawn` decision branch** — third `DecisionResult` kind alongside `silent` / `speak`. Dynamically advertised in the decision prompt only when dispatcher capacity + budget permit. Orchestrator handles guardrail failures by stripping the optional announcement rather than retrying.
+- **Korean README** — `docs/README.ko.md` added; language switcher row updated across all five READMEs.
+
+### Changed
+- **Barge-in monitor** — now arms on **any** TTS playback (voice- or typed-turn-originated), not only when continuous voice was active. When the wake-word listener is running the monitor reuses its mic frames via `subscribeMicFrames` instead of opening a second `getUserMedia` (fixes macOS default-input serialization glitches). Post-interrupt VAD restart is force-enabled in non-wake-word modes so user continuation is captured without re-waking.
+- **`mcp:sync-servers` IPC handler** promoted from deferred registration to the eager path (matches `sherpaIpc` / `notificationIpc`, which had the same startup-race issue).
+
+### Fixed
+- **"Maximum update depth exceeded" render storm on voice turns** — `useChat` / `useMemory` / `usePetBehavior` / `useVoice` now return a `useMemo`-stabilized bag with precise state deps. `useVoice`'s memo deliberately excludes `lifecycle.*` / `bindings.*` / `testEntries.*` (these factories are reconstructed every render but route through stable refs; old captures still call the latest implementation). `useAppController`'s `autonomyAwareSendMessage` refactored to close over empty deps via `autonomyRef` / `originalSendMessageRef`. `useVoice` internals promote `busEmit` and `setVoiceState` to `useCallback`. Root-cause of long STT utterances stalling the second turn.
+- **Pet-to-panel chat invisibility** — pet window's voice turns were writing `nexus:chat-sessions` via `upsertChatSession`, but `useDesktopBridge`'s cross-window sync was listening for `storage` events on `nexus:chat`, which nobody wrote to. `useChat`'s save effect now calls `saveChatMessages(messages)` alongside `upsertChatSession` so voice messages actually reach an open chat panel.
+- **Silero VAD falling back to legacy recording** — `setup-vendor.mjs` now copies the four onnxruntime-web bundles (`ort-wasm-simd-threaded{,.jsep}.{mjs,wasm}`) to `public/vendor/ort/`. Previously the folder didn't exist, so `vad-web` fell back to a CJS `require()` that Vite's ESM dev server couldn't service.
+- `react-hooks/exhaustive-deps` warning on `busEmit` — suppressed with comment explaining that `executeBusEffects` is a hoisted declaration closing over the same refs as the hook body.
+
+### Docs
+- All four existing READMEs (en / zh-CN / zh-TW / ja) refreshed with the v0.2.6 "What's new" section. New `docs/README.ko.md`.
+
 ## [0.2.2] - 2026-04-16
 
 ### Changed
