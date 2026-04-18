@@ -102,7 +102,7 @@ type UseDesktopBridgeOptions = {
   setReminderTasks: Dispatch<SetStateAction<ReminderTask[]>>
   setDebugConsoleEvents: Dispatch<SetStateAction<DebugConsoleEvent[]>>
   memory: Pick<MemoryController, 'memories' | 'setMemories' | 'setDailyMemories'>
-  chat: Pick<ChatController, 'input' | 'busy' | 'assistantActivity' | 'setMessages'>
+  chat: Pick<ChatController, 'input' | 'busy' | 'assistantActivity' | 'setMessages' | 'applyRemoteMessages'>
   pet: Pick<
     PetController,
     | 'ambientPresence'
@@ -274,7 +274,7 @@ export function useDesktopBridge({
   // reload from localStorage when the broadcast arrives.
   useEffect(() => {
     const unsubscribes: Array<() => void> = [
-      onStorageChange(CHAT_STORAGE_KEY, () => chat.setMessages(loadChatMessages())),
+      onStorageChange(CHAT_STORAGE_KEY, () => chat.applyRemoteMessages(loadChatMessages())),
       onStorageChange(MEMORY_STORAGE_KEY, () => memory.setMemories(loadMemories())),
       onStorageChange(DAILY_MEMORY_STORAGE_KEY, () => memory.setDailyMemories(loadDailyMemories())),
       onStorageChange(SETTINGS_STORAGE_KEY, () => setSettings(getSettingsSnapshot())),

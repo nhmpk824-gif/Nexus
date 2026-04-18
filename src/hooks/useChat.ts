@@ -118,14 +118,24 @@ export function useChat(ctx: UseChatContext) {
   const mirroredMessageIdsRef = useRef<Set<string>>(new Set())
   // Fingerprint of the last messages payload we *persisted*. Used by the
   // save effect below to skip rewriting when the current `messages` state
-  // came in via cross-window BroadcastChannel sync (useDesktopBridge loads
-  // from storage and calls setMessages). Without this guard, the save
-  // effect in the receiving window re-broadcasts the same content, the
-  // originating window receives it, calls setMessages again with yet
-  // another array reference, and both windows loop forever — a render
-  // storm distinct from the runtime-state echo but triggered by the same
-  // cross-window sync work.
+  // came in via cross-window BroadcastChannel sync (useDesktopBridge calls
+  // `applyRemoteMessages` below). Without this guard, the save effect in
+  // the receiving window re-broadcasts the same content and triggers a
+  // cross-window ping-pong that can even clobber the sender's newer state
+  // mid-turn.
   const lastSavedMessagesSignatureRef = useRef<string>('')
+
+  // Called by useDesktopBridge when a BroadcastChannel message says another
+  // window wrote the chat-messages storage key. Replaces local messages
+  // state AND primes the save-effect guards so the replacement doesn't
+  // immediately re-broadcast (which would kick the originating window into
+  // rewriting over its own in-flight additions).
+  const applyRemoteMessages = useCallback((next: ChatMessage[]) => {
+    messagesSaveSkipRef.current = true
+    lastSavedMessagesSignatureRef.current = JSON.stringify(next)
+    setMessages(next)
+    messagesRef.current = next
+  }, [])
 
   useEffect(() => {
     if (messagesSaveSkipRef.current) {
@@ -718,6 +728,7 @@ export function useChat(ctx: UseChatContext) {
     busyRef,
     sendMessageRef,
     setMessages,
+    applyRemoteMessages,
     setInput,
     setBusy,
     setError,
@@ -743,6 +754,7 @@ export function useChat(ctx: UseChatContext) {
     petThoughtBubble,
     pendingImage,
     setMessages,
+    applyRemoteMessages,
     setInput,
     setBusy,
     setError,
