@@ -66,7 +66,7 @@ export async function startSession(options) {
     const timeoutId = setTimeout(() => {
       _state = 'error'
       emit({ type: 'state', state: _state, sessionId: _sessionId })
-      try { ws.close() } catch {}
+      try { ws?.close() } catch {}
       reject(new Error('Realtime API connection timed out'))
     }, CONNECTION_TIMEOUT_MS)
 

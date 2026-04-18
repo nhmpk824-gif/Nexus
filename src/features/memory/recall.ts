@@ -47,7 +47,9 @@ function uniqueById<T extends { id: string }>(items: T[]) {
 }
 
 function getRecencyBoost(createdAt: string) {
-  const ageMs = Math.max(0, Date.now() - Date.parse(createdAt))
+  const parsed = Date.parse(createdAt)
+  if (!Number.isFinite(parsed)) return 0
+  const ageMs = Math.max(0, Date.now() - parsed)
   const ageHours = ageMs / (60 * 60 * 1000)
   return Math.max(0, 1 - Math.min(ageHours, 96) / 96) * 0.18
 }
@@ -126,13 +128,15 @@ function sortScoredItems<T extends { id: string; createdAt: string; content: str
         return right.finalScore - left.finalScore
       }
 
-      return Date.parse(right.item.createdAt) - Date.parse(left.item.createdAt)
+      const rDate = Date.parse(right.item.createdAt) || 0
+      const lDate = Date.parse(left.item.createdAt) || 0
+      return rDate - lDate
     })
 }
 
 let _indexQueue: Promise<void> = Promise.resolve()
 
-async function indexMemoriesToVectorStore<T extends { id: string; content: string }>(
+function indexMemoriesToVectorStore<T extends { id: string; content: string }>(
   items: T[],
   embeddingModel: string,
   layer: string,
@@ -141,7 +145,8 @@ async function indexMemoriesToVectorStore<T extends { id: string; content: strin
   _indexQueue = job.catch((err) => {
     console.warn('[memory] Vector index queue job failed:', err)
   })
-  return job
+  // Return the caught chain so callers using `void` never trigger unhandled rejections.
+  return _indexQueue
 }
 
 async function doIndexMemoriesToVectorStore<T extends { id: string; content: string }>(

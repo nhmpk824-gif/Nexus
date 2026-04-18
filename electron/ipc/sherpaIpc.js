@@ -3,6 +3,13 @@ import sherpaKwsService from '../sherpaKws.js'
 import sherpaVadService from '../sherpaVad.js'
 import sherpaSenseVoiceService from '../sherpaSenseVoice.js'
 import sherpaParaformerService from '../sherpaParaformer.js'
+import {
+  getInventory as getModelInventory,
+  downloadModel as downloadModelById,
+  downloadMissingRequired,
+  getNetworkProbe,
+} from '../services/modelManager.js'
+import { ensurePythonRuntimeStatus } from '../services/pythonRuntime.js'
 import { requireTrustedSender } from './validate.js'
 
 export function register() {
@@ -15,7 +22,7 @@ export function register() {
     requireTrustedSender(event)
     const status = sherpaKwsService.getStatus(payload)
     if (!status.modelFound) {
-      throw new Error(status.reason || '唤醒词模型未安装，请运行 setup.bat 下载模型。')
+      throw new Error(status.reason || '唤醒词模型未安装，请在设置 → 本地模型向导里下载。')
     }
     const ok = sherpaKwsService.start(payload)
     if (!ok) {
@@ -92,8 +99,8 @@ export function register() {
       const status = sherpaSenseVoiceService.getStatus()
       throw new Error(
         status.installed
-          ? `SenseVoice 模型未安装，请将 sherpa-onnx-sense-voice-zh-en-2024-07-17 目录放到 ${status.modelsDir} 下。`
-          : 'sherpa-onnx-node 未安装，请先运行 npm install sherpa-onnx-node。',
+          ? 'SenseVoice 模型未安装，请在设置 → 本地模型向导里点击下载。'
+          : 'sherpa-onnx-node 原生模块未加载，请检查安装是否完整。',
       )
     }
     const ok = sherpaSenseVoiceService.startStream()
@@ -148,8 +155,8 @@ export function register() {
       const status = sherpaParaformerService.getStatus()
       throw new Error(
         status.installed
-          ? `Paraformer 模型未安装，请将 sherpa-onnx-streaming-paraformer 目录放到 ${status.modelsDir} 下。`
-          : 'sherpa-onnx-node 未安装，请先运行 npm install sherpa-onnx-node。',
+          ? 'Paraformer 模型未安装，请在设置 → 本地模型向导里下载（可选模型，默认使用 SenseVoice）。'
+          : 'sherpa-onnx-node 原生模块未加载，请检查安装是否完整。',
       )
     }
     const ok = sherpaParaformerService.startStream()
@@ -177,5 +184,40 @@ export function register() {
     requireTrustedSender(event)
     sherpaParaformerService.abortStream()
     return { ok: true }
+  })
+
+  // ── Model manager (first-launch setup wizard) ──
+  //
+  // Progress events for in-flight downloads are pushed to every BrowserWindow
+  // via 'models:download-progress' (see electron/services/modelManager.js).
+
+  ipcMain.handle('models:inventory', (event) => {
+    requireTrustedSender(event)
+    return getModelInventory()
+  })
+
+  ipcMain.handle('models:download', async (event, payload) => {
+    requireTrustedSender(event)
+    const modelId = payload?.modelId
+    if (!modelId || typeof modelId !== 'string') {
+      throw new Error('modelId required')
+    }
+    await downloadModelById(modelId)
+    return getModelInventory()
+  })
+
+  ipcMain.handle('models:download-missing', async (event) => {
+    requireTrustedSender(event)
+    return downloadMissingRequired()
+  })
+
+  ipcMain.handle('models:network-probe', async (event) => {
+    requireTrustedSender(event)
+    return getNetworkProbe()
+  })
+
+  ipcMain.handle('python:status', async (event) => {
+    requireTrustedSender(event)
+    return ensurePythonRuntimeStatus()
   })
 }

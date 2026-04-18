@@ -143,6 +143,7 @@ export function useVoice(ctx: UseVoiceContext) {
   const stopApiRecordingRef = useRef<(cancel?: boolean) => void>(() => undefined)
   const stopVadListeningRef = useRef<(cancel?: boolean) => Promise<void>>(async () => undefined)
   const stopActiveSpeechOutputRef = useRef<() => void>(() => undefined)
+  const setContinuousVoiceSessionRef = useRef<(value: boolean) => void>(() => undefined)
 
   // ── Hearing runtime (unified input-side store) ──────────────────────────
   const hearingRuntimeRef = useRef<HearingRuntime | null>(null)
@@ -508,6 +509,7 @@ export function useVoice(ctx: UseVoiceContext) {
   stopApiRecordingRef.current = bindings.stopApiRecording
   stopVadListeningRef.current = bindings.stopVadListening
   stopActiveSpeechOutputRef.current = bindings.stopActiveSpeechOutput
+  setContinuousVoiceSessionRef.current = bindings.setContinuousVoiceSession
 
   // ── Effects ────────────────────────────────────────────────────────────────
 
@@ -516,13 +518,19 @@ export function useVoice(ctx: UseVoiceContext) {
     ensureSupportedSpeechInputSettings()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Disable continuous voice when setting is off
+  // Disable continuous voice when setting is off.
+  // IMPORTANT: do NOT depend on `bindings` here — `bindings` is recreated on
+  // every render (via bindingsHolder), so including it re-runs the effect on
+  // every render. Any state update inside causes a re-render, which recreates
+  // bindings again, triggering the effect again → "Maximum update depth
+  // exceeded". The method is invoked via a ref that's kept current above, so
+  // the effect always sees the latest implementation without re-subscribing.
   useEffect(() => {
     if (settings.continuousVoiceModeEnabled || !continuousVoiceActiveRef.current) return
 
     clearPendingVoiceRestart()
-    bindings.setContinuousVoiceSession(false)
-  }, [settings.continuousVoiceModeEnabled, clearPendingVoiceRestart, bindings])
+    setContinuousVoiceSessionRef.current(false)
+  }, [settings.continuousVoiceModeEnabled, clearPendingVoiceRestart])
 
   // If runtime continuous voice is already active on startup, keep the saved setting aligned.
   useEffect(() => {

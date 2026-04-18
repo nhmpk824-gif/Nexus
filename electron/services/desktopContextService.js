@@ -77,7 +77,79 @@ function normalizeActiveWindowSnapshot(rawSnapshot) {
   }
 }
 
+const MACOS_ACTIVE_WINDOW_SCRIPT = [
+  'tell application "System Events"',
+  '  set frontApp to first application process whose frontmost is true',
+  '  set appName to name of frontApp',
+  '  set windowTitle to ""',
+  '  try',
+  '    set windowTitle to name of front window of frontApp',
+  '  end try',
+  '  return "{" & quoted form of ("\"appName\":" & quoted form of appName & ",\"title\":" & quoted form of windowTitle) & "}"',
+  'end tell',
+].join('\n')
+
+function captureActiveWindowContextMac() {
+  const now = Date.now()
+  if (
+    activeWindowContextCache.value
+    && now - activeWindowContextCache.capturedAt < ACTIVE_WINDOW_CONTEXT_CACHE_TTL_MS
+  ) {
+    return Promise.resolve(activeWindowContextCache.value)
+  }
+
+  if (activeWindowContextCache.pending) {
+    return activeWindowContextCache.pending
+  }
+
+  activeWindowContextCache.pending = new Promise((resolve) => {
+    execFile(
+      'osascript',
+      ['-e', 'tell application "System Events" to set frontApp to first application process whose frontmost is true\nset appName to name of frontApp\ntell application "System Events" to set windowTitle to ""\ntry\ntell application "System Events" to set windowTitle to name of front window of frontApp\nend try\nreturn appName & "\\n" & windowTitle'],
+      {
+        timeout: ACTIVE_WINDOW_CONTEXT_TIMEOUT_MS,
+        maxBuffer: 256 * 1024,
+      },
+      (error, stdout) => {
+        if (error) {
+          console.warn('[desktop-context:mac] active window capture failed', error?.message)
+          resolve(null)
+          return
+        }
+
+        try {
+          const lines = String(stdout ?? '').split('\n')
+          const appName = (lines[0] ?? '').trim()
+          const title = (lines[1] ?? '').trim()
+          const snapshot = normalizeActiveWindowSnapshot({
+            title,
+            appName,
+            processPath: '',
+          })
+          resolve(snapshot)
+        } catch (parseError) {
+          console.warn('[desktop-context:mac] parse failed', parseError)
+          resolve(null)
+        }
+      },
+    )
+  }).then((snapshot) => {
+    activeWindowContextCache = {
+      capturedAt: snapshot ? Date.now() : 0,
+      value: snapshot,
+      pending: null,
+    }
+    return snapshot
+  })
+
+  return activeWindowContextCache.pending
+}
+
 export function captureActiveWindowContext() {
+  if (process.platform === 'darwin') {
+    return captureActiveWindowContextMac()
+  }
+
   if (process.platform !== 'win32') {
     return Promise.resolve(null)
   }

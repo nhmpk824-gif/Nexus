@@ -3,7 +3,9 @@
 // （16/32/48/64/128/256）。
 //
 // 想换图标时，把新的高分辨率方形 PNG 覆盖到 scripts/icon-source/nexus-icon-2048.png
-// 然后跑：node scripts/regenerate-icons.mjs
+// 然后跑：
+//   node scripts/regenerate-icons.mjs         # 保留原始配色
+//   node scripts/regenerate-icons.mjs --bw    # 去色成灰度（任务栏/Dock 黑白化）
 
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -17,14 +19,22 @@ const source = path.resolve(here, 'icon-source', 'nexus-icon-2048.png')
 const PNG_SIZES = [256, 512, 1024]
 const ICO_SIZES = [16, 32, 48, 64, 128, 256]
 
+const bw = process.argv.includes('--bw')
+
+// sharp pipeline helper — 开了 --bw 就先去色再 resize，保留 alpha。
+function pipeline(buffer) {
+  const base = sharp(buffer)
+  return bw ? base.grayscale() : base
+}
+
 async function main() {
   const sourceBuffer = await fs.readFile(source)
-  console.log(`[icons] source: ${source} (${sourceBuffer.length} bytes)`)
+  console.log(`[icons] source: ${source} (${sourceBuffer.length} bytes)${bw ? '  mode: --bw (grayscale)' : ''}`)
 
   // ── 生成各尺寸 PNG ───────────────────────────────────────────────────────
   for (const size of PNG_SIZES) {
     const out = path.join(publicDir, `nexus-${size}.png`)
-    await sharp(sourceBuffer)
+    await pipeline(sourceBuffer)
       .resize(size, size, { fit: 'cover' })
       .png({ compressionLevel: 9 })
       .toFile(out)
@@ -34,7 +44,7 @@ async function main() {
   // ── 生成多尺寸 .ico —— 把每个尺寸的 PNG 直接内嵌（Vista+ 支持）──────────
   const icoEntries = []
   for (const size of ICO_SIZES) {
-    const png = await sharp(sourceBuffer)
+    const png = await pipeline(sourceBuffer)
       .resize(size, size, { fit: 'cover' })
       .png({ compressionLevel: 9 })
       .toBuffer()

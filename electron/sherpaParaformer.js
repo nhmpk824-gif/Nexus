@@ -8,8 +8,8 @@
 
 import path from 'node:path'
 import fs from 'node:fs'
-import { app } from 'electron'
 import { createRequire } from 'node:module'
+import { findModelDir, getPrimaryModelsDir } from './services/modelPaths.js'
 
 let sherpa = null
 try {
@@ -20,12 +20,6 @@ try {
 }
 
 const SAMPLE_RATE = 16000
-
-function getModelsDir() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'sherpa-models')
-    : path.join(app.getAppPath(), 'sherpa-models')
-}
 
 const PARAFORMER_CANDIDATES = [
   {
@@ -66,15 +60,15 @@ class SherpaParaformerService {
     return {
       installed: sherpa !== null,
       modelFound: model !== null,
-      modelsDir: getModelsDir(),
+      modelsDir: getPrimaryModelsDir(),
       currentModelId: this.activeModelId,
     }
   }
 
   _findModel() {
-    const modelsDir = getModelsDir()
     for (const candidate of PARAFORMER_CANDIDATES) {
-      const dir = path.join(modelsDir, candidate.directory)
+      const dir = findModelDir(candidate.directory)
+      if (!dir) continue
       const allExist = Object.values(candidate.files).every(f =>
         fs.existsSync(path.join(dir, f)),
       )

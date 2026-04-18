@@ -76,25 +76,60 @@ Grab the latest installer from the [releases page](https://github.com/FanyinLiu/
 | Platform | Asset |
 |---|---|
 | Windows | `Nexus-Setup-0.2.5.exe` (NSIS, unsigned — click *More info → Run anyway* on first launch) |
-| macOS | `.dmg` or `.zip` (unsigned — right-click → Open on first launch to bypass Gatekeeper) |
+| macOS | `.dmg` or `.zip` (unsigned — see macOS steps below) |
 | Linux | `.AppImage` / `.deb` / `.tar.gz` (AppImage: `chmod +x` then run) |
 
-First run walks you through a 4-step wizard: persona, main chat model, voice stack, companion preferences. You can skip any step and adjust in settings later.
+**macOS first launch (unsigned build)**
+
+1. Open the `.dmg` and drag `Nexus.app` into `/Applications`.
+2. Remove Gatekeeper's quarantine flag — open Terminal and run:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Nexus.app
+   ```
+   (Or: right-click Nexus.app → Open → confirm in the dialog.)
+3. Launch Nexus. On first run a **"安装本地语音模型"** wizard appears — click **一键下载**
+   to pull ~280 MB of sherpa-onnx + VAD models into
+   `~/Library/Application Support/Nexus/sherpa-models`. The wizard can be
+   dismissed and reopened later from Settings.
+4. Python-based options (OmniVoice TTS / GLM-ASR) are detected automatically.
+   If you haven't installed Python + `requirements.txt`, they're silently
+   skipped — the core chat + SenseVoice STT + Edge TTS stack still works.
+
+After the wizard, a 4-step onboarding guide walks you through: persona, main
+chat model, voice stack, companion preferences. You can skip any step and
+adjust in settings later.
 
 ### Build from source
 
-**Requirements**: Node.js 22+, npm 10+.
+**Requirements**: Node.js 22+, npm 10+. (macOS: Xcode Command Line Tools for native modules.)
 
 ```bash
 git clone https://github.com/FanyinLiu/Nexus.git
 cd Nexus
-npm install
-npm run electron:dev   # dev mode with hot reload
-# or
-npm run package:win    # npm run package:mac / package:linux
+
+# Windows:
+setup.bat
+
+# macOS / Linux:
+bash scripts/setup.sh
+
+# Dev mode with hot reload
+npm run electron:dev
+
+# Production installers
+npm run package:win      # → release/Nexus-Setup-<version>.exe
+npm run package:mac      # → release/Nexus-<version>.dmg (universal build via electron-builder --arm64 --x64)
+npm run package:linux    # → release/Nexus-<version>.AppImage / .deb
 ```
 
-Production installers end up in `release/`. Signing is off by default; wire in your certs via the usual `electron-builder` env vars.
+Production installers end up in `release/`. Signing is off by default (unsigned macOS builds require right-click → Open on first launch to bypass Gatekeeper). Wire in your Apple Developer ID / Windows signing cert via the usual `electron-builder` env vars (`CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`).
+
+**macOS permissions.** On first launch, Nexus will prompt for:
+- **Microphone** — required for voice conversation / wake word / STT.
+- **Screen Recording** — required for desktop context / OCR. Approve in *System Settings → Privacy & Security → Screen Recording*, then restart Nexus.
+- **Automation** — optional; used by Now Playing (Music / Spotify) and foreground-app detection. If denied, the relevant features silently fall back to empty state.
+
+**macOS packaging notes.** The mac `.dmg` ships **without** bundled sherpa models (Windows / Linux installers still bundle them). The in-app setup wizard downloads them to `~/Library/Application Support/Nexus/sherpa-models` on first launch. This keeps the `.dmg` ~250 MB instead of ~550 MB and survives app upgrades (downloaded models persist across updates since they live in userData, not inside the `.app` bundle).
 
 ## Configure
 

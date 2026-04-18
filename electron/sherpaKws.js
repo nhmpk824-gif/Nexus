@@ -10,6 +10,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { app } from 'electron'
 import { createRequire } from 'node:module'
+import { findModelDir, getPrimaryModelsDir } from './services/modelPaths.js'
 
 const require = createRequire(import.meta.url)
 
@@ -35,10 +36,13 @@ const CHINESE_CUSTOM_KEYWORDS_FILE = 'keywords.nexus-zh.txt'
 const CJK_CHAR_REGEX = /[\u3400-\u9fff]/
 const SPACE_REGEX = /\s+/g
 
-function getModelsDir() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'sherpa-models')
-    : path.join(app.getAppPath(), 'sherpa-models')
+// Per-user writable root for generated keyword files. We can't write into a
+// bundled kwsDir on packaged mac (resourcesPath is read-only), so custom wake
+// word txt files go under userData/kws-keywords/<dirname>/ instead.
+function getKeywordOverlayDir(dirName) {
+  const base = path.join(app.getPath('userData'), 'kws-keywords', dirName)
+  try { fs.mkdirSync(base, { recursive: true }) } catch {}
+  return base
 }
 
 function normalizeWakeWord(value) {
@@ -122,7 +126,7 @@ function ensureEnglishKeywordsFileAllowlist(kwsDir, wakeWord) {
   const matched = keywords?.get(normalized)
   if (!matched) return null
 
-  const targetFile = path.join(kwsDir, ENGLISH_CUSTOM_KEYWORDS_FILE)
+  const targetFile = path.join(getKeywordOverlayDir(ENGLISH_KWS_DIRNAME), ENGLISH_CUSTOM_KEYWORDS_FILE)
   fs.writeFileSync(targetFile, `${matched.encoded} @${normalizeWakeWord(wakeWord)}\n`, 'utf8')
 
   return {
@@ -137,12 +141,12 @@ let _lastEnglishRawKeywordFileContent = ''
 // encoder tokenize at load time via modelingUnit='bpe' + bpeVocab. This
 // unlocks arbitrary custom English wake words (e.g. "HEY NEXUS") instead
 // of the fixed 9-keyword allowlist baked into keywords_raw.txt.
-function ensureEnglishRawKeywordsFile(kwsDir, wakeWord) {
+function ensureEnglishRawKeywordsFile(_kwsDir, wakeWord) {
   const label = normalizeWakeWord(wakeWord)
   const normalized = label.replace(SPACE_REGEX, ' ').toUpperCase()
   if (!normalized) return null
 
-  const targetFile = path.join(kwsDir, ENGLISH_CUSTOM_KEYWORDS_FILE)
+  const targetFile = path.join(getKeywordOverlayDir(ENGLISH_KWS_DIRNAME), ENGLISH_CUSTOM_KEYWORDS_FILE)
   const content = `${normalized} @${label}\n`
 
   if (content !== _lastEnglishRawKeywordFileContent) {
@@ -257,7 +261,7 @@ function ensureChineseKeywordsFile(kwsDir, wakeWord) {
   const tokenString = buildChineseKeywordTokenString(label, tokensFile)
   if (!tokenString) return null
 
-  const targetFile = path.join(kwsDir, CHINESE_CUSTOM_KEYWORDS_FILE)
+  const targetFile = path.join(getKeywordOverlayDir(CHINESE_KWS_DIRNAME), CHINESE_CUSTOM_KEYWORDS_FILE)
   const content = `${tokenString} @${label}\n`
 
   if (content !== _lastKeywordFileContent) {
@@ -281,14 +285,13 @@ function resolveKwsRuntime(options = {}) {
     }
   }
 
-  const modelsDir = getModelsDir()
   if (containsCjkCharacters(wakeWord)) {
-    const kwsDir = path.join(modelsDir, CHINESE_KWS_DIRNAME)
-    const modelFiles = resolveModelFiles(kwsDir)
+    const kwsDir = findModelDir(CHINESE_KWS_DIRNAME)
+    const modelFiles = kwsDir ? resolveModelFiles(kwsDir) : null
     if (!modelFiles) {
       return {
         config: null,
-        reason: `未找到中文唤醒词模型目录：${kwsDir}`,
+        reason: `未找到中文唤醒词模型：${CHINESE_KWS_DIRNAME}（请在首启向导中下载）`,
         modelKind: 'zh',
       }
     }
@@ -315,12 +318,12 @@ function resolveKwsRuntime(options = {}) {
     }
   }
 
-  const kwsDir = path.join(modelsDir, ENGLISH_KWS_DIRNAME)
-  const modelFiles = resolveModelFiles(kwsDir)
+  const kwsDir = findModelDir(ENGLISH_KWS_DIRNAME)
+  const modelFiles = kwsDir ? resolveModelFiles(kwsDir) : null
   if (!modelFiles) {
     return {
       config: null,
-      reason: `未找到英文唤醒词模型目录：${kwsDir}。请把唤醒词改成中文（例如「星绘」「小爱同学」）。`,
+      reason: `未找到英文唤醒词模型：${ENGLISH_KWS_DIRNAME}（请在首启向导中下载，或使用中文唤醒词）`,
       modelKind: 'en',
     }
   }
@@ -381,7 +384,7 @@ class SherpaKwsService {
     return {
       installed: sherpa !== null,
       modelFound: runtime.config !== null,
-      modelsDir: getModelsDir(),
+      modelsDir: getPrimaryModelsDir(),
       active: this.active,
       reason: runtime.reason,
       modelKind: runtime.modelKind,

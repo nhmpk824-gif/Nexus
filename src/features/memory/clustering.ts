@@ -14,6 +14,8 @@ import type { MemoryCluster, MemoryItem } from '../../types'
 const CLUSTER_SIMILARITY_THRESHOLD = 0.25
 const MIN_CLUSTER_SIZE = 2
 const MAX_CLUSTERS = 30
+/** Cap input to avoid O(n⁴) blowup in agglomerative clustering during dream cycles. */
+const MAX_MEMORIES_FOR_CLUSTERING = 500
 
 // ── Tokenization ──────────────────────────────────────────────────────────
 
@@ -66,11 +68,16 @@ function averageLinkage(a: ClusterNode, b: ClusterNode, tokenSets: Set<string>[]
 export function clusterMemories(memories: MemoryItem[]): MemoryCluster[] {
   if (memories.length < MIN_CLUSTER_SIZE) return []
 
+  // Cap input size to prevent O(n⁴) performance blowup — keep most recent memories
+  const capped = memories.length > MAX_MEMORIES_FOR_CLUSTERING
+    ? memories.slice(-MAX_MEMORIES_FOR_CLUSTERING)
+    : memories
+
   // Tokenize all memories
-  const tokenSets = memories.map((m) => tokenize(m.content))
+  const tokenSets = capped.map((m) => tokenize(m.content))
 
   // Initialize each memory as its own cluster
-  const nodes: ClusterNode[] = memories.map((_, i) => ({
+  const nodes: ClusterNode[] = capped.map((_, i) => ({
     memberIndices: [i],
   }))
 
@@ -110,7 +117,7 @@ export function clusterMemories(memories: MemoryItem[]): MemoryCluster[] {
   for (const node of nodes) {
     if (node.memberIndices.length < MIN_CLUSTER_SIZE) continue
 
-    const members = node.memberIndices.map((i) => memories[i])
+    const members = node.memberIndices.map((i) => capped[i])
     // Pick the longest content as the centroid representative
     const centroid = members.reduce((a, b) => (a.content.length >= b.content.length ? a : b))
     // Build a label from the most common tokens

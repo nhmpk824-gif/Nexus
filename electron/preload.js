@@ -79,6 +79,18 @@ contextBridge.exposeInMainWorld('desktopPet', {
   getSystemMediaSession: () => ipcRenderer.invoke('media-session:get'),
   controlSystemMediaSession: (payload) => ipcRenderer.invoke('media-session:control', payload),
 
+  // Model manager (first-launch setup wizard)
+  modelsGetInventory: () => ipcRenderer.invoke('models:inventory'),
+  modelsDownload: (modelId) => ipcRenderer.invoke('models:download', { modelId }),
+  modelsDownloadMissing: () => ipcRenderer.invoke('models:download-missing'),
+  modelsNetworkProbe: () => ipcRenderer.invoke('models:network-probe'),
+  pythonRuntimeStatus: () => ipcRenderer.invoke('python:status'),
+  subscribeModelsProgress: (listener) => {
+    const handler = (_event, payload) => listener(payload)
+    ipcRenderer.on('models:download-progress', handler)
+    return () => ipcRenderer.removeListener('models:download-progress', handler)
+  },
+
   // SenseVoice offline ASR (sherpa-onnx OfflineRecognizer)
   sensevoiceStatus: () => ipcRenderer.invoke('sensevoice:status'),
   sensevoiceStart: () => ipcRenderer.invoke('sensevoice:start'),

@@ -1,16 +1,20 @@
 import { app, BrowserWindow, dialog, session } from 'electron'
 import path from 'node:path'
+import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 
 import { initPetModelService, isPathInsideRoot, getImportedPetModelsRoot, IMPORTED_PET_MODELS_ROUTE } from './services/petModelService.js'
 import { initRendererServer, ensureRendererServer, getRendererServerUrl, closeRendererServer } from './rendererServer.js'
-import { mainWindow, panelWindow, panelSection, createMainWindow, createTray, applyPetWindowState } from './windowManager.js'
+import { mainWindow, panelWindow, panelSection, createMainWindow, createApplicationMenu, createTray, applyPetWindowState } from './windowManager.js'
 import { registerIpc } from './ipcRegistry.js'
 import { autoStartPlugins } from './services/pluginHost.js'
 import { initAutoUpdater } from './services/updaterService.js'
 import { closeAuditLog } from './services/auditLog.js'
+import { runMacPermissionChecks } from './services/macPermissions.js'
+import { initModelManager } from './services/modelManager.js'
+import { ensurePythonRuntimeStatus, getPythonRuntimeStatus } from './services/pythonRuntime.js'
 
 // ── Console safety: suppress broken-pipe errors on stdout/stderr ──
 
@@ -69,6 +73,13 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock()
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
+// On macOS, transparent BrowserWindows + WebGL trigger a SharedImageManager
+// mailbox race in the Skia renderer path. Disabling UseSkiaRenderer falls back
+// to the legacy compositor which handles transparent windows + WebGL correctly.
+if (process.platform === 'darwin') {
+  app.commandLine.appendSwitch('disable-features', 'UseSkiaRenderer')
+}
+
 if (!hasSingleInstanceLock) {
   app.quit()
 }
@@ -105,21 +116,55 @@ function isPortOpen(host, port) {
   })
 }
 
+// Allow users to override the Python binary used for OmniVoice / GLM-ASR.
+// Fixes the common case on macOS where `python3` is Apple's stock 3.9 which
+// can't install transformers>=5.0.0. Users can set NEXUS_PYTHON=/opt/homebrew/bin/python3.11
+function resolvePythonCommand() {
+  const status = getPythonRuntimeStatus()
+  if (status?.binary) return status.binary
+  if (process.env.NEXUS_PYTHON) return process.env.NEXUS_PYTHON
+  return process.platform === 'win32' ? 'python' : 'python3'
+}
+
 async function ensureServiceRunning({ tag, port, command, args, cwd, timeoutSec = 60 }) {
   if (await isPortOpen('127.0.0.1', port)) {
     console.info(`[${tag}] Already running on port ${port}`)
     return
   }
 
-  console.info(`[${tag}] Starting on port ${port}...`)
+  console.info(`[${tag}] Starting on port ${port} via ${command}...`)
+  // Pipe stderr so we can surface startup failures (missing deps, Python version
+  // mismatch, etc.) to the main-process console instead of silently giving up.
   const child = spawn(command, args, {
     cwd,
-    stdio: 'ignore',
+    stdio: ['ignore', 'ignore', 'pipe'],
     detached: true,
     windowsHide: true,
   })
   child.unref()
   childServices.push(child)
+
+  // Capture stderr into a ring buffer and only surface it if the process
+  // fails — live-streaming + tail-on-exit used to double-print 200+ line
+  // Python tracebacks when a sidecar exited early during boot. Now the
+  // user sees a single summary on exit, and nothing noisy while things
+  // are healthy.
+  let stderrTail = ''
+  child.stderr?.setEncoding('utf8')
+  child.stderr?.on('data', (chunk) => {
+    stderrTail = (stderrTail + chunk).slice(-4000)
+  })
+  child.on('exit', (code, signal) => {
+    if (code !== 0) {
+      console.warn(`[${tag}] Process exited early (code=${code}, signal=${signal}).`)
+      if (stderrTail.trim()) {
+        console.warn(`[${tag}] stderr tail:\n${stderrTail.trim()}`)
+      }
+    }
+  })
+  child.on('error', (err) => {
+    console.warn(`[${tag}] Spawn error: ${err?.message}`)
+  })
 
   for (let i = 0; i < timeoutSec; i++) {
     if (await isPortOpen('127.0.0.1', port)) {
@@ -131,26 +176,52 @@ async function ensureServiceRunning({ tag, port, command, args, cwd, timeoutSec 
   console.warn(`[${tag}] Did not start within ${timeoutSec}s`)
 }
 
+// Python sidecar scripts live in scripts/ and are listed under asarUnpack in
+// package.json. Packaged builds see them on disk at
+// `<resourcesPath>/app.asar.unpacked/scripts/*.py`. Dev runs read the repo
+// root directly. We must return a real on-disk path because child_process
+// spawn bypasses Electron's asar fs shim — a virtual asar path would ENOTDIR.
+function resolveAppRoot() {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
+}
+
+function pythonScriptPath(relativePath) {
+  if (app.isPackaged) {
+    const unpacked = path.join(process.resourcesPath, 'app.asar.unpacked', relativePath)
+    if (fs.existsSync(unpacked)) return unpacked
+  }
+  const devCandidate = path.join(resolveAppRoot(), relativePath)
+  return fs.existsSync(devCandidate) ? devCandidate : null
+}
+
 function ensureOmniVoiceRunning() {
-  const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'omnivoice_server.py')
+  const scriptPath = pythonScriptPath('scripts/omnivoice_server.py')
+  if (!scriptPath) {
+    console.info('[OmniVoice] Script not bundled in this build — skipping auto-start.')
+    return Promise.resolve()
+  }
   return ensureServiceRunning({
     tag: 'OmniVoice',
     port: OMNIVOICE_PORT,
-    command: 'python',
+    command: resolvePythonCommand(),
     args: [scriptPath, '--port', String(OMNIVOICE_PORT)],
-    cwd: path.join(path.dirname(fileURLToPath(import.meta.url)), '..'),
+    cwd: path.dirname(scriptPath),
     timeoutSec: 90,
   })
 }
 
 function ensureGlmAsrRunning() {
-  const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'glm_asr_server.py')
+  const scriptPath = pythonScriptPath('scripts/glm_asr_server.py')
+  if (!scriptPath) {
+    console.info('[GLM-ASR] Script not bundled in this build — skipping auto-start.')
+    return Promise.resolve()
+  }
   return ensureServiceRunning({
     tag: 'GLM-ASR',
     port: GLM_ASR_PORT,
-    command: 'python',
+    command: resolvePythonCommand(),
     args: [scriptPath, '--port', String(GLM_ASR_PORT)],
-    cwd: path.join(path.dirname(fileURLToPath(import.meta.url)), '..'),
+    cwd: path.dirname(scriptPath),
     timeoutSec: 120,
   })
 }
@@ -208,21 +279,45 @@ app.whenReady()
     await ensureRendererServer()
     registerMediaPermissionHandlers()
     registerIpc()
+    initModelManager()
 
     // macOS: hide dock icon for desktop pet (floating widget mode)
     if (process.platform === 'darwin' && app.dock) {
-      app.dock.hide()
+      try { app.dock.hide() } catch (err) {
+        console.warn('[macOS] Failed to hide dock icon:', err?.message)
+      }
     }
 
+    createApplicationMenu()
     createMainWindow()
     applyPetWindowState()
     createTray()
     initAutoUpdater({
       getWindows: () => [mainWindow, panelWindow].filter(Boolean),
     })
+    // macOS 隐私权限自检:未授权时主动弹 OS 对话框,已拒绝时弹 Electron 对话框
+    // 引导用户打开系统设置。非阻塞,失败不影响其他启动流程。
+    runMacPermissionChecks().catch((err) => console.warn('[mac-perm] auto-check error:', err?.message))
     autoStartPlugins().catch((err) => console.warn('[pluginHost] auto-start error:', err.message))
-    ensureOmniVoiceRunning().catch((err) => console.warn('[OmniVoice] auto-start error:', err.message))
-    ensureGlmAsrRunning().catch((err) => console.warn('[GLM-ASR] auto-start error:', err.message))
+
+    // Probe Python + dependencies before attempting to spawn the optional
+    // AI services. If Python is missing or torch/transformers aren't
+    // installed, skip the spawn quietly — users shouldn't see ImportError
+    // tracebacks just because they haven't set up the optional Python stack.
+    ensurePythonRuntimeStatus()
+      .then((status) => {
+        if (status.omniVoice.ready) {
+          ensureOmniVoiceRunning().catch((err) => console.warn('[OmniVoice] auto-start error:', err.message))
+        } else {
+          console.info('[OmniVoice] Skipping auto-start — Python prerequisites not met.')
+        }
+        if (status.glmAsr.ready) {
+          ensureGlmAsrRunning().catch((err) => console.warn('[GLM-ASR] auto-start error:', err.message))
+        } else {
+          console.info('[GLM-ASR] Skipping auto-start — Python prerequisites not met.')
+        }
+      })
+      .catch((err) => console.warn('[Python] Runtime probe failed:', err?.message))
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

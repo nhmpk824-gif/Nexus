@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, screen, shell, Tray } from 'electron'
+import { app, BrowserWindow, Menu, nativeImage, screen, shell, Tray } from 'electron'
 import nodeNet from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,7 +11,10 @@ const isDev = !app.isPackaged
 const isSmokeTest = process.env.SMOKE_TEST === '1'
 
 const RUNTIME_CLIENT_TTL_MS = 25_000
-const PET_WINDOW_SCREEN_MARGIN_PX = 24
+// macOS Dock overlaps transparent windows near the bottom edge even within
+// workArea bounds. Use a larger bottom margin on macOS to keep the pet's
+// action buttons (mic, menu) above the Dock hit region.
+const PET_WINDOW_SCREEN_MARGIN_PX = process.platform === 'darwin' ? 80 : 24
 const PANEL_WINDOW_GAP_PX = 28
 const PANEL_WINDOW_DEFAULT_WIDTH = 540
 const PANEL_WINDOW_DEFAULT_HEIGHT = 780
@@ -72,6 +75,36 @@ function getPetIconPath() {
   return isDev
     ? path.join(__dirname, '..', 'public', `${name}.${ext}`)
     : path.join(__dirname, '..', 'dist', `${name}.${ext}`)
+}
+
+// macOS dock visibility is reference-counted so we can toggle on/off as the
+// panel window shows/hides without fighting with the app.dock.hide() call
+// made at startup. `dockRefCount > 0` means the dock should be visible.
+let dockRefCount = 0
+
+function acquireDock() {
+  if (process.platform !== 'darwin' || !app.dock) return
+  dockRefCount += 1
+  if (dockRefCount === 1) {
+    try {
+      app.dock.show?.()
+    } catch (err) {
+      console.warn('[macOS] Failed to show dock icon:', err?.message)
+    }
+  }
+}
+
+function releaseDock() {
+  if (process.platform !== 'darwin' || !app.dock) return
+  if (dockRefCount <= 0) return
+  dockRefCount -= 1
+  if (dockRefCount === 0) {
+    try {
+      app.dock.hide?.()
+    } catch (err) {
+      console.warn('[macOS] Failed to hide dock icon:', err?.message)
+    }
+  }
 }
 
 export function buildRuntimeStateSnapshot() {
@@ -406,6 +439,18 @@ export function createMainWindow() {
   })
 
   win.webContents.on('did-finish-load', () => {
+    const bounds = win.getBounds()
+    console.log('[pet-window] position on show:', bounds)
+    // On macOS the pet should follow the user across Spaces and stay visible
+    // even when another app enters fullscreen mode — otherwise switching to a
+    // fullscreen Safari/Chrome hides the companion entirely.
+    if (process.platform === 'darwin') {
+      try {
+        win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+      } catch (err) {
+        console.warn('[pet-window] setVisibleOnAllWorkspaces failed:', err?.message)
+      }
+    }
     win.show()
     win.focus()
     win.moveTop()
@@ -531,7 +576,27 @@ export function createPanelWindow() {
     })
   }
 
+  // Track dock refcount for this panel window: acquire when it becomes
+  // visible, release when it hides or is closed. This restores a dock icon
+  // during "app-like" interactions (chat / settings panel) and pulls it back
+  // out of sight when the user is only seeing the pet overlay.
+  let dockHeldForPanel = false
+  const holdDock = () => {
+    if (dockHeldForPanel) return
+    dockHeldForPanel = true
+    acquireDock()
+  }
+  const releaseDockForPanel = () => {
+    if (!dockHeldForPanel) return
+    dockHeldForPanel = false
+    releaseDock()
+  }
+
+  win.on('show', holdDock)
+  win.on('hide', releaseDockForPanel)
+
   win.on('closed', () => {
+    releaseDockForPanel()
     panelWindow = null
   })
 
@@ -653,12 +718,101 @@ export function showPetContextMenu(sourceWindow = mainWindow) {
   menu.popup({ window: sourceWindow })
 }
 
-export function createTray() {
-  const iconPath = getPetIconPath()
+export function createApplicationMenu() {
+  if (process.platform !== 'darwin') {
+    // On Windows/Linux the tray context menu is sufficient.
+    Menu.setApplicationMenu(null)
+    return
+  }
 
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { label: `关于 ${app.name}`, role: 'about' },
+        { type: 'separator' },
+        { label: '隐藏', role: 'hide' },
+        { label: '隐藏其他', role: 'hideOthers' },
+        { label: '显示全部', role: 'unhide' },
+        { type: 'separator' },
+        { label: '退出', role: 'quit' },
+      ],
+    },
+    {
+      label: '编辑',
+      submenu: [
+        { label: '撤销', role: 'undo' },
+        { label: '重做', role: 'redo' },
+        { type: 'separator' },
+        { label: '剪切', role: 'cut' },
+        { label: '复制', role: 'copy' },
+        { label: '粘贴', role: 'paste' },
+        { label: '全选', role: 'selectAll' },
+      ],
+    },
+  ]
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+export function createTray() {
   try {
-    tray = new Tray(iconPath)
-  } catch {
+    if (process.platform === 'darwin') {
+      // macOS menu-bar tray: prefer the circular (no-frame) template icon at
+      // 22×22 pt so it works in both light- and dark-mode menu bars. Fall
+      // back to the regular app icon if the template asset is missing — on
+      // a fresh clone or truncated build the file may not have been shipped.
+      const templateCandidates = [
+        path.join(__dirname, '..', 'public', 'nexus-trayTemplate@2x.png'),
+        path.join(__dirname, '..', 'dist', 'nexus-trayTemplate@2x.png'),
+        path.join(process.resourcesPath ?? '', 'nexus-trayTemplate@2x.png'),
+      ]
+      let templateImage = null
+      for (const candidate of templateCandidates) {
+        if (!candidate) continue
+        const img = nativeImage.createFromPath(candidate)
+        if (!img.isEmpty()) {
+          templateImage = img
+          break
+        }
+      }
+      if (templateImage) {
+        const trayIcon = templateImage.resize({ width: 22, height: 22 })
+        // Mark as template so the OS inverts it for dark-mode menu bars.
+        trayIcon.setTemplateImage?.(true)
+        tray = new Tray(trayIcon)
+      } else {
+        // The menu-bar template asset is missing. Falling back to the
+        // full-color app icon looks broken in dark mode (and on light
+        // menu bars produces a harsh color mismatch). Skip tray creation
+        // entirely — the user can still interact with the pet window
+        // directly and via the main application menu — and log loudly
+        // so this shows up in support reports instead of getting lost.
+        console.error(
+          '[tray] macOS template icon missing from build. Tray disabled.',
+          { searchedCandidates: templateCandidates },
+        )
+        tray = null
+        return
+      }
+    } else {
+      // Windows / Linux: prefer the monochrome 22×22 tray silhouette over
+      // the full-colour app icon so it reads cleanly at taskbar sizes.
+      // Falls back to the app icon if the tray asset is missing from the
+      // build (e.g. truncated `dist/`).
+      const trayCandidates = [
+        path.join(__dirname, '..', 'public', 'nexus-tray.png'),
+        path.join(__dirname, '..', 'dist', 'nexus-tray.png'),
+      ]
+      let trayImage = null
+      for (const candidate of trayCandidates) {
+        const img = nativeImage.createFromPath(candidate)
+        if (!img.isEmpty()) { trayImage = img; break }
+      }
+      tray = new Tray(trayImage ?? nativeImage.createFromPath(getPetIconPath()))
+    }
+  } catch (err) {
+    console.warn('[tray] failed to create system tray:', err?.message)
     tray = null
     return
   }

@@ -129,7 +129,10 @@ export function startVoiceConversationEntrypoint(
         return
       }
       if (!status.installed || !status.modelFound) {
-        params.setError('Paraformer 模型缺失，请检查模型目录。')
+        const msg = 'Paraformer 模型缺失，请运行 node scripts/download-models.mjs 下载。'
+        params.setError(msg)
+        params.showPetStatus(msg, 5_000)
+        console.warn('[Voice] Paraformer unavailable:', status)
         return
       }
       if (params.vadSessionRef.current || params.paraformerSessionRef.current || params.busyRef.current) {
@@ -149,7 +152,12 @@ export function startVoiceConversationEntrypoint(
       }
 
       if (!status.installed || !status.modelFound) {
-        params.setError('SenseVoice 模型缺失，请检查模型目录。')
+        const msg = !status.installed
+          ? 'sherpa-onnx-node 未安装，请运行 npm install 后重试。'
+          : 'SenseVoice 模型缺失，请运行 node scripts/download-models.mjs 下载。'
+        params.setError(msg)
+        params.showPetStatus(msg, 5_000)
+        console.warn('[Voice] SenseVoice unavailable:', status)
         return
       }
       if (params.vadSessionRef.current || params.sensevoiceSessionRef.current || params.busyRef.current) {
@@ -176,7 +184,9 @@ export function startVoiceConversationEntrypoint(
   const wakewordTriggered = params.options?.wakewordTriggered ?? false
   if (!currentSettings.speechInputEnabled && !wakewordTriggered) {
     params.setContinuousVoiceSession(false)
-    params.setError('请先在设置中启用语音输入。')
+    const msg = '请先在设置中启用语音输入。'
+    params.setError(msg)
+    params.showPetStatus(msg, 4_000)
     return
   }
 

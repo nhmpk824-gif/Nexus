@@ -93,26 +93,31 @@ export function evaluateGoalReminders(goals: Goal[]): GoalReminder | null {
 
     if (goal.deadline) {
       const deadlineMs = Date.parse(goal.deadline)
-      const remainingMs = deadlineMs - now
-      const remainingHours = remainingMs / 3_600_000
-
-      if (remainingHours < 0) {
-        // Overdue
-        urgency = 'high'
-        score = 100
-      } else if (remainingHours < 24) {
-        urgency = 'high'
-        score = 90
-      } else if (remainingHours < 72) {
-        urgency = 'medium'
-        score = 60
+      if (!Number.isFinite(deadlineMs)) {
+        // Invalid deadline format — skip deadline scoring but still check staleness
       } else {
-        score = 20
+        const remainingMs = deadlineMs - now
+        const remainingHours = remainingMs / 3_600_000
+
+        if (remainingHours < 0) {
+          // Overdue
+          urgency = 'high'
+          score = 100
+        } else if (remainingHours < 24) {
+          urgency = 'high'
+          score = 90
+        } else if (remainingHours < 72) {
+          urgency = 'medium'
+          score = 60
+        } else {
+          score = 20
+        }
       }
     }
 
     // Stale check: no update in 3+ days
-    const staleDays = (now - Date.parse(goal.updatedAt)) / 86_400_000
+    const staleMs = now - Date.parse(goal.updatedAt)
+    const staleDays = Number.isFinite(staleMs) ? staleMs / 86_400_000 : 0
     if (staleDays >= 3) {
       score = Math.max(score, 50)
       if (urgency === 'low') urgency = 'medium'

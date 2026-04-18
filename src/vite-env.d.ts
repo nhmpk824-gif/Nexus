@@ -160,6 +160,44 @@ type RealtimeSessionOptions = {
   maxResponseTokens?: number
 }
 
+type ModelCatalogEntry = {
+  id: string
+  label: string
+  sizeLabel: string
+  purpose: string
+  required: boolean
+  kind: 'archive' | 'files' | 'standalone'
+  present: boolean
+  location: string | null
+}
+
+type ModelInventory = {
+  models: ModelCatalogEntry[]
+  ready: boolean
+  missingRequired: string[]
+  primaryDir: string
+  searchRoots: string[]
+}
+
+type PythonRuntimeStatus = {
+  pythonAvailable: boolean
+  binary: string | null
+  version: string | null
+  omniVoice: { ready: boolean; missingImports: string[] }
+  glmAsr: { ready: boolean; missingImports: string[] }
+}
+
+type ModelProgressEvent = {
+  modelId: string
+  phase: 'start' | 'downloading' | 'done' | 'installed' | 'error'
+  downloaded?: number
+  total?: number
+  fileName?: string
+  fileIndex?: number
+  totalFiles?: number
+  message?: string
+}
+
 type RealtimeEvent =
   | { type: 'state'; state: 'idle' | 'connecting' | 'active' | 'error'; sessionId: string }
   | { type: 'user_speech_started'; sessionId: string }
@@ -413,6 +451,14 @@ declare global {
       workspaceEdit: (payload: { path: string; oldString: string; newString: string }) => Promise<{ path: string; bytes: number; occurrences: number }>
       workspaceGlob: (payload: { pattern: string }) => Promise<{ pattern: string; matches: string[]; totalMatched: number; visited: number; hitLimit: boolean }>
       workspaceGrep: (payload: { query: string; caseSensitive?: boolean; maxResults?: number }) => Promise<{ query: string; matches: Array<{ path: string; line: number; text: string }>; visited: number; hitLimit: boolean }>
+
+      // Model manager (first-launch setup wizard)
+      modelsGetInventory: () => Promise<ModelInventory>
+      modelsDownload: (modelId: string) => Promise<ModelInventory>
+      modelsDownloadMissing: () => Promise<{ results: { id: string; ok: boolean; message?: string }[]; inventory: ModelInventory }>
+      modelsNetworkProbe: () => Promise<{ huggingFaceReachable: boolean }>
+      subscribeModelsProgress: (listener: (event: ModelProgressEvent) => void) => () => void
+      pythonRuntimeStatus: () => Promise<PythonRuntimeStatus>
 
       // SenseVoice offline ASR (sherpa-onnx OfflineRecognizer)
       sensevoiceStatus: () => Promise<{ installed: boolean; modelFound: boolean; modelsDir: string; currentModelId: string | null }>

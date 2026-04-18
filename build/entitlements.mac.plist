@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Allow unsigned code execution (needed for Electron and native modules like sherpa-onnx-node) -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <!-- V8 JIT compilation -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <!-- Load libraries signed by a different Team ID (Electron Framework vs app shell)
+       — critical for ad-hoc signed unsigned builds on Apple Silicon -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <!-- Allow DYLD_* environment variables (some Electron add-ons need them) -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+  <!-- Microphone access for voice input (wake word, STT, VAD) -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+  <!-- Screen capture for desktop awareness (OCR, screenshot context) -->
+  <key>com.apple.security.device.screen-capture</key>
+  <true/>
+  <!-- Outgoing network connections for LLM / STT / TTS API calls -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <!-- Incoming network connections for notification webhook server + renderer server -->
+  <key>com.apple.security.network.server</key>
+  <true/>
+  <!-- AppleEvents / osascript access: used to query System Events for the frontmost app,
+       and to query Music.app / Spotify.app for Now Playing metadata -->
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
+</dict>
+</plist>

@@ -109,11 +109,27 @@ jobs:
             assets: |
               release/*.exe
               release/*.exe.blockmap
-          - os: macos-latest
-            cmd: npx electron-builder --mac dmg zip --publish never
+          # Two separate mac runners — one per arch — because npm 10+ skips
+          # optional dependencies that don't match the host platform. Building
+          # --x64 from an arm64 host (macos-latest is Apple Silicon as of
+          # 2024) silently bundles the darwin-arm64 sherpa-onnx binary into
+          # the x64 .dmg, breaking voice on every Intel machine. Running each
+          # arch on its native runner keeps `npm ci` honest: macos-13 is
+          # Intel, macos-latest is Apple Silicon.
+          - os: macos-13
+            cmd: npx electron-builder --mac dmg zip --x64 --publish never
             assets: |
               release/*.dmg
+              release/*.dmg.blockmap
               release/*.zip
+              release/*.zip.blockmap
+          - os: macos-latest
+            cmd: npx electron-builder --mac dmg zip --arm64 --publish never
+            assets: |
+              release/*.dmg
+              release/*.dmg.blockmap
+              release/*.zip
+              release/*.zip.blockmap
           - os: ubuntu-latest
             cmd: npx electron-builder --linux AppImage deb tar.gz --publish never
             assets: |
@@ -138,6 +154,13 @@ jobs:
 
       - run: npm run build
         name: Vite build
+
+      # Windows is the only platform that bundles sherpa models via
+      # extraResources. Mac / Linux runtime-download them through the
+      # in-app setup wizard, so we skip the ~266 MB pull on those runners.
+      - name: Download sherpa models (Windows only)
+        if: matrix.os == 'windows-latest'
+        run: node scripts/download-models.mjs --skip-asr
 
       - name: Package installer
         env:

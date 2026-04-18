@@ -3,6 +3,7 @@ import type { ErrorInfo, ReactNode } from 'react'
 import './App.css'
 import { useAppController } from './controllers'
 import { PetView, PanelView } from './views'
+import { ModelSetupOverlay } from '../features/setup/components/ModelSetupOverlay'
 
 class AppErrorBoundary extends Component<
   { children: ReactNode },
@@ -82,6 +83,7 @@ function App() {
           {...controller.petView}
           onboardingGuide={onboardingGuide}
         />
+        <ModelSetupOverlay suppressed />
       </AppErrorBoundary>
     )
   }
@@ -93,6 +95,7 @@ function App() {
         settingsDrawer={settingsDrawer}
         onboardingGuide={onboardingGuide}
       />
+      <ModelSetupOverlay />
     </AppErrorBoundary>
   )
 }

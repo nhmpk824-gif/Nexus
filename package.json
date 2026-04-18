@@ -10,6 +10,11 @@
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
+    "postinstall": "node scripts/setup-vendor.mjs",
+    "download-models": "node scripts/download-models.mjs",
+    "download-models:all": "node scripts/download-models.mjs",
+    "download-models:lite": "node scripts/download-models.mjs --skip-asr",
+    "setup": "npm install && npm run build && node scripts/download-models.mjs",
     "dev": "vite",
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:47821 && cross-env DESKTOP_PET_USE_DEV_SERVER=1 electron .\"",
     "build": "tsc -b && vite build",
@@ -21,7 +26,9 @@
     "smoke:packaged": "cross-env SMOKE_TEST=1 electron .",
     "package": "npm run package:win",
     "package:dir": "npm run build && electron-builder --dir --config.win.signAndEditExecutable=false",
+    "prepackage:win": "node scripts/download-models.mjs --skip-asr",
     "package:win": "npm run build && electron-builder --win nsis --config.win.signAndEditExecutable=false",
+    "prepackage:win:signed": "node scripts/download-models.mjs --skip-asr",
     "package:win:signed": "npm run build && electron-builder --win nsis",
     "package:mac": "npm run build && electron-builder --mac",
     "package:linux": "npm run build && electron-builder --linux",
@@ -73,20 +80,40 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "scripts/omnivoice_server.py",
+      "scripts/glm_asr_server.py",
       "package.json",
       "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**"
     ],
-    "extraResources": [],
     "asarUnpack": [
       "node_modules/sherpa-onnx-node/**",
-      "electron/mediaSession.ps1"
+      "scripts/omnivoice_server.py",
+      "scripts/glm_asr_server.py"
     ],
     "icon": "public/nexus-256.png",
     "win": {
       "target": [
         "nsis"
       ],
-      "icon": "public/nexus.ico"
+      "icon": "public/nexus.ico",
+      "asarUnpack": [
+        "electron/mediaSession.ps1"
+      ],
+      "extraResources": [
+        {
+          "from": "sherpa-models",
+          "to": "sherpa-models",
+          "filter": [
+            "**/*",
+            "!_download.tar.bz2",
+            "!**/*.tar.bz2"
+          ]
+        },
+        {
+          "from": "public/vendor/vad/silero_vad_v5.onnx",
+          "to": "silero_vad_v5.onnx"
+        }
+      ]
     },
     "mac": {
       "target": [
@@ -95,7 +122,16 @@
       ],
       "icon": "public/nexus-1024.png",
       "category": "public.app-category.utilities",
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Nexus needs microphone access for voice conversations, wake word detection, and speech recognition.",
+        "NSScreenCaptureUsageDescription": "Nexus uses screen capture for desktop awareness, allowing your AI companion to understand what you are working on.",
+        "NSAppleEventsUsageDescription": "Nexus queries System Events to detect the app you're currently using and reads Now Playing info from Music and Spotify so your AI companion can respond to your context."
+      }
     },
     "linux": {
       "target": [

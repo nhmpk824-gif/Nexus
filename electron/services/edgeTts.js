@@ -127,6 +127,7 @@ export async function synthesizeEdgeTts(text, options = {}) {
     let ws
     let resolved = false
     let firstChunkReceived = false
+    let streamEnded = false
 
     const connectTimeout = setTimeout(() => {
       if (!resolved) {
@@ -157,8 +158,9 @@ export async function synthesizeEdgeTts(text, options = {}) {
       ws.send(buildSsmlMessage(text, voice, rate, pitch, volume))
 
       synthesisTimeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true
+        if (!streamEnded) {
+          streamEnded = true
+          console.warn('[Edge-TTS] synthesis timeout — force-ending stream')
           pcmStream.push(null)
           try { ws.close() } catch {}
         }
@@ -174,7 +176,10 @@ export async function synthesizeEdgeTts(text, options = {}) {
         // Text message — check for turn.end
         if (event.data.includes('Path:turn.end')) {
           clearTimeout(synthesisTimeout)
-          pcmStream.push(null)
+          if (!streamEnded) {
+            streamEnded = true
+            pcmStream.push(null)
+          }
           try { ws.close() } catch {}
         }
         return
@@ -200,6 +205,7 @@ export async function synthesizeEdgeTts(text, options = {}) {
         resolved = true
         reject(new Error(msg))
       } else {
+        streamEnded = true
         pcmStream.destroy(new Error(msg))
       }
     })
@@ -212,7 +218,8 @@ export async function synthesizeEdgeTts(text, options = {}) {
         reject(new Error('Edge TTS WebSocket 连接关闭'))
       } else {
         // Ensure stream ends
-        if (!pcmStream.destroyed) {
+        if (!streamEnded && !pcmStream.destroyed) {
+          streamEnded = true
           pcmStream.push(null)
         }
       }

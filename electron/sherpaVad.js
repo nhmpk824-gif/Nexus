@@ -14,10 +14,8 @@
  * process eliminates the whole problem.
  */
 
-import path from 'node:path'
-import fs from 'node:fs'
-import { app } from 'electron'
 import { createRequire } from 'node:module'
+import { findStandaloneFile } from './services/modelPaths.js'
 
 const require = createRequire(import.meta.url)
 
@@ -32,10 +30,7 @@ const SAMPLE_RATE = 16000
 const WINDOW_SIZE = 512 // Silero v5 mandatory frame size
 
 function resolveModelPath() {
-  const resourcePath = app.isPackaged
-    ? path.join(process.resourcesPath, 'silero_vad_v5.onnx')
-    : path.join(app.getAppPath(), 'public', 'vendor', 'vad', 'silero_vad_v5.onnx')
-  return fs.existsSync(resourcePath) ? resourcePath : null
+  return findStandaloneFile('silero_vad_v5.onnx', 'public/vendor/vad/silero_vad_v5.onnx')
 }
 
 class SherpaVadService {

@@ -48,10 +48,16 @@ export async function performNetworkRequest(url, options = {}) {
   const abortController = signal ? null : new AbortController()
   const requestSignal = signal ?? abortController?.signal
 
-  // Use Node's native fetch for FormData bodies and localhost/loopback URLs —
-  // Electron's net.fetch (Chromium network stack) rejects Buffer/Uint8Array multipart
-  // bodies with ERR_INVALID_ARGUMENT on certain request combinations.
-  const useNativeFetch = body instanceof FormData || isLoopbackUrl(url)
+  // Use Node's native fetch for FormData bodies, Buffer/Uint8Array bodies, and
+  // localhost/loopback URLs — Electron's net.fetch (Chromium network stack)
+  // rejects Buffer/Uint8Array multipart bodies with ERR_INVALID_ARGUMENT on
+  // certain request combinations. Any non-loopback POST that hand-builds a
+  // multipart Buffer (e.g. Zhipu/OpenAI-compatible STT through audioIpc.js)
+  // must bypass Chromium too, not just loopback URLs.
+  const isBinaryBody =
+    body instanceof Uint8Array ||
+    (typeof Buffer !== 'undefined' && Buffer.isBuffer?.(body))
+  const useNativeFetch = body instanceof FormData || isBinaryBody || isLoopbackUrl(url)
 
   return withRequestTimeout(
     () => (useNativeFetch ? fetch : net.fetch)(url, {

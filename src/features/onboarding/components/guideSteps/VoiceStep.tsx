@@ -1,6 +1,7 @@
 import {
   type SpeechModelOption,
   isSenseVoiceSpeechInputProvider,
+  isSpeechOutputKeyless,
   USER_VISIBLE_SPEECH_INPUT_PROVIDER_PRESETS,
   USER_VISIBLE_SPEECH_OUTPUT_PROVIDER_PRESETS,
 } from '../../../../lib/audioProviders'
@@ -183,34 +184,36 @@ export function VoiceStep({
 
           <p className="onboarding-tip">{speechOutputProvider.notes}</p>
 
-          <div className="onboarding-grid onboarding-grid--two">
-            <label>
-              <span>输出接口地址</span>
-              <input
-                value={draft.speechOutputApiBaseUrl}
-                onChange={(event) => setDraft((current) => updateCurrentSpeechOutputProviderProfile(
-                  current,
-                  {
-                    apiBaseUrl: event.target.value,
-                  },
-                ))}
-              />
-            </label>
+          {!isSpeechOutputKeyless(draft.speechOutputProviderId) ? (
+            <div className="onboarding-grid onboarding-grid--two">
+              <label>
+                <span>输出接口地址</span>
+                <input
+                  value={draft.speechOutputApiBaseUrl}
+                  onChange={(event) => setDraft((current) => updateCurrentSpeechOutputProviderProfile(
+                    current,
+                    {
+                      apiBaseUrl: event.target.value,
+                    },
+                  ))}
+                />
+              </label>
 
-            <label>
-              <span>{isVolcengineSpeechOutput ? '输出密钥（APP_ID:ACCESS_TOKEN）' : '输出密钥'}</span>
-              <input
-                type="password"
-                value={draft.speechOutputApiKey}
-                onChange={(event) => setDraft((current) => updateCurrentSpeechOutputProviderProfile(
-                  current,
-                  {
-                    apiKey: event.target.value,
-                  },
-                ))}
-              />
-            </label>
-          </div>
+              <label>
+                <span>{isVolcengineSpeechOutput ? '输出密钥（APP_ID:ACCESS_TOKEN）' : '输出密钥'}</span>
+                <input
+                  type="password"
+                  value={draft.speechOutputApiKey}
+                  onChange={(event) => setDraft((current) => updateCurrentSpeechOutputProviderProfile(
+                    current,
+                    {
+                      apiKey: event.target.value,
+                    },
+                  ))}
+                />
+              </label>
+            </div>
+          ) : null}
 
           <div className="onboarding-grid onboarding-grid--two">
             <label>
