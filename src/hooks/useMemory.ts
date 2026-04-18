@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   clearDailyMemoriesForDay,
   createManualMemory,
@@ -76,7 +76,10 @@ export function useMemory({ settings }: UseMemoryParams) {
     return () => window.clearTimeout(timerId)
   }, [settings.memoryEmbeddingModel, settings.memorySearchMode])
 
-  const recentDailyMemoryEntries = getRecentDailyEntries(dailyMemories, 1).slice(0, 8)
+  const recentDailyMemoryEntries = useMemo(
+    () => getRecentDailyEntries(dailyMemories, 1).slice(0, 8),
+    [dailyMemories],
+  )
 
   const appendDailyMemoryEntries = useCallback((entries: DailyMemoryEntry[]) => {
     if (!entries.length) {
@@ -221,7 +224,13 @@ export function useMemory({ settings }: UseMemoryParams) {
     }
   }, [])
 
-  return {
+  // Memoize return so the outer `memory` object has a stable identity when
+  // no observable state changed. Without this, every parent re-render hands
+  // downstream consumers (useAppController's petView / panelView / overlays)
+  // a fresh `memory` reference, which cascades into useMemo invalidations
+  // and — where downstream effects write state back — a Max Update Depth
+  // render storm.
+  return useMemo(() => ({
     memories,
     memoriesRef,
     dailyMemories,
@@ -239,5 +248,21 @@ export function useMemory({ settings }: UseMemoryParams) {
     exportMemoryArchive,
     importMemoryArchive,
     clearMemoryArchive,
-  }
+  }), [
+    memories,
+    dailyMemories,
+    recentDailyMemoryEntries,
+    setMemories,
+    setDailyMemories,
+    appendDailyMemoryEntries,
+    addManualMemory,
+    removeMemory,
+    updateMemory,
+    clearTodayDailyMemory,
+    updateDailyEntry,
+    removeDailyEntry,
+    exportMemoryArchive,
+    importMemoryArchive,
+    clearMemoryArchive,
+  ])
 }

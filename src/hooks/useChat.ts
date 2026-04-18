@@ -7,6 +7,7 @@ import {
   shorten,
   upsertChatSession,
 } from '../lib'
+import { saveChatMessages } from '../lib/storage'
 import { getCoreRuntime } from '../lib/coreRuntime'
 import { parseChatHistoryArchive, serializeChatHistoryArchive } from '../features/chat'
 import {
@@ -121,6 +122,13 @@ export function useChat(ctx: UseChatContext) {
       messagesSaveSkipRef.current = false
       return
     }
+    // Cross-window sync. Voice turns run entirely inside the pet window —
+    // STT → sendMessage → setMessages all happen there, never touching the
+    // chat panel's React state. The panel listens for `storage` events on
+    // CHAT_STORAGE_KEY (see useDesktopBridge) and reloads its message list
+    // from there, so we need to actually write that key. Without this, the
+    // pet window's voice turns are invisible to an open chat panel.
+    saveChatMessages(messages)
     upsertChatSession({
       id: currentSessionIdRef.current,
       startedAt: currentSessionStartedAtRef.current,
@@ -666,7 +674,14 @@ export function useChat(ctx: UseChatContext) {
     [],
   )
 
-  return {
+  // Memoize the return bag so its identity is stable between renders that
+  // don't change any observable state. Returning a fresh object literal each
+  // render made every downstream consumer (useAppController's chatWithAutonomy,
+  // petView, overlays, panelView) invalidate on every parent re-render — which
+  // in turn cascaded into their children's useEffect deps and, wherever those
+  // effects wrote back to state, produced a "Maximum update depth exceeded"
+  // render storm. Stabilizing here cuts the cascade at its source.
+  return useMemo(() => ({
     messages,
     sessionStartAt: sessionStartAtRef.current,
     archivedMessageIds: archivedMessageIdsRef.current,
@@ -698,5 +713,30 @@ export function useChat(ctx: UseChatContext) {
     clearChatHistory,
     hidePetDialogBubble,
     sendMessage: stableSendMessage,
-  }
+  }), [
+    messages,
+    input,
+    busy,
+    error,
+    assistantActivity,
+    petDialogBubble,
+    petThoughtBubble,
+    pendingImage,
+    setMessages,
+    setInput,
+    setBusy,
+    setError,
+    setPendingImage,
+    appendChatMessage,
+    appendSystemMessage,
+    pushCompanionNotice,
+    pushInnerThought,
+    hideInnerThought,
+    replaceChatHistory,
+    exportChatHistory,
+    importChatHistory,
+    clearChatHistory,
+    hidePetDialogBubble,
+    stableSendMessage,
+  ])
 }

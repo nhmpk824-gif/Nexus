@@ -1,8 +1,4 @@
-/* eslint-disable react-hooks/refs -- useVoice is a ref-heavy voice infrastructure
-   hook that must bridge refs, state, and event bus during render.  The lint rule
-   flags `settings` (a plain AppSettings value) because the context object that
-   carries it also holds RefObjects; these are false positives. */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createInitialWakewordRuntimeState,
   HearingRuntime,
@@ -233,7 +229,19 @@ export function useVoice(ctx: UseVoiceContext) {
     }
   }
 
-  function busEmit(event: VoiceBusEvent) {
+  // `busEmit` and `setVoiceState` are exposed through the hook's return bag;
+  // leaving them as plain function declarations gives them a fresh identity
+  // every render, which ripples through the useMemo deps below and defeats
+  // the memoization. Close over refs / stable primitives and wrap in
+  // useCallback so the hook's return stays referentially stable when no
+  // observable state changed.
+
+  const setVoiceState = useCallback((next: VoiceState) => {
+    voiceStateRef.current = next
+    setVoiceStateRaw(next)
+  }, [])
+
+  const busEmit = useCallback((event: VoiceBusEvent) => {
     const prevUiPhase = voiceBus.uiPhase
     const effects = voiceBus.emit(event)
     const nextUiPhase = voiceBus.uiPhase
@@ -244,17 +252,12 @@ export function useVoice(ctx: UseVoiceContext) {
       setVoiceState(nextUiPhase)
     }
     executeBusEffects(effects)
-  }
+  }, [voiceBus, setVoiceState])
 
   // ── Ref sync ───────────────────────────────────────────────────────────────
   // All voice-state changes should go through setVoiceStateSync so the ref
   // is updated synchronously (scheduleVoiceRestart reads the ref, not React state).
   // The useEffect is kept only as a safety net for edge cases.
-
-  function setVoiceState(next: VoiceState) {
-    voiceStateRef.current = next
-    setVoiceStateRaw(next)
-  }
 
   useEffect(() => {
     voiceStateRef.current = voiceState
@@ -634,7 +637,13 @@ export function useVoice(ctx: UseVoiceContext) {
     })
   }, [voiceBus])
 
-  return {
+  // Memoize return — the voice hook is consumed by useAppController's
+  // petView / panelView / overlays which cascade into downstream effects;
+  // returning a fresh object every render was a co-driver of the Max Update
+  // Depth render storm that hit chat turns. Deps enumerate the actual state
+  // triggers; ref objects / React-guaranteed setters stay out (stable
+  // identity by construction).
+  return useMemo(() => ({
     // State
     voiceState,
     continuousVoiceActive,
@@ -684,5 +693,35 @@ export function useVoice(ctx: UseVoiceContext) {
 
     // Low-level speech output (for settings preview)
     startSpeechOutput: bindings.startSpeechOutput,
-  }
+  // Intentionally exclude `lifecycle.*`, `bindings.*`, `testEntries.*` from
+  // the dep list. These objects are reconstructed on every render (see
+  // createVoiceBindings / createVoiceLifecycleControls calls above), which
+  // would force this useMemo to invalidate every render — defeating the
+  // stabilization and reintroducing the "Maximum update depth exceeded"
+  // render storm on voice-originated chat turns. The factories' internal
+  // implementations all route through stable refs (voiceStateRef, etc.),
+  // so downstream consumers call whichever implementation is current even
+  // if they captured an "old" reference. Fresh state values that genuinely
+  // need to propagate (`voiceState`, `voicePipeline`, …) stay in the deps.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [
+    voiceState,
+    continuousVoiceActive,
+    liveTranscript,
+    speechLevel,
+    wakewordState,
+    voicePipeline,
+    voiceTrace,
+    setVoiceState,
+    setLiveTranscript,
+    setVoicePipeline,
+    setVoiceTrace,
+    updateVoicePipeline,
+    appendVoiceTrace,
+    voiceBus,
+    hearingRuntime,
+    busEmit,
+    clearPendingVoiceRestart,
+    ensureSupportedSpeechInputSettings,
+  ])
 }

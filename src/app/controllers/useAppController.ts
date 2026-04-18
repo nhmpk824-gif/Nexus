@@ -376,30 +376,55 @@ export function useAppController() {
     rhythmPromptGetterRef.current = autonomy.getRhythmPrompt
   }, [autonomy.getEmotionPrompt, autonomy.getRelationshipPrompt, autonomy.getRhythmPrompt])
 
-  // Wake autonomy when user sends a chat message
-  const originalSendMessage = chat.sendMessage
-  const autonomyAwareSendMessage = useCallback(async (...args: Parameters<typeof originalSendMessage>) => {
-    autonomy.focusAwareness.markActive()
-    autonomy.autonomyTick.wakeUp()
-    autonomy.markUserResponse()
-    autonomy.markInteraction()
+  // Wake autonomy when user sends a chat message.
+  //
+  // Depending on the whole `autonomy` object (or even `chat.sendMessage`) in
+  // this wrapper's useCallback deps rebuilt it every render — the autonomy
+  // return value is a fresh object whenever any inner hook returns a new
+  // reference, and `chat.sendMessage` was also a function identity that
+  // rotated on chat state changes. That pushed a new `autonomyAwareSendMessage`
+  // into downstream useMemos (`chatWithAutonomy`, `petView`, `overlays`), which
+  // then re-rendered components whose effects wrote back to state — a classic
+  // "Maximum update depth exceeded" loop, observable as a log spam storm the
+  // moment a chat turn settles.
+  //
+  // Fix: stash the live references in refs and let the wrapper close over
+  // empty deps. The wrapper identity is now stable for the lifetime of the
+  // component, so `chatWithAutonomy` / `petView` / `overlays` stop churning.
+  const autonomyRef = useRef(autonomy)
+  const originalSendMessageRef = useRef(chat.sendMessage)
+  useEffect(() => {
+    autonomyRef.current = autonomy
+  }, [autonomy])
+  useEffect(() => {
+    originalSendMessageRef.current = chat.sendMessage
+  }, [chat.sendMessage])
+
+  const autonomyAwareSendMessage = useCallback(async (
+    ...args: Parameters<ChatController['sendMessage']>
+  ) => {
+    const live = autonomyRef.current
+    live.focusAwareness.markActive()
+    live.autonomyTick.wakeUp()
+    live.markUserResponse()
+    live.markInteraction()
 
     // Classify user message text for emotion signals
     const messageText = typeof args[0] === 'string' ? args[0] : ''
     if (messageText) {
-      autonomy.applyEmotionSignal('user_returned')
+      live.applyEmotionSignal('user_returned')
       for (const signal of classifyMessageSignals(messageText)) {
-        autonomy.applyEmotionSignal(signal)
+        live.applyEmotionSignal(signal)
       }
     }
 
-    const result = await originalSendMessage(...args)
+    const result = await originalSendMessageRef.current(...args)
     if (result) {
-      autonomy.memoryDream.incrementSessionCount()
-      autonomy.applyEmotionSignal('task_completed')
+      live.memoryDream.incrementSessionCount()
+      live.applyEmotionSignal('task_completed')
     }
     return result
-  }, [originalSendMessage, autonomy])
+  }, [])
 
   // Point sendMessageRef to the autonomy-aware wrapper so that voice
   // and other ref-based paths also trigger emotion/interaction tracking.
@@ -407,7 +432,9 @@ export function useAppController() {
     sendMessageRef.current = autonomyAwareSendMessage
   }, [autonomyAwareSendMessage])
 
-  // Patch chat.sendMessage with autonomy-aware wrapper
+  // Patch chat.sendMessage with autonomy-aware wrapper.
+  // `autonomyAwareSendMessage` is now a stable identity, so this memo only
+  // invalidates when `chat` itself changes shape — which is what we want.
   const chatWithAutonomy = useMemo(() => ({
     ...chat,
     sendMessage: autonomyAwareSendMessage,

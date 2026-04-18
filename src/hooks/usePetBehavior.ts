@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildPresenceMessage,
   type PetPerformanceCue,
@@ -337,7 +337,10 @@ export function usePetBehavior(ctx: UsePetBehaviorContext) {
     }
   }, [mood, ctx.view])
 
-  return {
+  // Memoize return — otherwise every parent render hands consumers (petView,
+  // overlays, useChat ctx.setMood etc.) a new `pet` object, invalidating
+  // their useMemos and cascading into render storms.
+  return useMemo(() => ({
     mood,
     setMood,
     moodRef,
@@ -363,5 +366,29 @@ export function usePetBehavior(ctx: UsePetBehaviorContext) {
     publishAmbientPresence,
     dismissAmbientPresence,
     markPresenceActivity,
-  }
+  }), [
+    mood,
+    setMood,
+    gazeTarget,
+    setGazeTarget,
+    petPerformanceCue,
+    petStatusText,
+    ambientPresence,
+    setAmbientPresence,
+    mascotHovered,
+    setMascotHovered,
+    petTapActive,
+    setPetTapActive,
+    petTouchZone,
+    setPetTouchZone,
+    petHotspotActive,
+    setPetHotspotActive,
+    updatePetStatus,
+    playNextPetPerformanceCue,
+    clearPetPerformanceCue,
+    queuePetPerformanceCue,
+    publishAmbientPresence,
+    dismissAmbientPresence,
+    markPresenceActivity,
+  ])
 }
