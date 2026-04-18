@@ -11,22 +11,41 @@ import { existsSync, mkdirSync, createWriteStream, rmSync, statSync } from 'node
 import { join, dirname } from 'node:path'
 import { get as httpsGet } from 'node:https'
 import { get as httpGet } from 'node:http'
-import { execSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 
 // ── Network probe (HuggingFace vs ModelScope fallback) ─────────────────
 
+// Cache the probe with a 5-minute TTL so a long-running app adapts when the
+// network comes back (or drops out) — previously the result was cached for
+// the entire process lifetime, leaving China-network users stuck on the
+// ModelScope path even after a VPN came up.
+const HF_PROBE_TTL_MS = 5 * 60 * 1_000
 let _canReachHF = null
+let _canReachHFCheckedAt = 0
 
 export async function canReachHuggingFace() {
-  if (_canReachHF !== null) return _canReachHF
+  const now = Date.now()
+  if (_canReachHF !== null && now - _canReachHFCheckedAt < HF_PROBE_TTL_MS) {
+    return _canReachHF
+  }
   return new Promise((resolve) => {
     const req = httpsGet('https://huggingface.co', { timeout: 5000 }, () => {
       req.destroy()
       _canReachHF = true
+      _canReachHFCheckedAt = Date.now()
       resolve(true)
     })
-    req.on('error', () => { _canReachHF = false; resolve(false) })
-    req.on('timeout', () => { req.destroy(); _canReachHF = false; resolve(false) })
+    req.on('error', () => {
+      _canReachHF = false
+      _canReachHFCheckedAt = Date.now()
+      resolve(false)
+    })
+    req.on('timeout', () => {
+      req.destroy()
+      _canReachHF = false
+      _canReachHFCheckedAt = Date.now()
+      resolve(false)
+    })
   })
 }
 
@@ -79,6 +98,29 @@ function downloadFile(url, destPath, onProgress, maxRedirects = 5) {
 
 // ── Archive (tar.bz2) download + extract ───────────────────────────────
 
+function extractTarArchive(archivePath, parentDir) {
+  return new Promise((resolve, reject) => {
+    // -xf (auto-detect compression from magic bytes) works on GNU tar,
+    // BSD tar, and the libarchive tar.exe bundled with Windows 10 1803+.
+    // `-xjf` hard-codes bzip2 and crashes on some BSD tar variants — auto-
+    // detection is both simpler and more portable.
+    // `spawn` (not `execSync`) keeps Electron's event loop responsive during
+    // the multi-second decompression of the larger models (SenseVoice is
+    // ~230 MB compressed); execSync would freeze the UI and stall the
+    // progress bar.
+    const child = spawn('tar', ['-xf', archivePath, '-C', parentDir], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    })
+    let stderr = ''
+    child.stderr?.on('data', (chunk) => { stderr += String(chunk) })
+    child.on('error', (err) => reject(err))
+    child.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`tar exited with code ${code}${stderr ? `: ${stderr.trim()}` : ''}`))
+    })
+  })
+}
+
 async function downloadAndExtractArchive(url, parentDir, onProgress) {
   mkdirSync(parentDir, { recursive: true })
   const archivePath = join(parentDir, `_download-${Date.now()}.tar.bz2`)
@@ -91,11 +133,7 @@ async function downloadAndExtractArchive(url, parentDir, onProgress) {
   }
 
   try {
-    // -xf (auto-detect compression from magic bytes) works on GNU tar,
-    // BSD tar, and the libarchive tar.exe bundled with Windows 10 1803+.
-    // `-xjf` hard-codes bzip2 and crashes on some BSD tar variants — auto-
-    // detection is both simpler and more portable.
-    execSync(`tar -xf "${archivePath}" -C "${parentDir}"`, { stdio: 'pipe' })
+    await extractTarArchive(archivePath, parentDir)
   } finally {
     try { rmSync(archivePath, { force: true }) } catch {}
   }
