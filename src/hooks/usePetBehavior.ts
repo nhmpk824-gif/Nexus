@@ -4,6 +4,7 @@ import {
   type PetPerformanceCue,
   type PresenceLine,
 } from '../features/pet'
+import { getPetModelPreset } from '../features/pet/models'
 import { createIdleSequenceController, type IdleSequenceController } from '../features/pet/idleSequence'
 import {
   createId,
@@ -305,16 +306,31 @@ export function usePetBehavior(ctx: UsePetBehaviorContext) {
       idleControllerRef.current.stop()
     }
 
-    const controller = createIdleSequenceController((cue) => {
-      // Only queue idle animations when truly idle
-      if (
-        moodRef.current === 'idle'
-        && !performanceCueQueueRef.current.length
-        && ctx.view === 'pet'
-      ) {
-        queuePetPerformanceCue([cue])
-      }
-    })
+    // Pick up the active model's fidget pool when the controller spins up.
+    // If the model ships an `idleFidgets` list it's used; otherwise the
+    // controller falls back to its built-in default pool. Reading from the
+    // settings ref (not state) keeps this effect stable across renders —
+    // swapping models later restarts via the mood / view gating effect
+    // below rather than re-subscribing here.
+    const activeModel = getPetModelPreset(ctx.settingsRef.current?.petModelId)
+    const fidgetPool = activeModel?.idleFidgets
+
+    const controller = createIdleSequenceController(
+      (cue) => {
+        // Only queue idle animations when truly idle: mood is 'idle',
+        // nothing else is already queued on the performance cue stack,
+        // and the pet window is actually showing (panel view doesn't need
+        // animation).
+        if (
+          moodRef.current === 'idle'
+          && !performanceCueQueueRef.current.length
+          && ctx.view === 'pet'
+        ) {
+          queuePetPerformanceCue([cue])
+        }
+      },
+      { pool: fidgetPool },
+    )
 
     idleControllerRef.current = controller
 

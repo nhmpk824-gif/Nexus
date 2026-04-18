@@ -1,3 +1,28 @@
+/**
+ * One entry in a model's idle fidget pool. When the pet is in `idle` mood
+ * and the pet window is visible, the idle controller periodically draws
+ * a weighted random fidget from this pool and queues it as a performance
+ * cue. Models that don't ship a pool fall back to DEFAULT_IDLE_FIDGET_POOL.
+ */
+export interface IdleFidgetDefinition {
+  id: string
+  /** Expression slot to hold for the duration. Defaults to 'idle'. */
+  expressionSlot?: PetExpressionSlot
+  /** Optional motion slot. Omit for "blink-style" expression-only fidgets. */
+  motionSlot?: PetExpressionSlot
+  /** How long the fidget holds in ms. Defaults to 800. */
+  durationMs?: number
+  /** Short stage direction surfaced in debug UI / accessibility layer. */
+  stageDirection?: string
+  /**
+   * Relative weight in the random draw. Missing / non-positive weights
+   * weight = 1 (uniform) — no fidget is ever forced over others. Use
+   * higher values (e.g. 5 for blinks, 1 for stretches) to bias toward
+   * unobtrusive motions.
+   */
+  weight?: number
+}
+
 export type PetExpressionSlot =
   | 'idle'
   | 'thinking'
@@ -56,6 +81,15 @@ export interface PetModelDefinition {
     yOffsetRatio?: number
     yOffsetPx?: number
   }
+  /**
+   * Per-model idle fidget pool. Omit to use the default pool (blink /
+   * fidget / shift / stretch targeting slots every model is expected to
+   * have). Declare a pool here to tune weights for this model's strengths
+   * — e.g. Mao has an `exp_07` blush-face that fits a "shy" fidget, other
+   * models might lean on angle-rig-only head tilts. See
+   * `src/features/pet/idleSequence.ts` for the draw logic.
+   */
+  idleFidgets?: IdleFidgetDefinition[]
 }
 
 export interface CubismModelFile {
@@ -169,6 +203,18 @@ export const PET_MODEL_PRESETS: PetModelDefinition[] = [
       yOffsetRatio: 0.03,
       yOffsetPx: 12,
     },
+    // Mao gets a 6-entry pool instead of the 4-entry default — `exp_07`
+    // (blush/embarrassed) makes a good quiet "shy glance" fidget, and
+    // `exp_02` (listening-attentive) reads as "perks up" when alternated
+    // with the tilt/stretch motions.
+    idleFidgets: [
+      { id: 'blink', expressionSlot: 'idle', durationMs: 600, stageDirection: '(眨眼)', weight: 6 },
+      { id: 'glance', expressionSlot: 'listening', durationMs: 900, stageDirection: '(环顾)', weight: 3 },
+      { id: 'shy', expressionSlot: 'embarrassed', durationMs: 1100, stageDirection: '(小害羞)', weight: 2 },
+      { id: 'fidget', expressionSlot: 'happy', motionSlot: 'happy', durationMs: 1000, stageDirection: '(小动作)', weight: 2 },
+      { id: 'think', expressionSlot: 'thinking', motionSlot: 'thinking', durationMs: 1200, stageDirection: '(想事情)', weight: 2 },
+      { id: 'stretch', expressionSlot: 'sleepy', motionSlot: 'sleepy', durationMs: 1400, stageDirection: '(伸懒腰)', weight: 1 },
+    ],
   },
 ]
 
