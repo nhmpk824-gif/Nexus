@@ -1,6 +1,8 @@
 import { PromptModeStreamFilter } from '../../features/chat/promptModeMcp'
 import { selectToolDeliveryMode } from '../../features/chat/systemPromptBuilder'
 import { requestAssistantReplyStreaming } from '../../features/chat/runtime'
+import { selectTriggeredLorebookEntries } from '../../features/chat/lorebookInjection'
+import { loadLorebookEntries } from '../../lib/storage/lorebooks'
 import { recordUsage } from '../../features/metering/contextMeter'
 import { formatGameContext, loadGameContext } from '../../features/context/gameContext'
 import {
@@ -284,6 +286,10 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           mcpTools,
           gameContext,
           autoSkillContext,
+          triggeredLorebookEntries: selectTriggeredLorebookEntries(
+            loadLorebookEntries(),
+            nextMessages,
+          ),
           onBuiltInToolResult: handleBuiltInToolResult,
           // Current emotion/relationship/rhythm awareness — the latest values
           // come from useAutonomyController via a ref wrapper. These getters

@@ -37,6 +37,7 @@ export function buildSettingsSectionDescriptions(t: Translator): SettingsSection
     chat: t('调整角色名称、用户称呼、系统提示词和 Live2D 角色。', 'Tune the companion identity, user name, system prompt, and Live2D character.'),
     history: t('管理当前会话聊天记录的导入、导出与清理。', 'Manage import, export, and cleanup for the current chat history.'),
     memory: t('整理长期记忆、日记和向量检索策略。', 'Manage long-term memory, diary entries, and retrieval strategy.'),
+    lorebooks: t('按关键词触发的背景设定条目，相关话题出现时才注入 prompt。', 'Keyword-triggered world knowledge entries — injected into the prompt only when relevant topics come up.'),
     voice: t('统一配置连续对话、输入输出链路和语音体验。', 'Configure continuous talk mode plus the input and output voice pipeline.'),
     window: t('控制桌宠、面板和桌面交互方式。', 'Control the desktop pet, panel, and on-screen behavior.'),
     integrations: t('把 Nexus 连到外部系统：MCP 工具、游戏服务器、Telegram / Discord 聊天桥。', 'Connect Nexus to external systems: MCP tools, game servers, and Telegram / Discord chat bridges.'),
@@ -112,6 +113,15 @@ export function buildSettingsSectionMeta(input: BuildSettingsSectionMetaInput): 
       preview: [
         `${memories.length} ${t('条记忆', 'memories')}`,
         `${dailyMemoryEntries.length} ${t('条日记', 'daily notes')}`,
+      ],
+    },
+    lorebooks: {
+      eyebrow: t('Lorebook 背景条目', 'Lorebooks'),
+      glyph: 'memory',
+      description: descriptions.lorebooks,
+      preview: [
+        t('关键词触发注入', 'Keyword-triggered injection'),
+        t('按需补齐背景', 'Topic-aware world knowledge'),
       ],
     },
     voice: {

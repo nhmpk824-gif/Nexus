@@ -12,8 +12,10 @@ import type {
   ChatMessage,
   ChatMessageContent,
   DesktopContextSnapshot,
+  LorebookEntry,
   MemoryRecallContext,
 } from '../../types'
+import { buildLorebookSection } from './lorebookInjection'
 import { getApiProviderPreset } from '../../lib/apiProviders'
 import { formatDesktopContext } from '../context/desktopContext'
 import { formatNarrativeForPrompt } from '../memory/narrativeMemory'
@@ -61,6 +63,13 @@ export type AssistantReplyRequestOptions = {
   intentContext?: string
   mcpTools?: McpToolDescriptor[]
   autoSkillContext?: string
+  /**
+   * Lorebook entries that matched keywords in the recent user messages
+   * for this turn. Pre-filtered and ordered by the caller (see
+   * selectTriggeredLorebookEntries) so the builder can inline them
+   * without re-scanning. Empty / missing means no entries fired.
+   */
+  triggeredLorebookEntries?: LorebookEntry[]
   /**
    * 当前情绪状态格式化后的 prompt 文本（来自 emotionModel.formatEmotionForPrompt）。
    * 由 useAutonomyController 通过 useChat ctx 注入；空字符串会被自动过滤掉。
@@ -200,6 +209,7 @@ export async function buildSystemPrompt(
     intentContextSection,
     hotTier.longTermSection,
     hotTier.dailySection,
+    buildLorebookSection(options.triggeredLorebookEntries ?? []),
     buildSemanticMemorySection(memoryContext),
     mcpToolsSection,
     skillGuideSection,

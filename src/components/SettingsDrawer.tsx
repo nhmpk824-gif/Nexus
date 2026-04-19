@@ -23,6 +23,7 @@ import {
   ContextSection,
   HistorySection,
   IntegrationsSection,
+  LorebooksSection,
   MemorySection,
   ModelSection,
   SpeechInputSection,
@@ -486,6 +487,11 @@ export function SettingsDrawer({
           onExportChatHistory={() => void chatHistory.handleExportChatHistory()}
           onImportChatHistory={() => void chatHistory.handleImportChatHistory()}
           onClearChatHistory={() => void chatHistory.handleClearChatHistory()}
+        />
+
+        <LorebooksSection
+          active={activeSectionId === 'lorebooks'}
+          uiLanguage={draft.uiLanguage}
         />
 
         <MemorySection
