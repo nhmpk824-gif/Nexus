@@ -158,7 +158,7 @@ export const HistorySection = memo(function HistorySection({
       {archivedSessions.length === 0 ? (
         <p className="settings-drawer__hint">（暂无往期会话）</p>
       ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
           {archivedSessions.map((session) => {
             const isExpanded = expandedId === session.id
             return (
@@ -171,9 +171,14 @@ export const HistorySection = memo(function HistorySection({
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 8,
+                  // Without min-width:0 the flex column refuses to shrink
+                  // narrower than its longest unbroken child — a single
+                  // pasted URL inside an expanded session used to push the
+                  // whole li past the drawer's right edge.
+                  minWidth: 0,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {session.title ?? '（无标题会话）'}
@@ -203,6 +208,7 @@ export const HistorySection = memo(function HistorySection({
                     style={{
                       maxHeight: 320,
                       overflowY: 'auto',
+                      overflowX: 'hidden',
                       padding: 8,
                       background: 'var(--surface-sunken, rgba(0,0,0,0.15))',
                       borderRadius: 6,
@@ -211,13 +217,19 @@ export const HistorySection = memo(function HistorySection({
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 6,
+                      // Long unbroken tokens (URLs, base64, stack frames)
+                      // inside historic messages used to push this block
+                      // past the drawer; force wrapping at any boundary.
+                      minWidth: 0,
+                      wordBreak: 'break-word',
+                      overflowWrap: 'anywhere',
                     }}
                   >
                     {session.messages.length === 0 ? (
                       <div style={{ opacity: 0.5 }}>（此会话没有消息）</div>
                     ) : (
                       session.messages.map((msg) => (
-                        <div key={msg.id}>
+                        <div key={msg.id} style={{ minWidth: 0, maxWidth: '100%' }}>
                           <span style={{ opacity: 0.6, marginRight: 6 }}>
                             {msg.role === 'user' ? '你' : msg.role === 'assistant' ? '伙伴' : msg.role}
                           </span>
