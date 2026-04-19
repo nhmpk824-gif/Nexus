@@ -35,6 +35,7 @@ import { useMediaSessionController } from './useMediaSessionController'
 import { useReminderTaskStore } from './useReminderTaskStore'
 import { useSettingsSubscription } from './useSettingsSubscription'
 import { useWorkspaceRootBridge } from './useWorkspaceRootBridge'
+import { useMcpServerSync } from '../../hooks/useMcpServerSync'
 import { commitSettingsUpdate } from '../store/commitSettingsUpdate'
 import { AUTONOMY_GOALS_STORAGE_KEY, readJson, writeJson } from '../../lib/storage'
 import { classifyMessageSignals } from '../../features/autonomy/emotionModel'
@@ -63,6 +64,7 @@ export function useAppController() {
   useBudgetConfigSync(settings)
   useIntegrationWhitelists(settings)
   useWorkspaceRootBridge(settings, (msg) => setErrorRef.current?.(msg))
+  useMcpServerSync(settings.mcpServers)
 
   const [goals, setGoals] = useState<Goal[]>(() => readJson<Goal[]>(AUTONOMY_GOALS_STORAGE_KEY, []))
   const goalsRef = useRef(goals)

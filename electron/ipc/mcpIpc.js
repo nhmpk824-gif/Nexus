@@ -30,4 +30,10 @@ export function register() {
       ? mcpHost.callTool(id, name, toolArgs)
       : mcpHost.callToolByName(name, toolArgs)
   })
+
+  ipcMain.handle('mcp:sync-servers', async (event, payload) => {
+    requireTrustedSender(event)
+    const desired = Array.isArray(payload?.servers) ? payload.servers : []
+    return mcpHost.syncFromSettings(desired)
+  })
 }

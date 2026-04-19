@@ -471,3 +471,110 @@ export async function stopAll() {
     ),
   )
 }
+
+/**
+ * Parse a free-form args string from the settings UI into an argv array.
+ * Supports quoted args with embedded spaces: `--root "F:\my data"` → ['--root', 'F:\\my data'].
+ * Lines are joined first so a user can freely use newlines in the textarea.
+ */
+function parseArgsString(raw) {
+  if (!raw) return []
+  const flat = String(raw).replace(/\r?\n/g, ' ').trim()
+  if (!flat) return []
+
+  const out = []
+  let current = ''
+  let quote = null
+  for (const ch of flat) {
+    if (quote) {
+      if (ch === quote) {
+        quote = null
+      } else {
+        current += ch
+      }
+      continue
+    }
+    if (ch === '"' || ch === '\'') {
+      quote = ch
+      continue
+    }
+    if (ch === ' ' || ch === '\t') {
+      if (current) {
+        out.push(current)
+        current = ''
+      }
+      continue
+    }
+    current += ch
+  }
+  if (current) out.push(current)
+  return out
+}
+
+/**
+ * Reconcile running MCP instances with a desired-state list from user
+ * settings:
+ *
+ *   - stop + forget instances whose id is not in `desired`
+ *   - stop instances whose command/args changed, then start with new values
+ *   - start instances that are enabled but not yet running
+ *   - leave already-correct instances alone
+ *
+ * Called once at app launch and again whenever the user edits the MCP
+ * server list in Settings. Idempotent. Errors on individual servers are
+ * logged but don't prevent the rest from reconciling.
+ */
+export async function syncFromSettings(desired) {
+  const configs = Array.isArray(desired) ? desired : []
+  const desiredById = new Map()
+  for (const cfg of configs) {
+    if (!cfg?.id) continue
+    desiredById.set(String(cfg.id), {
+      id: String(cfg.id),
+      enabled: Boolean(cfg.enabled),
+      command: String(cfg.command ?? '').trim(),
+      args: parseArgsString(cfg.args),
+      label: cfg.label ?? '',
+    })
+  }
+
+  // Stop + remove instances that shouldn't be running
+  for (const [id, instance] of [..._instances]) {
+    const target = desiredById.get(id)
+    const shouldBeRunning = target?.enabled && target?.command
+    if (!shouldBeRunning) {
+      if (instance.state === 'running' || instance.state === 'starting') {
+        await instance.stop().catch((err) => {
+          console.warn(`[mcpHost:sync] stop ${id} failed:`, err?.message)
+        })
+      }
+      if (!target) {
+        _instances.delete(id)
+      }
+    }
+  }
+
+  // Start / restart instances that should be running
+  for (const target of desiredById.values()) {
+    if (!target.enabled || !target.command) continue
+    const instance = getInstance(target.id)
+    const cmdChanged = (
+      instance.pendingStartCommand !== target.command
+      || JSON.stringify(instance.pendingStartArgs ?? []) !== JSON.stringify(target.args)
+    )
+
+    if (instance.state === 'running' && !cmdChanged) continue
+
+    try {
+      if (instance.state === 'running' || instance.state === 'starting') {
+        await instance.restart(target.command, target.args)
+      } else {
+        await instance.start(target.command, target.args)
+      }
+    } catch (err) {
+      console.warn(`[mcpHost:sync] start ${target.id} failed:`, err?.message)
+    }
+  }
+
+  return getAllStatuses()
+}

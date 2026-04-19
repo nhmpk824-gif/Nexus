@@ -172,6 +172,7 @@ contextBridge.exposeInMainWorld('desktopPet', {
   mcpStatus: (payload) => ipcRenderer.invoke('mcp:status', payload),
   mcpListTools: (payload) => ipcRenderer.invoke('mcp:list-tools', payload),
   mcpCallTool: (payload) => ipcRenderer.invoke('mcp:call-tool', payload),
+  mcpSyncServers: (payload) => ipcRenderer.invoke('mcp:sync-servers', payload),
 
   // Plugin Host
   pluginScan: () => ipcRenderer.invoke('plugin:scan'),

@@ -318,6 +318,7 @@ declare global {
       mcpStatus: (payload?: { id: string }) => Promise<McpHostStatus | McpHostStatus[]>
       mcpListTools: (payload?: { id: string }) => Promise<McpToolDescriptor[]>
       mcpCallTool: (payload: { serverId?: string; name: string; arguments?: Record<string, unknown> }) => Promise<unknown>
+      mcpSyncServers: (payload: { servers: Array<{ id: string; label?: string; command: string; args?: string; enabled: boolean }> }) => Promise<McpHostStatus[]>
 
       // Plugin Host
       pluginScan: () => Promise<PluginStatus[]>
