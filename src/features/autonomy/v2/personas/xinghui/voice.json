@@ -1,0 +1,5 @@
+{
+  "providerId": "edge-tts",
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "instructions": "冷静、轻量、语速中等偏慢。不拔高尾音，不做戏剧停顿。像一个在耳边说话的人而不是主播。"
+}

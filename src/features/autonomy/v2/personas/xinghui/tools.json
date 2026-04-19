@@ -1,0 +1,11 @@
+{
+  "allowlist": [
+    "web_search",
+    "weather",
+    "reminder_create",
+    "reminder_list",
+    "clipboard_read",
+    "active_window_read"
+  ],
+  "blocklist": []
+}
