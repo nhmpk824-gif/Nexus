@@ -53,13 +53,18 @@ function shouldRunSecondaryRecall(request, primaryResult) {
     return false
   }
 
-  // 高质量聚合 API（Tavily/Perplexity/Gemini 等）已做语义排序与去噪，无需本地二次召回
+  const isHighRisk = isHighRiskRecallQuery(request)
+
+  // 高质量聚合 API（Tavily/Perplexity/Gemini 等）已做语义排序与去噪，日常查询
+  // 不再本地二次召回。但对高风险查询（官网 / latest / 歌词）——也就是答案依赖
+  // 特定域名或时效性时——即便是高质量提供商也可能给出弱结果（例如 Exa 把
+  // 「小米 SU7 官网」首条返回成论坛帖），此时仍允许走 Bing/DDG 补一轮召回。
   const highQualityProviders = ['tavily', 'perplexity', 'gemini', 'brave', 'exa', 'firecrawl']
-  if (highQualityProviders.includes(primaryResult.providerId)) {
+  if (highQualityProviders.includes(primaryResult.providerId) && !isHighRisk) {
     return false
   }
 
-  if (isHighRiskRecallQuery(request)) {
+  if (isHighRisk) {
     if (getConfidenceRank(primaryResult.matchConfidence) < 3) {
       return true
     }

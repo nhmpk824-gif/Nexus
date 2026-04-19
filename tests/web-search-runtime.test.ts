@@ -444,10 +444,7 @@ test('Bing candidate query search keeps the most relevant official-style result'
   assert.deepEqual(result.rewrittenQueries, ['小米 SU7 官网', 'Xiaomi SU7 official site'])
 })
 
-// TODO: secondary recall merge logic doesn't promote higher-scored Bing
-// results above the primary provider's results. The scoring function works
-// but the merge path may not be wired. Skipping until the feature is fixed.
-test.skip('official queries can use secondary recall to recover a stronger result from another provider', async () => {
+test('official queries can use secondary recall to recover a stronger result from another provider', async () => {
   const seenRequests: Array<string> = []
   const exaResponse = createJsonResponse({
     results: [
