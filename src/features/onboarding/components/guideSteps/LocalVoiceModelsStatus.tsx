@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { pickTranslatedUiText } from '../../../../lib/uiLanguage'
+import type { UiLanguage } from '../../../../types'
 
 // Mirror the bridge-side types locally. `ModelInventory` + co. are
 // declared in src/vite-env.d.ts at module scope so `declare global` can
@@ -34,7 +36,15 @@ type ModelInventoryLike = {
  * server, Storybook, tests) — the step works identically without this
  * block, it's purely diagnostic.
  */
-export function LocalVoiceModelsStatus() {
+type LocalVoiceModelsStatusProps = {
+  uiLanguage: UiLanguage
+}
+
+export function LocalVoiceModelsStatus({ uiLanguage }: LocalVoiceModelsStatusProps) {
+  const ti = (
+    key: Parameters<typeof pickTranslatedUiText>[1],
+    params?: Parameters<typeof pickTranslatedUiText>[2],
+  ) => pickTranslatedUiText(uiLanguage, key, params)
   const [inventory, setInventory] = useState<ModelInventoryLike | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -64,7 +74,7 @@ export function LocalVoiceModelsStatus() {
         setProgressText(null)
         void refreshInventory()
       } else if (event.phase === 'error') {
-        setError(event.message ?? '下载失败')
+        setError(event.message ?? ti('onboarding.local_voice_models.download_failed'))
       }
     })
     return () => unsubscribe?.()
@@ -78,7 +88,7 @@ export function LocalVoiceModelsStatus() {
       if (result?.inventory) setInventory(result.inventory)
       const failures = result?.results.filter((r) => !r.ok) ?? []
       if (failures.length) {
-        setError(`下载未完成：${failures.map((f) => f.id).join('、')}。稍后可在设置里重试。`)
+        setError(ti('onboarding.local_voice_models.partial_failure', { ids: failures.map((f) => f.id).join('、') }))
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -101,16 +111,16 @@ export function LocalVoiceModelsStatus() {
   if (missing.length === 0) {
     return (
       <p className="onboarding-tip">
-        ✓ 本地语音模型已就绪（{requiredModels.length} 项：唤醒词 + 离线识别 + VAD）。
+        {ti('onboarding.local_voice_models.ready', { count: requiredModels.length })}
       </p>
     )
   }
 
   return (
     <div className="onboarding-subsection">
-      <strong>本地语音模型未就绪</strong>
+      <strong>{ti('onboarding.local_voice_models.missing_heading')}</strong>
       <p className="onboarding-tip">
-        以下 {missing.length} 项模型尚未下载，选择本地离线识别或启用唤醒词前需要先补齐：
+        {ti('onboarding.local_voice_models.missing_note', { count: missing.length })}
       </p>
       <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.7)' }}>
         {missing.map((m) => (
@@ -121,7 +131,7 @@ export function LocalVoiceModelsStatus() {
         ))}
       </ul>
       {progressText ? (
-        <p className="onboarding-tip">下载中：{progressText}</p>
+        <p className="onboarding-tip">{ti('onboarding.local_voice_models.downloading_prefix', { detail: progressText })}</p>
       ) : null}
       {error ? <p className="settings-test-result is-error">{error}</p> : null}
       <button
@@ -130,7 +140,9 @@ export function LocalVoiceModelsStatus() {
         onClick={() => void handleDownload()}
         disabled={downloading}
       >
-        {downloading ? '下载中…' : `下载 ${missing.length} 项必需模型`}
+        {downloading
+          ? ti('onboarding.local_voice_models.downloading_button')
+          : ti('onboarding.local_voice_models.download_button', { count: missing.length })}
       </button>
     </div>
   )

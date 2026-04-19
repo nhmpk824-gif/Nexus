@@ -1,3 +1,4 @@
+import { pickTranslatedUiText } from '../../../../lib/uiLanguage'
 import type { AppSettings } from '../../../../types'
 import type { PetModelDefinition } from '../../../pet'
 import type { OnboardingDraftSetter } from './types'
@@ -17,10 +18,12 @@ export function CompanionStep({
   selectedPetModel,
   finishHint,
 }: CompanionStepProps) {
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) =>
+    pickTranslatedUiText(draft.uiLanguage, key)
   return (
     <div className="onboarding-grid onboarding-grid--stack">
       <label>
-        <span>角色模型</span>
+        <span>{ti('onboarding.companion.model_label')}</span>
         <select
           value={draft.petModelId}
           onChange={(event) => setDraft((current) => ({
@@ -38,17 +41,17 @@ export function CompanionStep({
       </label>
 
       <div className="onboarding-summary">
-        <strong>当前角色</strong>
+        <strong>{ti('onboarding.companion.current_label')}</strong>
         <p>
           {selectedPetModel
             ? `${selectedPetModel.label} · ${selectedPetModel.description}`
-            : '当前还没有可选模型，稍后也可以在设置里继续导入。'}
+            : ti('onboarding.companion.no_models')}
         </p>
       </div>
 
       <div className="onboarding-grid onboarding-grid--two">
         <label className="onboarding-toggle">
-          <span>开启连续语音</span>
+          <span>{ti('onboarding.companion.enable_continuous_voice')}</span>
           <input
             type="checkbox"
             checked={draft.continuousVoiceModeEnabled}
@@ -60,7 +63,7 @@ export function CompanionStep({
         </label>
 
         <label className="onboarding-toggle">
-          <span>开机自启</span>
+          <span>{ti('onboarding.companion.launch_on_startup')}</span>
           <input
             type="checkbox"
             checked={draft.launchOnStartup}

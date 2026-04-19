@@ -1,4 +1,5 @@
 import { API_PROVIDER_PRESETS, getApiProviderPreset } from '../../../../lib/apiProviders'
+import { pickTranslatedUiText } from '../../../../lib/uiLanguage'
 import type { AppSettings } from '../../../../types'
 import type { OnboardingDraftSetter } from './types'
 
@@ -17,13 +18,15 @@ export function TextStep({
   textProvider,
   onApplyTextProviderPreset,
 }: TextStepProps) {
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) =>
+    pickTranslatedUiText(draft.uiLanguage, key)
   const currentPreset = getApiProviderPreset(draft.apiProviderId)
   const hasModelOptions = currentPreset.models.length > 0
 
   return (
     <div className="onboarding-grid onboarding-grid--stack">
       <label>
-        <span>文本模型提供商</span>
+        <span>{ti('onboarding.text.provider_label')}</span>
         <select
           value={draft.apiProviderId}
           onChange={(event) => onApplyTextProviderPreset(event.target.value)}
@@ -40,7 +43,7 @@ export function TextStep({
 
       <div className="onboarding-grid onboarding-grid--two">
         <label>
-          <span>接口地址</span>
+          <span>{ti('onboarding.text.api_base_label')}</span>
           <input
             value={draft.apiBaseUrl}
             onChange={(event) => setDraft((current) => ({
@@ -51,7 +54,7 @@ export function TextStep({
         </label>
 
         <label>
-          <span>模型名</span>
+          <span>{ti('onboarding.text.model_label')}</span>
           {hasModelOptions ? (
             <select
               value={draft.model}
@@ -64,7 +67,7 @@ export function TextStep({
                 <option key={model} value={model}>{model}</option>
               ))}
               {!currentPreset.models.includes(draft.model) && draft.model && (
-                <option value={draft.model}>{draft.model} (自定义)</option>
+                <option value={draft.model}>{draft.model} {ti('onboarding.text.model_custom_suffix')}</option>
               )}
             </select>
           ) : (
@@ -80,7 +83,7 @@ export function TextStep({
       </div>
 
       <label>
-        <span>接口密钥</span>
+        <span>{ti('onboarding.text.api_key_label')}</span>
         <input
           type="password"
           value={draft.apiKey}
@@ -88,7 +91,7 @@ export function TextStep({
             ...current,
             apiKey: event.target.value,
           }))}
-          placeholder="如果暂时没有，也可以先留空"
+          placeholder={ti('onboarding.text.api_key_placeholder')}
         />
       </label>
     </div>

@@ -1,3 +1,4 @@
+import { pickTranslatedUiText } from '../../../../lib/uiLanguage'
 import type { AppSettings } from '../../../../types'
 import type { OnboardingDraftSetter } from './types'
 
@@ -7,29 +8,31 @@ type WelcomeStepProps = {
 }
 
 export function WelcomeStep({ draft, setDraft }: WelcomeStepProps) {
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) =>
+    pickTranslatedUiText(draft.uiLanguage, key)
   return (
     <div className="onboarding-grid onboarding-grid--two">
       <label>
-        <span>你的称呼</span>
+        <span>{ti('onboarding.welcome.user_name_label')}</span>
         <input
           value={draft.userName}
           onChange={(event) => setDraft((current) => ({
             ...current,
             userName: event.target.value,
           }))}
-          placeholder="比如：阿宁"
+          placeholder={ti('onboarding.welcome.user_name_placeholder')}
         />
       </label>
 
       <label>
-        <span>桌宠名字</span>
+        <span>{ti('onboarding.welcome.companion_name_label')}</span>
         <input
           value={draft.companionName}
           onChange={(event) => setDraft((current) => ({
             ...current,
             companionName: event.target.value,
           }))}
-          placeholder="比如：星绘"
+          placeholder={ti('onboarding.welcome.companion_name_placeholder')}
         />
       </label>
     </div>

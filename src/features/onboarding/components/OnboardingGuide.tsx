@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   apiProviderRequiresApiKey,
   getApiProviderPreset,
@@ -25,11 +25,12 @@ import {
   WelcomeStep,
 } from './guideSteps'
 import {
+  buildOnboardingSteps,
   getOnboardingFinishHint,
   getOnboardingStepError,
-  ONBOARDING_STEPS,
   sanitizeOnboardingSettings,
 } from './onboardingGuideSupport'
+import { pickTranslatedUiText } from '../../../lib/uiLanguage'
 
 export type OnboardingGuideProps = {
   open: boolean
@@ -52,9 +53,14 @@ export function OnboardingGuide({
   const [draft, setDraft] = useState(settings)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const ti = (
+    key: Parameters<typeof pickTranslatedUiText>[1],
+    params?: Parameters<typeof pickTranslatedUiText>[2],
+  ) => pickTranslatedUiText(draft.uiLanguage, key, params)
 
-  const step = ONBOARDING_STEPS[stepIndex] ?? ONBOARDING_STEPS[0]
-  const lastStepIndex = ONBOARDING_STEPS.length - 1
+  const onboardingSteps = useMemo(() => buildOnboardingSteps(draft.uiLanguage), [draft.uiLanguage])
+  const step = onboardingSteps[stepIndex] ?? onboardingSteps[0]
+  const lastStepIndex = onboardingSteps.length - 1
   const textProvider = getApiProviderPreset(draft.apiProviderId)
   const speechInputProvider = getSpeechInputProviderPreset(draft.speechInputProviderId)
   const speechOutputProvider = getSpeechOutputProviderPreset(draft.speechOutputProviderId)
@@ -66,6 +72,7 @@ export function OnboardingGuide({
   const finishHint = getOnboardingFinishHint(
     draft,
     apiProviderRequiresApiKey(draft.apiProviderId),
+    draft.uiLanguage,
   )
 
   useEffect(() => {
@@ -103,7 +110,7 @@ export function OnboardingGuide({
   }
 
   function goNextStep() {
-    const nextError = getOnboardingStepError(draft, step.id)
+    const nextError = getOnboardingStepError(draft, step.id, draft.uiLanguage)
     if (nextError) {
       setError(nextError)
       return
@@ -114,7 +121,7 @@ export function OnboardingGuide({
   }
 
   async function handleFinish() {
-    const nextError = getOnboardingStepError(draft, step.id)
+    const nextError = getOnboardingStepError(draft, step.id, draft.uiLanguage)
     if (nextError) {
       setError(nextError)
       return
@@ -127,7 +134,7 @@ export function OnboardingGuide({
       await onSave(sanitizeOnboardingSettings(draft, settings))
       onDismiss()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '首次设置保存失败，请稍后再试。')
+      setError(caught instanceof Error ? caught.message : ti('onboarding.save_failed'))
     } finally {
       setSaving(false)
     }
@@ -189,20 +196,20 @@ export function OnboardingGuide({
       <section className={`onboarding-card onboarding-card--${view}`}>
         <div className="onboarding-card__header">
           <div>
-            <p className="eyebrow">首次配置</p>
-            <h2>先把陪伴体配置到能聊、能听、能说</h2>
+            <p className="eyebrow">{ti('onboarding.eyebrow')}</p>
+            <h2>{ti('onboarding.title')}</h2>
             <p className="onboarding-card__copy">
-              这是一轮最小可用首配。先完成聊天、语音、角色和基础陪伴偏好，工具权限、记忆策略和桌面上下文都可以稍后在设置里继续细调。
+              {ti('onboarding.body')}
             </p>
           </div>
 
           <button className="ghost-button" type="button" onClick={onDismiss} disabled={saving}>
-            稍后再说
+            {ti('onboarding.dismiss')}
           </button>
         </div>
 
         <div className="onboarding-stepper">
-          {ONBOARDING_STEPS.map((item, index) => (
+          {onboardingSteps.map((item, index) => (
             <button
               key={item.id}
               type="button"
@@ -243,16 +250,16 @@ export function OnboardingGuide({
             }}
             disabled={stepIndex === 0 || saving}
           >
-            上一步
+            {ti('onboarding.prev')}
           </button>
 
           {stepIndex < lastStepIndex ? (
             <button className="primary-button" type="button" onClick={goNextStep} disabled={saving}>
-              下一步
+              {ti('onboarding.next')}
             </button>
           ) : (
             <button className="primary-button" type="button" onClick={() => void handleFinish()} disabled={saving}>
-              {saving ? '保存中...' : '完成引导并开始使用'}
+              {saving ? ti('onboarding.finishing') : ti('onboarding.finish')}
             </button>
           )}
         </div>

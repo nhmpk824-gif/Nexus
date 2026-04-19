@@ -9,6 +9,7 @@ import {
   updateCurrentSpeechInputProviderProfile,
   updateCurrentSpeechOutputProviderProfile,
 } from '../../../../lib/speechProviderProfiles'
+import { pickTranslatedUiText } from '../../../../lib/uiLanguage'
 import type { AppSettings, SpeechVoiceOption } from '../../../../types'
 import { LocalVoiceModelsStatus } from './LocalVoiceModelsStatus'
 import type { OnboardingDraftSetter } from './types'
@@ -42,13 +43,15 @@ export function VoiceStep({
   onApplySpeechInputPreset,
   onApplySpeechOutputPreset,
 }: VoiceStepProps) {
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) =>
+    pickTranslatedUiText(draft.uiLanguage, key)
   return (
     <div className="onboarding-grid onboarding-grid--stack">
-      <LocalVoiceModelsStatus />
+      <LocalVoiceModelsStatus uiLanguage={draft.uiLanguage} />
 
       <div className="onboarding-grid onboarding-grid--two">
         <label className="onboarding-toggle">
-          <span>启用语音输入</span>
+          <span>{ti('onboarding.voice.enable_input')}</span>
           <input
             type="checkbox"
             checked={draft.speechInputEnabled}
@@ -60,7 +63,7 @@ export function VoiceStep({
         </label>
 
         <label className="onboarding-toggle">
-          <span>启用语音输出</span>
+          <span>{ti('onboarding.voice.enable_output')}</span>
           <input
             type="checkbox"
             checked={draft.speechOutputEnabled}
@@ -74,9 +77,9 @@ export function VoiceStep({
 
       {draft.speechInputEnabled ? (
         <div className="onboarding-subsection">
-          <strong>语音输入</strong>
+          <strong>{ti('onboarding.voice.input_heading')}</strong>
           <label>
-            <span>输入方案</span>
+            <span>{ti('onboarding.voice.input_provider')}</span>
             <select
               value={draft.speechInputProviderId}
               onChange={(event) => onApplySpeechInputPreset(event.target.value)}
@@ -94,7 +97,7 @@ export function VoiceStep({
           {!isSenseVoiceSpeechInputProvider(draft.speechInputProviderId) ? (
             <div className="onboarding-grid onboarding-grid--two">
               <label>
-                <span>输入接口地址</span>
+                <span>{ti('onboarding.voice.input_api_base')}</span>
                 <input
                   value={draft.speechInputApiBaseUrl}
                   onChange={(event) => setDraft((current) => updateCurrentSpeechInputProviderProfile(
@@ -107,7 +110,7 @@ export function VoiceStep({
               </label>
 
               <label>
-                <span>输入密钥</span>
+                <span>{ti('onboarding.voice.input_api_key')}</span>
                 <input
                   type="password"
                   value={draft.speechInputApiKey}
@@ -124,7 +127,7 @@ export function VoiceStep({
 
           <div className="onboarding-grid onboarding-grid--two">
             <label>
-              <span>输入模型</span>
+              <span>{ti('onboarding.voice.input_model')}</span>
               {speechInputModelOptions.length ? (
                 <select
                   value={draft.speechInputModel}
@@ -155,7 +158,7 @@ export function VoiceStep({
             </label>
 
             <label>
-              <span>识别语言</span>
+              <span>{ti('onboarding.voice.recognition_lang')}</span>
               <input
                 value={draft.speechRecognitionLang}
                 onChange={(event) => setDraft((current) => ({
@@ -170,9 +173,9 @@ export function VoiceStep({
 
       {draft.speechOutputEnabled ? (
         <div className="onboarding-subsection">
-          <strong>语音输出</strong>
+          <strong>{ti('onboarding.voice.output_heading')}</strong>
           <label>
-            <span>输出方案</span>
+            <span>{ti('onboarding.voice.output_provider')}</span>
             <select
               value={draft.speechOutputProviderId}
               onChange={(event) => onApplySpeechOutputPreset(event.target.value)}
@@ -190,7 +193,7 @@ export function VoiceStep({
           {!isSpeechOutputKeyless(draft.speechOutputProviderId) ? (
             <div className="onboarding-grid onboarding-grid--two">
               <label>
-                <span>输出接口地址</span>
+                <span>{ti('onboarding.voice.output_api_base')}</span>
                 <input
                   value={draft.speechOutputApiBaseUrl}
                   onChange={(event) => setDraft((current) => updateCurrentSpeechOutputProviderProfile(
@@ -203,7 +206,7 @@ export function VoiceStep({
               </label>
 
               <label>
-                <span>{isVolcengineSpeechOutput ? '输出密钥（APP_ID:ACCESS_TOKEN）' : '输出密钥'}</span>
+                <span>{isVolcengineSpeechOutput ? ti('onboarding.voice.output_api_key_volcano') : ti('onboarding.voice.output_api_key')}</span>
                 <input
                   type="password"
                   value={draft.speechOutputApiKey}
@@ -220,7 +223,7 @@ export function VoiceStep({
 
           <div className="onboarding-grid onboarding-grid--two">
             <label>
-              <span>{isVolcengineSpeechOutput ? '业务集群' : '输出模型'}</span>
+              <span>{isVolcengineSpeechOutput ? ti('onboarding.voice.output_model_volcano') : ti('onboarding.voice.output_model')}</span>
               {speechOutputModelOptions.length ? (
                 <select
                   value={draft.speechOutputModel}
@@ -251,7 +254,7 @@ export function VoiceStep({
             </label>
 
             <label>
-              <span>播报语言</span>
+              <span>{ti('onboarding.voice.synthesis_lang')}</span>
               <input
                 value={draft.speechSynthesisLang}
                 onChange={(event) => setDraft((current) => ({
@@ -264,12 +267,12 @@ export function VoiceStep({
 
           {isVolcengineSpeechOutput ? (
             <p className="onboarding-tip">
-              火山 TTS 的“输出模型”实际填写的是业务集群。建议先用 `volcano_tts`，音色先试 `BV001_streaming`，最适合拿来验证链路是否打通。
+              {ti('onboarding.voice.volcano_hint')}
             </p>
           ) : null}
 
           <label>
-            <span>{isVolcengineSpeechOutput ? '音色类型' : '音色 / 音色 ID'}</span>
+            <span>{isVolcengineSpeechOutput ? ti('onboarding.voice.voice_label_volcano') : ti('onboarding.voice.voice_label')}</span>
             {speechOutputVoiceOptions.length ? (
               <select
                 value={draft.speechOutputVoice}
