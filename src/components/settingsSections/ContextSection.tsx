@@ -11,6 +11,7 @@ import {
   type ReminderTaskActionKind,
 } from '../settingsDrawerSupport'
 import { formatReminderScheduleSummaryForUi, type ReminderTaskDraftInput } from '../../features/reminders/schedule'
+import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type {
   ReminderTask,
   ReminderTaskAction,
@@ -69,6 +70,10 @@ export const ContextSection = memo(function ContextSection({
   onUpdateReminderTask,
   onRemoveReminderTask,
 }: ContextSectionProps) {
+  const ti = (
+    key: Parameters<typeof pickTranslatedUiText>[1],
+    params?: Parameters<typeof pickTranslatedUiText>[2],
+  ) => pickTranslatedUiText(uiLanguage, key, params)
   const [reminderStatus, setReminderStatus] = useState<ConnectionResult | null>(null)
   const [newReminderTitle, setNewReminderTitle] = useState('')
   const [newReminderPrompt, setNewReminderPrompt] = useState('')
@@ -130,7 +135,7 @@ export const ContextSection = memo(function ContextSection({
     if (!title || !prompt) {
       setReminderStatus({
         ok: false,
-        message: '请先填写提醒标题和提醒内容。',
+        message: ti('settings.context.error.title_and_prompt_required'),
       })
       return
     }
@@ -138,7 +143,7 @@ export const ContextSection = memo(function ContextSection({
     if (newReminderActionKind === 'web_search' && !actionTarget) {
       setReminderStatus({
         ok: false,
-        message: '搜索任务需要填写搜索关键词。',
+        message: ti('settings.context.error.search_query_required'),
       })
       return
     }
@@ -155,12 +160,12 @@ export const ContextSection = memo(function ContextSection({
       resetNewReminderDraft()
       setReminderStatus({
         ok: true,
-        message: '本地提醒已保存。',
+        message: ti('settings.context.success.saved'),
       })
     } catch (error) {
       setReminderStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '提醒保存失败。',
+        message: error instanceof Error ? error.message : ti('settings.context.error.save_failed'),
       })
     }
   }
@@ -175,12 +180,12 @@ export const ContextSection = memo(function ContextSection({
       onAddReminderTask(template.buildDraft(new Date()))
       setReminderStatus({
         ok: true,
-        message: `已添加模板任务：${template.label}`,
+        message: ti('settings.context.success.template_added', { name: template.label }),
       })
     } catch (error) {
       setReminderStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '模板任务添加失败。',
+        message: error instanceof Error ? error.message : ti('settings.context.error.template_failed'),
       })
     }
   }
@@ -210,26 +215,29 @@ export const ContextSection = memo(function ContextSection({
     <section className={`settings-section ${active ? 'is-active' : 'is-hidden'}`}>
       <div className="settings-section__title-row">
         <div>
-          <h4>本地自动任务中心</h4>
+          <h4>{ti('settings.context.title')}</h4>
           <p className="settings-drawer__hint">
-            支持 `at / every / cron` 三种调度；触发时会直接弹人物气泡，展示文本和 TTS 播报文本可以分开写，也可以先用下面的模板快速建一个常用任务。
+            {ti('settings.context.note')}
           </p>
         </div>
       </div>
 
       <div className="settings-drawer__stack">
         <div className="settings-drawer__inline-actions">
-          <span className="settings-summary-chip">总数 {reminderTasks.length}</span>
-          <span className="settings-summary-chip">启用 {enabledReminderCount}</span>
+          <span className="settings-summary-chip">{ti('settings.context.total_summary', { count: reminderTasks.length })}</span>
+          <span className="settings-summary-chip">{ti('settings.context.enabled_summary', { count: enabledReminderCount })}</span>
           <span className="settings-summary-chip">
-            下个任务 {nextReminderTask ? nextReminderTask.title : '暂无'}
+            {ti('settings.context.next_task_summary', { name: nextReminderTask ? nextReminderTask.title : ti('settings.context.none') })}
           </span>
         </div>
 
         <p className="settings-drawer__hint">
           {nextReminderTask
-            ? `最近一次触发将是「${nextReminderTask.title}」：${formatReminderCenterNextLabel(nextReminderTask.nextRunAt, uiLanguage)}`
-            : '当前还没有即将执行的本地任务。'}
+            ? ti('settings.context.next_task_line', {
+              title: nextReminderTask.title,
+              when: formatReminderCenterNextLabel(nextReminderTask.nextRunAt, uiLanguage),
+            })
+            : ti('settings.context.no_upcoming_task')}
         </p>
 
         <div className="settings-drawer__inline-actions">
@@ -252,7 +260,7 @@ export const ContextSection = memo(function ContextSection({
           {reminderTasks.map((task) => (
             <article key={task.id} className="settings-drawer__card">
               <label>
-                <span>标题</span>
+                <span>{ti('settings.context.field.title')}</span>
                 <input
                   value={task.title}
                   onChange={(event) => onUpdateReminderTask(task.id, { title: event.target.value })}
@@ -260,7 +268,7 @@ export const ContextSection = memo(function ContextSection({
               </label>
 
               <label>
-                <span>展示内容</span>
+                <span>{ti('settings.context.field.prompt')}</span>
                 <textarea
                   rows={3}
                   value={task.prompt}
@@ -269,16 +277,16 @@ export const ContextSection = memo(function ContextSection({
               </label>
 
               <label>
-                <span>TTS 播报文本</span>
+                <span>{ti('settings.context.field.speech_text')}</span>
                 <input
                   value={task.speechText ?? ''}
                   onChange={(event) => onUpdateReminderTask(task.id, { speechText: event.target.value || undefined })}
-                  placeholder="留空时默认读取展示内容"
+                  placeholder={ti('settings.context.field.speech_placeholder')}
                 />
               </label>
 
               <label>
-                <span>执行动作</span>
+                <span>{ti('settings.context.field.action')}</span>
                 <select
                   value={task.action.kind}
                   onChange={(event) => onUpdateReminderTask(task.id, {
@@ -292,15 +300,15 @@ export const ContextSection = memo(function ContextSection({
                     ),
                   })}
                 >
-                  <option value="notice">普通提醒</option>
-                  <option value="weather">天气播报</option>
-                  <option value="web_search">网页搜索</option>
+                  <option value="notice">{ti('settings.context.action.notice')}</option>
+                  <option value="weather">{ti('settings.context.action.weather')}</option>
+                  <option value="web_search">{ti('settings.context.action.web_search')}</option>
                 </select>
               </label>
 
               {task.action.kind === 'weather' ? (
                 <label>
-                  <span>天气地点</span>
+                  <span>{ti('settings.context.field.weather_location')}</span>
                   <input
                     value={task.action.location}
                     onChange={(event) => onUpdateReminderTask(task.id, {
@@ -309,26 +317,26 @@ export const ContextSection = memo(function ContextSection({
                         location: event.target.value,
                       },
                     })}
-                    placeholder="留空时走默认地点"
+                    placeholder={ti('settings.context.field.weather_location_placeholder')}
                   />
                 </label>
               ) : null}
 
               {task.action.kind === 'web_search' ? (
                 <label>
-                  <span>搜索关键词</span>
+                  <span>{ti('settings.context.field.search_query')}</span>
                   <input
                     value={task.action.query}
                     onChange={(event) => onUpdateReminderTask(task.id, {
                       action: buildReminderAction('web_search', event.target.value),
                     })}
-                    placeholder="例如：AI 新闻 / 周传雄 黄昏 歌词"
+                    placeholder={ti('settings.context.field.search_query_placeholder')}
                   />
                 </label>
               ) : null}
 
               <label>
-                <span>调度方式</span>
+                <span>{ti('settings.context.field.schedule')}</span>
                 <select
                   value={task.schedule.kind}
                   onChange={(event) => handleUpdateReminderTaskSchedule(task, event.target.value as ReminderScheduleKind)}
@@ -343,7 +351,7 @@ export const ContextSection = memo(function ContextSection({
 
               {task.schedule.kind === 'at' ? (
                 <label>
-                  <span>执行时间</span>
+                  <span>{ti('settings.context.field.run_at')}</span>
                   <input
                     type="datetime-local"
                     value={toDatetimeLocalValue(task.schedule.at)}
@@ -359,7 +367,7 @@ export const ContextSection = memo(function ContextSection({
 
               {task.schedule.kind === 'every' ? (
                 <label>
-                  <span>每隔多少分钟</span>
+                  <span>{ti('settings.context.field.every_minutes')}</span>
                   <input
                     type="number"
                     min={1}
@@ -384,7 +392,7 @@ export const ContextSection = memo(function ContextSection({
 
               {task.schedule.kind === 'cron' ? (
                 <label>
-                  <span>Cron 表达式</span>
+                  <span>{ti('settings.context.field.cron')}</span>
                   <input
                     value={task.schedule.expression}
                     onChange={(event) => onUpdateReminderTask(task.id, {
@@ -399,7 +407,7 @@ export const ContextSection = memo(function ContextSection({
               ) : null}
 
               <label className="settings-toggle">
-                <span>启用这个任务</span>
+                <span>{ti('settings.context.field.enable_task')}</span>
                 <input
                   type="checkbox"
                   checked={task.enabled}
@@ -409,86 +417,88 @@ export const ContextSection = memo(function ContextSection({
 
               <div className="settings-drawer__hint">
                 {formatReminderActionSummary(task, uiLanguage)} · {formatReminderScheduleSummaryForUi(task, uiLanguage)}
-                {task.nextRunAt ? ` · 下次：${toDatetimeLocalValue(task.nextRunAt).replace('T', ' ')}` : ' · 当前不会再触发'}
+                {task.nextRunAt
+                  ? ` · ${ti('settings.context.next_run_prefix', { time: toDatetimeLocalValue(task.nextRunAt).replace('T', ' ') })}`
+                  : ` · ${ti('settings.context.no_next_run')}`}
               </div>
 
               <div className="settings-drawer__inline-actions">
                 <button type="button" className="ghost-button" onClick={() => onRemoveReminderTask(task.id)}>
-                  删除
+                  {ti('settings.context.delete')}
                 </button>
               </div>
             </article>
           ))}
         </div>
       ) : (
-        <p className="settings-drawer__hint">还没有本地提醒，下面可以直接新建一个。</p>
+        <p className="settings-drawer__hint">{ti('settings.context.empty_state')}</p>
       )}
 
       <div className="settings-drawer__card">
         <label>
-          <span>新提醒标题</span>
+          <span>{ti('settings.context.new_title_label')}</span>
           <input
             value={newReminderTitle}
             onChange={(event) => setNewReminderTitle(event.target.value)}
-            placeholder="例如：喝水提醒"
+            placeholder={ti('settings.context.new_title_placeholder')}
           />
         </label>
 
         <label>
-          <span>展示内容</span>
+          <span>{ti('settings.context.field.prompt')}</span>
           <textarea
             rows={3}
             value={newReminderPrompt}
             onChange={(event) => setNewReminderPrompt(event.target.value)}
-            placeholder="例如：先休息一下，喝口水再继续。"
+            placeholder={ti('settings.context.new_prompt_placeholder')}
           />
         </label>
 
         <label>
-          <span>TTS 播报文本</span>
+          <span>{ti('settings.context.field.speech_text')}</span>
           <input
             value={newReminderSpeechText}
             onChange={(event) => setNewReminderSpeechText(event.target.value)}
-            placeholder="例如：主人，记得喝水休息一下。"
+            placeholder={ti('settings.context.new_speech_placeholder')}
           />
         </label>
 
         <label>
-          <span>执行动作</span>
+          <span>{ti('settings.context.field.action')}</span>
           <select
             value={newReminderActionKind}
             onChange={(event) => setNewReminderActionKind(event.target.value as ReminderTaskActionKind)}
           >
-            <option value="notice">普通提醒</option>
-            <option value="weather">天气播报</option>
-            <option value="web_search">网页搜索</option>
+            <option value="notice">{ti('settings.context.action.notice')}</option>
+            <option value="weather">{ti('settings.context.action.weather')}</option>
+            <option value="web_search">{ti('settings.context.action.web_search')}</option>
           </select>
         </label>
 
         {newReminderActionKind === 'weather' ? (
           <label>
-            <span>天气地点</span>
+            <span>{ti('settings.context.field.weather_location')}</span>
             <input
               value={newReminderActionTarget}
               onChange={(event) => setNewReminderActionTarget(event.target.value)}
-              placeholder="留空时走默认地点"
+              placeholder={ti('settings.context.field.weather_location_placeholder')}
             />
           </label>
         ) : null}
 
         {newReminderActionKind === 'web_search' ? (
           <label>
-            <span>搜索关键词</span>
+            <span>{ti('settings.context.field.search_query')}</span>
             <input
               value={newReminderActionTarget}
               onChange={(event) => setNewReminderActionTarget(event.target.value)}
-              placeholder="例如：AI 新闻 / 深圳天气 / 周传雄 黄昏 歌词"
+              placeholder={ti('settings.context.new_search_placeholder')}
             />
           </label>
         ) : null}
 
         <label>
-          <span>调度方式</span>
+          <span>{ti('settings.context.field.schedule')}</span>
           <select
             value={newReminderScheduleKind}
             onChange={(event) => setNewReminderScheduleKind(event.target.value as ReminderScheduleKind)}
@@ -503,7 +513,7 @@ export const ContextSection = memo(function ContextSection({
 
         {newReminderScheduleKind === 'at' ? (
           <label>
-            <span>执行时间</span>
+            <span>{ti('settings.context.field.run_at')}</span>
             <input
               type="datetime-local"
               value={newReminderAt}
@@ -514,7 +524,7 @@ export const ContextSection = memo(function ContextSection({
 
         {newReminderScheduleKind === 'every' ? (
           <label>
-            <span>每隔多少分钟</span>
+            <span>{ti('settings.context.field.every_minutes')}</span>
             <input
               type="number"
               min={1}
@@ -527,7 +537,7 @@ export const ContextSection = memo(function ContextSection({
 
         {newReminderScheduleKind === 'cron' ? (
           <label>
-            <span>Cron 表达式</span>
+            <span>{ti('settings.context.field.cron')}</span>
             <input
               value={newReminderCronExpression}
               onChange={(event) => setNewReminderCronExpression(event.target.value)}
@@ -538,7 +548,7 @@ export const ContextSection = memo(function ContextSection({
 
         <div className="settings-drawer__inline-actions">
           <button type="button" className="primary-button" onClick={handleAddReminderTask}>
-            添加提醒
+            {ti('settings.context.add_button')}
           </button>
         </div>
       </div>
