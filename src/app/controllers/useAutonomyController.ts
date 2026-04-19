@@ -41,6 +41,7 @@ import { canBroadcast, markBroadcast } from './broadcastGate'
 import { useEmotionState } from './useEmotionState'
 import { useRelationshipState } from './useRelationshipState'
 import { useRhythmState } from './useRhythmState'
+import { useAutonomyV2Engine } from './useAutonomyV2Engine'
 import { useTelegramBridge } from './useTelegramBridge'
 import { useDiscordBridge } from './useDiscordBridge'
 import { recordUsage } from '../../features/metering/contextMeter'
@@ -109,6 +110,20 @@ export function useAutonomyController({
   const runDreamRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const evaluateTriggersRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const lastActiveWindowTitleRef = useRef<string | null>(null)
+
+  const v2Engine = useAutonomyV2Engine({
+    settingsRef,
+    messagesRef,
+    memoriesRef: memory.memoriesRef,
+    reminderTasksRef,
+    goalsRef,
+    emotionStateRef: emotionState.emotionStateRef,
+    relationshipRef: relationshipState.relationshipRef,
+    rhythmRef: rhythmState.rhythmRef,
+    activeWindowTitleRef: lastActiveWindowTitleRef,
+    pushCompanionNotice: chat.pushCompanionNotice,
+    onDebugEvent: debugConsole.appendDebugConsoleEvent,
+  })
   const monologueTickCounterRef = useRef(0)
   const monologueRunningRef = useRef(false)
   const decisionFeedbackRef = useRef<DecisionFeedbackState>(createInitialFeedbackState())
@@ -126,6 +141,29 @@ export function useAutonomyController({
       void window.desktopPet?.getDesktopContext?.({ includeActiveWindow: true })
         .then((ctx) => { lastActiveWindowTitleRef.current = ctx?.activeWindowTitle ?? null })
         .catch(() => { lastActiveWindowTitleRef.current = null })
+    }
+
+    // ── V2 engine branch ────────────────────────────────────────────────────
+    // When the v2 feature flag is on, skip the legacy rule-based
+    // proactiveEngine + inner-monologue path entirely. The v2 hook handles
+    // its own tick gating, LLM call, guardrail, and delivery. State decays
+    // (emotion / relationship / rhythm) run here because v2 reads from
+    // these refs every tick.
+    if (currentSettings.autonomyEngineV2 && currentSettings.autonomyLevelV2 !== 'off') {
+      emotionState.decayOnTick(tickState.idleSeconds)
+      relationshipState.decayOnTick()
+      rhythmState.decayOnTick()
+
+      // Dream cycle still runs during sleep — it feeds future context.
+      if (tickState.phase === 'sleeping') {
+        void runDreamRef.current()
+      }
+      // Context triggers still fire (they're orthogonal to the proactive
+      // engine and the user may have configured app-switch reactions).
+      void evaluateTriggersRef.current()
+
+      void v2Engine.considerTick(tickState)
+      return
     }
 
     const decision = evaluateProactiveContext({
@@ -365,7 +403,7 @@ export function useAutonomyController({
 
     // Evaluate context triggers on each tick
     void evaluateTriggersRef.current()
-  }, [busyRef, chat, debugConsole, emotionState, focusAwareness.focusStateRef, goalsRef, memory.memoriesRef, messagesRef, relationshipState, reminderTasksRef, rhythmState, settingsRef])
+  }, [busyRef, chat, debugConsole, emotionState, focusAwareness.focusStateRef, goalsRef, memory.memoriesRef, messagesRef, relationshipState, reminderTasksRef, rhythmState, settingsRef, v2Engine])
 
   const autonomyTick = useAutonomyTick({
     settingsRef,
