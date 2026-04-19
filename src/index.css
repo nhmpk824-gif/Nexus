@@ -59,22 +59,6 @@
   --color-shadow: rgba(0, 0, 0, 0.08);
   --color-shadow-accent: rgba(50, 50, 50, 0.12);
 
-  /* Dark mode semantic tokens */
-  --color-dark-surface: rgba(30, 24, 34, 0.96);
-  --color-dark-surface-muted: rgba(40, 32, 44, 0.94);
-  --color-dark-surface-glass: rgba(36, 28, 40, 0.78);
-  --color-dark-surface-elevated: rgba(48, 38, 52, 0.96);
-  --color-dark-text-primary: #ede4ef;
-  --color-dark-text-muted: #9a8e9e;
-  --color-dark-text-soft: #6e626e;
-  --color-dark-accent: #b0b0b0;
-  --color-dark-accent-soft: rgba(180, 180, 180, 0.16);
-  --color-dark-accent-hover: #c0c0c0;
-  --color-dark-border: rgba(100, 100, 100, 0.35);
-  --color-dark-border-strong: rgba(140, 140, 140, 0.4);
-  --color-dark-shadow: rgba(0, 0, 0, 0.2);
-  --color-dark-shadow-accent: rgba(180, 180, 180, 0.1);
-
   /* Radius — generous & soft */
   --radius-sm: 8px;
   --radius-md: 14px;
@@ -100,17 +84,6 @@
 /* ── Base styles ── */
 
 :root {
-  /* Legacy token bridge — maps to new theme */
-  --nexus-surface: var(--color-surface);
-  --nexus-surface-muted: var(--color-surface-muted);
-  --nexus-text-primary: var(--color-text-primary);
-  --nexus-text-muted: var(--color-text-muted);
-  --nexus-accent: var(--color-accent);
-  --nexus-accent-soft: var(--color-accent-soft);
-  --nexus-border: var(--color-border);
-  --nexus-shadow: var(--color-shadow);
-  --nexus-app-background: transparent;
-
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.55;
@@ -124,39 +97,11 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --nexus-surface: var(--color-dark-surface);
-    --nexus-surface-muted: var(--color-dark-surface-muted);
-    --nexus-text-primary: var(--color-dark-text-primary);
-    --nexus-text-muted: var(--color-dark-text-muted);
-    --nexus-accent: var(--color-dark-accent);
-    --nexus-accent-soft: var(--color-dark-accent-soft);
-    --nexus-border: var(--color-dark-border);
-    --nexus-shadow: var(--color-dark-shadow);
-    color: var(--color-dark-text-primary);
-  }
-}
-
-/* Force dark with attribute */
-[data-theme="dark"] {
-  --nexus-surface: var(--color-dark-surface);
-  --nexus-surface-muted: var(--color-dark-surface-muted);
-  --nexus-text-primary: var(--color-dark-text-primary);
-  --nexus-text-muted: var(--color-dark-text-muted);
-  --nexus-accent: var(--color-dark-accent);
-  --nexus-accent-soft: var(--color-dark-accent-soft);
-  --nexus-border: var(--color-dark-border);
-  --nexus-shadow: var(--color-dark-shadow);
-  color: var(--color-dark-text-primary);
-}
-
 html,
 body,
 #root {
   min-height: 100vh;
-  background: var(--nexus-app-background);
+  background: transparent;
 }
 
 body {

@@ -2,6 +2,7 @@ import { softTheme } from './presets/soft'
 import { editorialTheme } from './presets/editorial'
 import { highContrastTheme } from './presets/high-contrast'
 import { nexusDefaultTheme } from './presets/nexus-default'
+import { systemDarkTheme } from './presets/system-dark'
 import type { ThemeDefinition, ThemeId } from '../../types/theme'
 
 const themeMap: Record<ThemeId, ThemeDefinition> = {
@@ -9,6 +10,7 @@ const themeMap: Record<ThemeId, ThemeDefinition> = {
   soft: softTheme,
   'high-contrast': highContrastTheme,
   editorial: editorialTheme,
+  'system-dark': systemDarkTheme,
 }
 
 export const themeRegistry = Object.values(themeMap)

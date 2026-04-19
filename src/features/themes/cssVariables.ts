@@ -1,16 +1,30 @@
-import type { ThemeDefinition } from '../../types/theme'
+import type { ThemeDefinition, ThemeTokens } from '../../types/theme'
 
-export function toCssVariables(theme: ThemeDefinition) {
-  return {
-    '--nexus-surface': theme.tokens.surface,
-    '--nexus-surface-muted': theme.tokens.surfaceMuted,
-    '--nexus-text-primary': theme.tokens.textPrimary,
-    '--nexus-text-muted': theme.tokens.textMuted,
-    '--nexus-accent': theme.tokens.accent,
-    '--nexus-accent-soft': theme.tokens.accentSoft,
-    '--nexus-border': theme.tokens.border,
-    '--nexus-shadow': theme.tokens.shadow,
+type CssVariableRecord = Record<`--color-${string}`, string>
+
+const TOKEN_TO_VARIABLE: Array<[keyof ThemeTokens, `--color-${string}`]> = [
+  ['surface', '--color-surface'],
+  ['surfaceMuted', '--color-surface-muted'],
+  ['surfaceGlass', '--color-surface-glass'],
+  ['surfaceElevated', '--color-surface-elevated'],
+  ['textPrimary', '--color-text-primary'],
+  ['textMuted', '--color-text-muted'],
+  ['textSoft', '--color-text-soft'],
+  ['accent', '--color-accent'],
+  ['accentSoft', '--color-accent-soft'],
+  ['accentHover', '--color-accent-hover'],
+  ['border', '--color-border'],
+  ['borderStrong', '--color-border-strong'],
+  ['shadow', '--color-shadow'],
+  ['shadowAccent', '--color-shadow-accent'],
+]
+
+export function toCssVariables(theme: ThemeDefinition): CssVariableRecord {
+  const result = {} as CssVariableRecord
+  for (const [tokenKey, cssVariable] of TOKEN_TO_VARIABLE) {
+    result[cssVariable] = theme.tokens[tokenKey]
   }
+  return result
 }
 
 export function applyThemeVariables(
@@ -18,8 +32,7 @@ export function applyThemeVariables(
   target: HTMLElement = document.documentElement,
 ) {
   const variables = toCssVariables(theme)
-
-  Object.entries(variables).forEach(([name, value]) => {
+  for (const [name, value] of Object.entries(variables)) {
     target.style.setProperty(name, value)
-  })
+  }
 }
