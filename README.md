@@ -36,7 +36,7 @@ The design goal is persistence of relationship, not just chat. A nightly **dream
 
 ## News
 
-- **2025.04.19** — **Autonomy Engine V2** is now default-on. The hand-written rule tree is replaced by a single LLM decision call gated by the tick loop, consuming a layered context snapshot and filtered through a persona guardrail. See [What's new in v0.2.5](#whats-new-in-v025--autonomy-engine-v2) below for architecture and migration notes.
+- **2025.04.19** — **v0.2.5 released.** Autonomy Engine V2 now default-on (LLM-driven decision + persona guardrail replacing the hand-written rule tree). Chat pane now opens fresh each launch with past sessions browsable under Settings → 聊天记录. Voice/TTS reliability pass (Edge TTS unblocked, Pipecat pipeline race conditions fixed, wake-word sensitivity tuned for weak mics). New `system-dark` theme preset. See [What's new in v0.2.5](#whats-new-in-v025) below for full notes.
 - **2025.04.16** — v0.2.4 released. Big voice/TTS reliability pass (tool-call TTS, markdown stripping, empty-stream detection, first-audio watchdog), Anthropic prompt caching wired on the system + tools prefix, wake-word gaps tightened, 20+ bug fixes. [Changelog →](https://github.com/FanyinLiu/Nexus/releases/tag/v0.2.4)
 - **2025.04.15** — Wake-word + VAD rewrite (Plan C): main-process Silero VAD + sherpa-onnx-node, single mic stream. Fixes the "only fires once" wake bug.
 - **2025.04.14** — TTS intermittency fixes: retry / per-segment events / sender teardown.
@@ -52,7 +52,7 @@ The design goal is persistence of relationship, not just chat. A nightly **dream
 
 - 🧠 **Memory that dreams.** Three-tier hot / warm / cold with hybrid BM25 + vector search. A nightly dream cycle clusters conversations into *narrative threads* so the companion's sense of you compounds over time instead of resetting each session.
 
-- 🤖 **Autonomous inner life (V2).** Single LLM decision call per tick, fed a layered snapshot (emotion · relationship · rhythm · desktop · recent chat) and filtered through a per-persona guardrail. No more formulaic template output — it writes in its own voice, and can also choose to stay silent. See [What's new in v0.2.5](#whats-new-in-v025--autonomy-engine-v2).
+- 🤖 **Autonomous inner life (V2).** Single LLM decision call per tick, fed a layered snapshot (emotion · relationship · rhythm · desktop · recent chat) and filtered through a per-persona guardrail. No more formulaic template output — it writes in its own voice, and can also choose to stay silent. See [What's new in v0.2.5](#whats-new-in-v025).
 
 - 🔧 **Built-in tools.** Web search, weather, reminders. Works with native function calling **and** a prompt-mode fallback for models that don't support `tools`.
 
@@ -68,14 +68,21 @@ The design goal is persistence of relationship, not just chat. A nightly **dream
 
 - 💰 **Cost-aware.** Built-in budget metering + Anthropic prompt caching on the system + tools prefix (30-50% input token reduction on long sessions).
 
-## What's new in v0.2.5 — Autonomy Engine V2
+## What's new in v0.2.5
+
+> Autonomy engine rewrite is the headline; three other items landed this
+> cycle — chat bucketing, a voice/TTS reliability pass, and a new
+> `system-dark` theme. This section is refreshed each release; older notes
+> live in [Releases](https://github.com/FanyinLiu/Nexus/releases).
+
+### 🤖 Autonomy Engine V2 — headline
 
 > **TL;DR** — The old rule-based decision tree (~900 lines of templates) has
 > been replaced by a single LLM call per tick, wrapped in a per-persona
 > guardrail. Proactive speech now sounds like the persona instead of like a
 > template. Feature flag was flipped on by default in this release.
 
-### Why we rewrote it
+#### Why we rewrote it
 
 The v1 autonomy pipeline was three pieces of hand-written logic bolted
 together:
@@ -89,7 +96,7 @@ barely flowed into the words that came out, because the output layer was a
 template picker, not a writer. Users reported the proactive lines felt
 "childish" and "formulaic" regardless of persona. That's what V2 fixes.
 
-### What V2 actually does
+#### What V2 actually does
 
 ```
 tick (eligible?) → contextGatherer → decisionEngine → personaGuardrail → delivery
@@ -112,7 +119,7 @@ Key shifts from V1:
 | Cost | 2–3 LLM calls (monologue + intent + speak) | 1 LLM call, reuses primary or dedicated model |
 | Testability | React-entangled | Pure modules, tested in plain Node |
 
-### Persona files
+#### Persona files
 
 Per-persona config is now file-based instead of stuffed into a JSON field.
 Look at `src/features/autonomy/v2/personas/xinghui/` for the reference
@@ -131,7 +138,7 @@ The guardrail reads `style.json`'s forbidden phrases + density caps and
 can optionally re-prompt an LLM judge if the output feels off-voice.
 Strictness is user-tunable (`autonomyPersonaStrictnessV2`: `loose | med | strict`).
 
-### Tuning
+#### Tuning
 
 Settings → **Autonomy**:
 
@@ -144,7 +151,7 @@ Settings → **Autonomy**:
 - **Strictness** (`autonomyPersonaStrictnessV2`) — `loose | med | strict`
   for the guardrail.
 
-### What still lives on V1
+#### What still lives on V1
 
 Emotion model, relationship tracker, rhythm learner, focus awareness, dream
 cycle, goal tracker — all unchanged and feeding into V2's context snapshot.
@@ -154,6 +161,53 @@ validated; Phase 6 of the migration deletes it.
 
 See `src/features/autonomy/README.md` for the internal layering rules and
 `src/features/autonomy/v2/` for the source.
+
+### 💬 Chat now buckets per launch
+
+Every app launch opens a fresh chat pane instead of dragging the full
+history list back into view. Past sessions are preserved under
+`Settings → 聊天记录 → 往期会话` with click-to-expand browsing and a
+per-row delete.
+
+- Storage schema moved from a single flat `nexus:chat` array to a
+  per-session layout (`nexus:chat:sessions`, cap 30 sessions × 500
+  messages each; inline image data URLs stripped before persist to stay
+  under the localStorage quota).
+- One-shot migration wraps your existing flat history into one "legacy
+  archive" session — nothing is lost, and the old key is left intact for
+  safe rollback.
+- LLM context is now scoped to the current session; cross-launch
+  continuity is carried by the memory + dream system (hot / warm / cold
+  tiers + nightly thread clustering), not by dragging raw message
+  history forward.
+
+### 🔊 Voice / TTS reliability pass
+
+- **Edge TTS unblocked.** The "please fill in the speech output base URL"
+  gate used to reject Edge TTS — which talks to a fixed Microsoft
+  WebSocket and doesn't use an HTTP base URL. Fixed by returning a marker
+  URL that passes the non-empty check; the Edge branch never reads it.
+- **Pipecat pipeline race conditions fixed** (still opt-in; flip via
+  `localStorage.setItem('nexus:useTtsPipeline', 'true')` then reload).
+  Three overlapping bugs had previously stalled `waitForCompletion()` for
+  12s without any audio: (1) frame pushes are now serialized so
+  `StartFrame` fully propagates before any `TextDeltaFrame` enters — no
+  more "first sentence dropped as stale turn", (2) the audio observer
+  moved downstream so it actually sees `AudioFrame`s emitted by the TTS
+  IPC callback, (3) `waitForDrain()` is wrapped in a 10 s safety timeout
+  so a dropped-chunk path can no longer hang the completion promise past
+  the upstream chat timeout. The flag stays default-off until opt-in
+  testers validate; this release unblocks that validation.
+- **Wake-word sensitivity loosened** for weak headset microphones
+  (`keywordsThreshold` 0.15 → 0.10, `keywordsScore` 2.0 → 2.5). If you
+  were having to shout to trigger the wake word, this tuning pass helps.
+
+### 🎨 New `system-dark` theme preset
+
+Added a `system-dark` preset to the theme registry and expanded the
+token surface that presets drive, so darker palettes render correctly
+across the whole UI (cssVariables + tokens + index.css + registry all
+updated together). Switch in `Settings → 外观 → 主题`.
 
 ## Install
 
