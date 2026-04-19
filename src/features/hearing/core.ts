@@ -136,6 +136,48 @@ export function looksLikeBackgroundAudioArtifact(text: string) {
   return BACKGROUND_NOISE_ARTIFACT_PATTERNS.some((pattern) => pattern.test(trimmed))
 }
 
+/**
+ * Detect whether a transcript is a repetition collapse — a single
+ * character (or short fragment) repeated dominantly. This happens when
+ * the autoregressive STT model's attention head gets stuck on one
+ * token, emitting things like "出出出出出出出..." until the decoder's
+ * max length. Legitimate Chinese speech has char-repetition ratios
+ * under ~50% even with doubling (e.g. 说说、看看), so the 70% gate
+ * below leaves healthy margin for natural emphatic speech.
+ */
+export function looksLikeRepetitionCollapse(text: string) {
+  const compact = String(text ?? '').replace(/\s+/g, '')
+  // Natural short utterances ("好", "对", "嗯嗯") can legitimately be
+  // single-char or all-same — don't flag them.
+  if (compact.length < 6) return false
+
+  const charCounts = new Map<string, number>()
+  for (const char of compact) {
+    charCounts.set(char, (charCounts.get(char) ?? 0) + 1)
+  }
+  let maxRepeat = 0
+  for (const count of charCounts.values()) {
+    if (count > maxRepeat) maxRepeat = count
+  }
+  if (maxRepeat / compact.length >= 0.7) return true
+
+  // Secondary: a consecutive run of the same character ≥ 8 means the
+  // decoder stalled on one token — call it a collapse even if the
+  // overall ratio stays under the 70% bar.
+  const CONSECUTIVE_RUN_THRESHOLD = 8
+  let run = 1
+  for (let i = 1; i < compact.length; i += 1) {
+    if (compact[i] === compact[i - 1]) {
+      run += 1
+      if (run >= CONSECUTIVE_RUN_THRESHOLD) return true
+    } else {
+      run = 1
+    }
+  }
+
+  return false
+}
+
 export function normalizeRecognizedVoiceTranscript(text: string) {
   const normalized = String(text ?? '')
     .replace(/\s+/g, ' ')
@@ -147,6 +189,12 @@ export function normalizeRecognizedVoiceTranscript(text: string) {
 
   // Filter out background audio artifacts (subtitle watermarks, etc.)
   if (looksLikeBackgroundAudioArtifact(normalized)) {
+    return ''
+  }
+
+  // Drop repetition-collapse outputs before they reach the UI or LLM.
+  // These are STT-side hallucinations, not user speech.
+  if (looksLikeRepetitionCollapse(normalized)) {
     return ''
   }
 

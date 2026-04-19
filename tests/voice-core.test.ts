@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 import {
   choosePreferredVoiceTranscript,
+  looksLikeRepetitionCollapse,
   normalizeRecognizedVoiceTranscript,
   resolveVoiceTranscriptDecision,
   shouldAttemptLocalWhisperRescore,
@@ -171,6 +172,28 @@ test('still strips the wake word when a KWS-triggered transcript contains it', (
     content: '\u5e2e\u6211\u6253\u5f00\u5b98\u7f51',
     mode: 'wake_word',
   })
+})
+
+test('looksLikeRepetitionCollapse flags attention-stall hallucinations', () => {
+  // "出出出出出出出出出出" — single-char collapse, what the user saw in the TTS
+  // side reported earlier. Same shape shows up in STT decoders.
+  assert.equal(looksLikeRepetitionCollapse('\u51fa'.repeat(20)), true)
+  // Consecutive run trigger (ratio alone would not flag this).
+  assert.equal(looksLikeRepetitionCollapse('\u4f60\u597d' + '\u5440'.repeat(10)), true)
+  // Natural short utterances stay healthy.
+  assert.equal(looksLikeRepetitionCollapse('\u597d'), false)
+  assert.equal(looksLikeRepetitionCollapse('\u55ef\u55ef'), false)
+  // Emphatic doubling ("说说这个话题") should pass.
+  assert.equal(looksLikeRepetitionCollapse('\u8bf4\u8bf4\u8fd9\u4e2a\u8bdd\u9898'), false)
+  // A proper sentence with one repeated char under the 70% cap passes.
+  assert.equal(looksLikeRepetitionCollapse('\u4eca\u5929\u5929\u6c14\u771f\u597d'), false)
+})
+
+test('normalizeRecognizedVoiceTranscript drops repetition collapses', () => {
+  assert.equal(
+    normalizeRecognizedVoiceTranscript('\u51fa'.repeat(30)),
+    '',
+  )
 })
 
 test('normalizes leading filler words before routing voice transcripts', () => {
