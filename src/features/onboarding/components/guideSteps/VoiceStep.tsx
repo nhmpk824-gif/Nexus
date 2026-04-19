@@ -10,6 +10,7 @@ import {
   updateCurrentSpeechOutputProviderProfile,
 } from '../../../../lib/speechProviderProfiles'
 import type { AppSettings, SpeechVoiceOption } from '../../../../types'
+import { LocalVoiceModelsStatus } from './LocalVoiceModelsStatus'
 import type { OnboardingDraftSetter } from './types'
 
 type VoiceStepProps = {
@@ -43,6 +44,8 @@ export function VoiceStep({
 }: VoiceStepProps) {
   return (
     <div className="onboarding-grid onboarding-grid--stack">
+      <LocalVoiceModelsStatus />
+
       <div className="onboarding-grid onboarding-grid--two">
         <label className="onboarding-toggle">
           <span>启用语音输入</span>
