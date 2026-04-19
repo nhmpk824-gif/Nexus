@@ -1,5 +1,8 @@
 import { memo } from 'react'
+import { useTranslation } from '../i18n/useTranslation.ts'
 import type { SubagentTask } from '../types/subagent'
+
+type TranslateFn = ReturnType<typeof useTranslation>['t']
 
 /**
  * Thin status strip for subagent background work. Renders queued/running
@@ -28,16 +31,22 @@ function pickVisibleTasks(tasks: SubagentTask[]): SubagentTask[] {
   })
 }
 
-function describeStatus(task: SubagentTask): { label: string; tone: 'progress' | 'error' } {
+function describeStatus(task: SubagentTask, t: TranslateFn): { label: string; tone: 'progress' | 'error' } {
   switch (task.status) {
     case 'queued':
-      return { label: '排队中', tone: 'progress' }
+      return { label: t('subagent.queued'), tone: 'progress' }
     case 'running':
-      return { label: '正在处理', tone: 'progress' }
+      return { label: t('subagent.running'), tone: 'progress' }
     case 'failed':
-      return { label: `失败：${task.failureReason ?? '未知原因'}`, tone: 'error' }
+      return {
+        label: t('subagent.failed_prefix', { reason: task.failureReason ?? t('subagent.unknown_reason') }),
+        tone: 'error',
+      }
     case 'rejected':
-      return { label: `未能启动：${task.failureReason ?? '被拒绝'}`, tone: 'error' }
+      return {
+        label: t('subagent.rejected_prefix', { reason: task.failureReason ?? t('subagent.rejected_default') }),
+        tone: 'error',
+      }
     default:
       return { label: task.status, tone: 'progress' }
   }
@@ -50,6 +59,7 @@ export type SubagentTaskStripProps = {
 export const SubagentTaskStrip = memo(function SubagentTaskStrip({
   tasks,
 }: SubagentTaskStripProps) {
+  const { t } = useTranslation()
   const visible = tasks ? pickVisibleTasks(tasks) : []
   if (!visible.length) return null
 
@@ -67,7 +77,7 @@ export const SubagentTaskStrip = memo(function SubagentTaskStrip({
       }}
     >
       {visible.map((task) => {
-        const status = describeStatus(task)
+        const status = describeStatus(task, t)
         const active = task.status === 'queued' || task.status === 'running'
         return (
           <div
@@ -93,7 +103,7 @@ export const SubagentTaskStrip = memo(function SubagentTaskStrip({
                 animation: active ? 'subagent-pulse 1.4s ease-out infinite' : undefined,
               }}
             />
-            <span style={{ fontWeight: 600, flexShrink: 0 }}>子代理</span>
+            <span style={{ fontWeight: 600, flexShrink: 0 }}>{t('subagent.label')}</span>
             <span
               style={{
                 flex: 1,

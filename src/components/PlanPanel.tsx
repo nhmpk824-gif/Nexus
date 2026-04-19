@@ -1,11 +1,13 @@
 import { memo, useEffect, useState } from 'react'
 import { planStore, type Plan, type PlanStepStatus } from '../features/plan/planStore'
+import { useTranslation } from '../i18n/useTranslation.ts'
+import type { TranslationKey } from '../types/i18n'
 
-const STATUS_LABEL: Record<Plan['status'], string> = {
-  draft: '草稿',
-  active: '执行中',
-  completed: '已完成',
-  aborted: '已终止',
+const STATUS_LABEL_KEY: Record<Plan['status'], TranslationKey> = {
+  draft: 'plan.status.draft',
+  active: 'plan.status.active',
+  completed: 'plan.status.completed',
+  aborted: 'plan.status.aborted',
 }
 
 const STEP_ICON: Record<PlanStepStatus, string> = {
@@ -32,6 +34,7 @@ function formatTime(ts: number): string {
 }
 
 const PlanRow = memo(function PlanRow({ plan, onRemove }: { plan: Plan; onRemove: () => void }) {
+  const { t } = useTranslation()
   const completedCount = plan.steps.filter((s) => s.status === 'completed').length
   const total = plan.steps.length
 
@@ -52,7 +55,7 @@ const PlanRow = memo(function PlanRow({ plan, onRemove }: { plan: Plan; onRemove
         <div style={{ fontSize: 11, color: '#64748b' }}>{formatTime(plan.updatedAt)}</div>
       </div>
       <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, marginBottom: 8 }}>
-        {STATUS_LABEL[plan.status]} · {completedCount}/{total}
+        {t(STATUS_LABEL_KEY[plan.status])} · {completedCount}/{total}
       </div>
       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {plan.steps.map((step) => (
@@ -95,7 +98,7 @@ const PlanRow = memo(function PlanRow({ plan, onRemove }: { plan: Plan; onRemove
             cursor: 'pointer',
           }}
         >
-          移除
+          {t('plan.remove')}
         </button>
       )}
     </div>
@@ -103,6 +106,7 @@ const PlanRow = memo(function PlanRow({ plan, onRemove }: { plan: Plan; onRemove
 })
 
 export const PlanPanel = memo(function PlanPanel() {
+  const { t } = useTranslation()
   const [plans, setPlans] = useState<Plan[]>(() => planStore.list())
 
   useEffect(() => {
@@ -112,7 +116,7 @@ export const PlanPanel = memo(function PlanPanel() {
   if (plans.length === 0) {
     return (
       <div style={{ padding: 16, color: '#64748b', fontSize: 12 }}>
-        当前没有进行中的计划。Agent 模式启动后会在这里显示步骤进度。
+        {t('plan.empty_state')}
       </div>
     )
   }

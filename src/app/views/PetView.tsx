@@ -13,6 +13,7 @@ import { hoverReactionMap, voiceStateLabelMap } from '../appSupport'
 import { MusicPopupCard, PetControlIcon, PetDialogBubble, PetThoughtBubble } from '../../components'
 import { resolveCharacterPreset } from '../../features/character/presets'
 import { clamp } from '../../lib'
+import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type { PetTouchZone } from '../../types'
 import type { UseAppControllerResult } from '../controllers/useAppController'
 
@@ -52,13 +53,17 @@ export function PetView({
   const tapTimerRef = useRef<number | null>(null)
   const dragStateRef = useRef<{ x: number; y: number } | null>(null)
 
+  const ti = (
+    key: Parameters<typeof pickTranslatedUiText>[1],
+    params?: Parameters<typeof pickTranslatedUiText>[2],
+  ) => pickTranslatedUiText(settings.uiLanguage, key, params)
   const characterPreset = useMemo(() => resolveCharacterPreset(), [])
   const voiceStateLabel = voiceStateLabelMap[voice.voiceState]
   const petSignalLabel = voice.voiceState !== 'idle'
     ? voiceStateLabel
     : settings.continuousVoiceModeEnabled
-      ? '待命'
-      : '语音'
+      ? ti('pet.chip.standby')
+      : ti('pet.chip.voice')
   const activeMediaSessionKey = mediaSession?.sessionKey
     ?? [mediaSession?.sourceAppUserModelId, mediaSession?.title, mediaSession?.artist]
       .filter((value): value is string => Boolean(value))
@@ -312,9 +317,9 @@ export function PetView({
               }`}
               title={
                 voice.voiceState !== 'idle' ? voiceStateLabel
-                : chat.busy ? '思考中'
-                : settings.continuousVoiceModeEnabled ? '待命中'
-                : '已就绪'
+                : chat.busy ? ti('pet.status.thinking')
+                : settings.continuousVoiceModeEnabled ? ti('pet.status.standby')
+                : ti('pet.status.ready')
               }
             >
               <span className="pet-window__status-dot" aria-hidden="true" />
@@ -328,17 +333,17 @@ export function PetView({
               {railExpanded ? (
                 <div className="pet-window__island-panel">
                   <div className="pet-window__island-grid">
-                    <button className="pet-window__island-btn" type="button" onClick={openSettingsPanel} title="设置">
+                    <button className="pet-window__island-btn" type="button" onClick={openSettingsPanel} title={ti('pet.button.settings')}>
                       <PetControlIcon name="tuning" className="pet-window__island-btn-icon" />
                     </button>
-                    <button className="pet-window__island-btn" type="button" onClick={openChatPanelForVoice} title="对话">
+                    <button className="pet-window__island-btn" type="button" onClick={openChatPanelForVoice} title={ti('pet.button.chat')}>
                       <PetControlIcon name="chat" className="pet-window__island-btn-icon" />
                     </button>
                     <button
                       className={`pet-window__island-btn ${settings.continuousVoiceModeEnabled ? 'is-active' : ''}`}
                       type="button"
                       onClick={toggleContinuousVoiceMode}
-                      title={settings.continuousVoiceModeEnabled ? '连续对话已开启' : '当前为单次语音'}
+                      title={settings.continuousVoiceModeEnabled ? ti('pet.voice.continuous_on') : ti('pet.voice.single')}
                     >
                       <PetControlIcon name={settings.continuousVoiceModeEnabled ? 'continuous' : 'single-shot'} className="pet-window__island-btn-icon" />
                     </button>
@@ -346,7 +351,7 @@ export function PetView({
                       className={`pet-window__island-btn ${isPinned ? 'is-active' : ''}`}
                       type="button"
                       onClick={togglePinned}
-                      title={isPinned ? '窗口已固定' : '固定窗口'}
+                      title={isPinned ? ti('pet.window.pinned') : ti('pet.window.pin')}
                     >
                       <PetControlIcon name="pin" className="pet-window__island-btn-icon" />
                     </button>
@@ -354,7 +359,7 @@ export function PetView({
                       className={`pet-window__island-btn ${clickThrough ? 'is-active' : ''}`}
                       type="button"
                       onClick={toggleClickThrough}
-                      title={clickThrough ? '当前可点透桌面' : '保持可交互'}
+                      title={clickThrough ? ti('pet.window.click_through') : ti('pet.window.interactive')}
                     >
                       <PetControlIcon name="pointer" className="pet-window__island-btn-icon" />
                     </button>
@@ -367,7 +372,7 @@ export function PetView({
                   className={`pet-window__anchor-btn pet-window__anchor-btn--expand ${railExpanded ? 'is-open' : ''}`}
                   type="button"
                   onClick={handleRailToggle}
-                  title={railExpanded ? '收起' : '展开控制'}
+                  title={railExpanded ? ti('pet.rail.collapse') : ti('pet.rail.expand')}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" className="pet-window__anchor-icon">
                     <path fill="currentColor" d="M4 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5ZM4 15a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-4Z" />
@@ -419,7 +424,7 @@ export function PetView({
                 onPointerEnter={() => {
                   pet.setMascotHovered(true)
                   pet.markPresenceActivity({ dismissAmbient: false })
-                  pet.updatePetStatus('靠近一点，我会给你更丰富的反馈。')
+                  pet.updatePetStatus(ti('pet.touch_hint'))
                 }}
                 onPointerLeave={() => {
                   pet.setMascotHovered(false)
