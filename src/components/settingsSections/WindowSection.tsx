@@ -1,8 +1,20 @@
 import { memo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { PANEL_SCENE_MODE_OPTIONS } from '../../features/panelScene'
+import type { PanelSceneMode } from '../../features/panelScene'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
-import type { AppSettings, PetWindowState, UiLanguage } from '../../types'
+import type { AppSettings, PetWindowState, TranslationKey, UiLanguage } from '../../types'
+
+// Panel scene mode options resolved to i18n keys at render time so the
+// dropdown labels actually change when the user switches UI language.
+const PANEL_SCENE_OPTIONS: Array<{ id: PanelSceneMode; labelKey: TranslationKey }> = [
+  { id: 'off', labelKey: 'settings.window.panel_scene.off' },
+  { id: 'auto', labelKey: 'settings.window.panel_scene.auto' },
+  { id: 'morning', labelKey: 'settings.window.panel_scene.morning' },
+  { id: 'noon', labelKey: 'settings.window.panel_scene.noon' },
+  { id: 'afternoon', labelKey: 'settings.window.panel_scene.afternoon' },
+  { id: 'dusk', labelKey: 'settings.window.panel_scene.dusk' },
+  { id: 'night', labelKey: 'settings.window.panel_scene.night' },
+]
 
 type WindowSectionProps = {
   active: boolean
@@ -78,7 +90,7 @@ export const WindowSection = memo(function WindowSection({
       <p className="settings-drawer__hint">{ti('settings.window.click_through_note')}</p>
 
       <label>
-        <span>聊天面板背景</span>
+        <span>{ti('settings.window.panel_scene_label')}</span>
         <select
           value={draft.panelSceneMode}
           onChange={(event) =>
@@ -88,20 +100,18 @@ export const WindowSection = memo(function WindowSection({
             }))
           }
         >
-          {PANEL_SCENE_MODE_OPTIONS.map((option) => (
+          {PANEL_SCENE_OPTIONS.map((option) => (
             <option key={option.id} value={option.id}>
-              {option.label}
+              {ti(option.labelKey)}
             </option>
           ))}
         </select>
       </label>
 
-      <p className="settings-drawer__hint">
-        「按时间自动切换」会每 10 分钟根据本机时钟选清晨 / 正午 / 午后 / 黄昏 / 夜晚之一；选固定场景会一直停留在该氛围里。
-      </p>
+      <p className="settings-drawer__hint">{ti('settings.window.panel_scene_hint')}</p>
 
       <label className="settings-toggle">
-        <span>面板右上角显示天气</span>
+        <span>{ti('settings.window.ambient_weather_toggle')}</span>
         <input
           type="checkbox"
           checked={draft.ambientWeatherEnabled}
@@ -116,10 +126,10 @@ export const WindowSection = memo(function WindowSection({
 
       {draft.ambientWeatherEnabled ? (
         <label>
-          <span>城市 / 地点</span>
+          <span>{ti('settings.window.ambient_weather_location_label')}</span>
           <input
             value={draft.ambientWeatherLocation}
-            placeholder="例如 北京 / 上海 / Tokyo"
+            placeholder={ti('settings.window.ambient_weather_location_placeholder')}
             onChange={(event) =>
               setDraft((prev) => ({
                 ...prev,
@@ -130,9 +140,7 @@ export const WindowSection = memo(function WindowSection({
         </label>
       ) : null}
 
-      <p className="settings-drawer__hint">
-        天气每 30 分钟自动刷新一次，数据来自 Nominatim + Open-Meteo，不需要 API key。地点留空或网络异常时角标会自动隐藏。
-      </p>
+      <p className="settings-drawer__hint">{ti('settings.window.ambient_weather_hint')}</p>
     </section>
   )
 })

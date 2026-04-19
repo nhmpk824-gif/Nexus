@@ -28,16 +28,6 @@ export const PANEL_SCENE_IDS: readonly PanelSceneId[] = [
   'morning', 'noon', 'afternoon', 'dusk', 'night',
 ] as const
 
-export const PANEL_SCENE_MODE_OPTIONS: Array<{ id: PanelSceneMode; label: string }> = [
-  { id: 'off', label: '关闭（只用主题底色）' },
-  { id: 'auto', label: '按时间自动切换' },
-  { id: 'morning', label: '固定：清晨' },
-  { id: 'noon', label: '固定：正午' },
-  { id: 'afternoon', label: '固定：午后' },
-  { id: 'dusk', label: '固定：黄昏' },
-  { id: 'night', label: '固定：夜晚' },
-]
-
 /**
  * Map an hour-of-day integer to a scene id. Buckets match the informal
  * greeting buckets in `appSupport.getTimeGreeting` so the backdrop shift
