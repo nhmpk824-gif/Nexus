@@ -154,11 +154,12 @@ jobs:
       - run: npm run build
         name: Vite build
 
-      # Windows is the only platform that bundles sherpa models via
-      # extraResources. Mac / Linux runtime-download them through the
-      # in-app setup wizard, so we skip the ~266 MB pull on those runners.
-      - name: Download sherpa models (Windows only)
-        if: matrix.os == 'windows-latest'
+      # All three platforms now bundle the required sherpa models via
+      # extraResources so a fresh install has working wake-word detection
+      # and offline STT out of the box. `--skip-asr` skips the optional
+      # Paraformer model; the three required models (cn/en wake word,
+      # SenseVoice STT) plus Silero VAD still come down and get packed.
+      - name: Download sherpa models
         run: node scripts/download-models.mjs --skip-asr
 
       - name: Package installer

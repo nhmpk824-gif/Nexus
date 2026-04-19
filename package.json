@@ -30,7 +30,9 @@
     "package:win": "npm run build && electron-builder --win nsis --config.win.signAndEditExecutable=false",
     "prepackage:win:signed": "node scripts/download-models.mjs --skip-asr",
     "package:win:signed": "npm run build && electron-builder --win nsis",
+    "prepackage:mac": "node scripts/download-models.mjs --skip-asr",
     "package:mac": "npm run build && electron-builder --mac",
+    "prepackage:linux": "node scripts/download-models.mjs --skip-asr",
     "package:linux": "npm run build && electron-builder --linux",
     "verify:release": "npm run lint && npm test && npm run build"
   },
@@ -131,7 +133,22 @@
         "NSMicrophoneUsageDescription": "Nexus needs microphone access for voice conversations, wake word detection, and speech recognition.",
         "NSScreenCaptureUsageDescription": "Nexus uses screen capture for desktop awareness, allowing your AI companion to understand what you are working on.",
         "NSAppleEventsUsageDescription": "Nexus queries System Events to detect the app you're currently using and reads Now Playing info from Music and Spotify so your AI companion can respond to your context."
-      }
+      },
+      "extraResources": [
+        {
+          "from": "sherpa-models",
+          "to": "sherpa-models",
+          "filter": [
+            "**/*",
+            "!_download.tar.bz2",
+            "!**/*.tar.bz2"
+          ]
+        },
+        {
+          "from": "public/vendor/vad/silero_vad_v5.onnx",
+          "to": "silero_vad_v5.onnx"
+        }
+      ]
     },
     "linux": {
       "target": [
@@ -140,7 +157,22 @@
       ],
       "icon": "public/nexus-256.png",
       "category": "Utility",
-      "executableName": "nexus"
+      "executableName": "nexus",
+      "extraResources": [
+        {
+          "from": "sherpa-models",
+          "to": "sherpa-models",
+          "filter": [
+            "**/*",
+            "!_download.tar.bz2",
+            "!**/*.tar.bz2"
+          ]
+        },
+        {
+          "from": "public/vendor/vad/silero_vad_v5.onnx",
+          "to": "silero_vad_v5.onnx"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
