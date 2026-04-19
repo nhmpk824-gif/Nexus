@@ -11,6 +11,7 @@ import type {
   MemorySearchMode,
   UiLanguage,
 } from '../../types'
+import type { TranslationKey } from '../../types/i18n'
 
 type MemorySearchModeOption = {
   value: MemorySearchMode
@@ -20,7 +21,7 @@ type MemorySearchModeOption = {
 
 type EmbeddingModelOption = {
   value: string
-  hint?: string
+  hint?: TranslationKey
 }
 
 type StatusMessage = {
@@ -232,7 +233,7 @@ export const MemorySection = memo(function MemorySection({
                 >
                   {SCREEN_VLM_MODEL_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {ti(option.label)}
                     </option>
                   ))}
                   <option value="__custom__">{ti('settings.memory.custom_option')}</option>
@@ -240,8 +241,10 @@ export const MemorySection = memo(function MemorySection({
               </label>
 
               <p className="settings-drawer__hint">
-                {SCREEN_VLM_MODEL_OPTIONS.find((option) => option.value === draft.screenVlmModel)?.hint
-                  ?? ti('settings.memory.context.vlm_custom_hint')}
+                {(() => {
+                  const vlmHint = SCREEN_VLM_MODEL_OPTIONS.find((option) => option.value === draft.screenVlmModel)?.hint
+                  return vlmHint ? ti(vlmHint) : ti('settings.memory.context.vlm_custom_hint')
+                })()}
               </p>
 
               <label>
@@ -309,7 +312,7 @@ export const MemorySection = memo(function MemorySection({
         >
           {MEMORY_EMBEDDING_MODEL_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {ti(option.label)}
             </option>
           ))}
           <option value="__custom__">{ti('settings.memory.custom_option')}</option>
@@ -317,7 +320,9 @@ export const MemorySection = memo(function MemorySection({
       </label>
 
       <p className="settings-drawer__hint">
-        {selectedMemoryEmbeddingModel?.hint ?? ti('settings.memory.long_term.embedding_custom_hint')}
+        {selectedMemoryEmbeddingModel?.hint
+          ? ti(selectedMemoryEmbeddingModel.hint)
+          : ti('settings.memory.long_term.embedding_custom_hint')}
       </p>
 
       <label>

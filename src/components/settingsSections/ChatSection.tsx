@@ -10,6 +10,7 @@ import {
 } from '../../features/character/profiles'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type { AppSettings, CharacterProfile } from '../../types'
+import type { TranslationKey } from '../../types/i18n'
 
 type StatusMessage = {
   ok: boolean
@@ -203,10 +204,10 @@ export const ChatSection = memo(function ChatSection({
                 }
               >
                 <span className="settings-choice-card__header">
-                  <strong>{preset.label}</strong>
+                  <strong>{ti(preset.label as TranslationKey)}</strong>
                 </span>
                 <span className="settings-choice-card__description">
-                  {preset.description}
+                  {ti(preset.description as TranslationKey)}
                 </span>
               </button>
             )

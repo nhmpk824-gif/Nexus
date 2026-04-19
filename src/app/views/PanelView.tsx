@@ -144,7 +144,7 @@ export function PanelView({
         ? nextSchedulerStatusLabel
         : pet.ambientPresence?.text
           ? shorten(pet.ambientPresence.text, 64)
-          : characterPreset.motionLabel
+          : ti(characterPreset.motionLabel)
   const panelQuickPrompts = useMemo(() => ([
     {
       label: memory.memories[0]?.content
@@ -324,7 +324,7 @@ export function PanelView({
           <>
             <div className="panel-window__simple-header">
               <div className="panel-window__simple-copy">
-                <p className="eyebrow">{characterPreset.heroEyebrow}</p>
+                <p className="eyebrow">{ti(characterPreset.heroEyebrow)}</p>
                 <strong>{settings.companionName}</strong>
                 <p>{panelHeroStatusText}</p>
               </div>

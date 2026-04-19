@@ -1,54 +1,59 @@
 import type { PetMood, VoiceState } from '../../types'
+import type { TranslationKey } from '../../types/i18n'
 
 export interface CharacterPreset {
   id: string
   themeClassName: string
-  heroEyebrow: string
-  dialogueEyebrow: string
-  heroTags: string[]
-  moodLabels: Record<PetMood, string>
-  voiceStateDescriptors: Record<VoiceState, string>
-  dockIdleHint: string
-  dockActiveHint: string
-  stageAmbientHint: string
-  portraitTitle: string
-  portraitDetail: string
-  motionLabel: string
+  heroEyebrow: TranslationKey
+  dialogueEyebrow: TranslationKey
+  heroTags: TranslationKey[]
+  moodLabels: Record<PetMood, TranslationKey>
+  voiceStateDescriptors: Record<VoiceState, TranslationKey>
+  dockIdleHint: TranslationKey
+  dockActiveHint: TranslationKey
+  stageAmbientHint: TranslationKey
+  portraitTitle: TranslationKey
+  portraitDetail: TranslationKey
+  motionLabel: TranslationKey
 }
 
 const MAO_COMPANION_PRESET: CharacterPreset = {
   id: 'mao-live2d',
   themeClassName: 'desktop-pet-root--theme-nexus',
-  heroEyebrow: 'Nexus · Companion UI',
-  dialogueEyebrow: '桌面陪伴',
-  heroTags: ['陪伴布局', 'Live2D 桌面陪伴', 'Voice Native'],
+  heroEyebrow: 'character.preset.mao.hero_eyebrow',
+  dialogueEyebrow: 'character.preset.mao.dialogue_eyebrow',
+  heroTags: [
+    'character.preset.mao.tag.0',
+    'character.preset.mao.tag.1',
+    'character.preset.mao.tag.2',
+  ],
   moodLabels: {
-    idle: '轻量待命',
-    thinking: '正在整理',
-    happy: '温柔回应',
-    sleepy: '安静放松',
-    surprised: '微微吃惊',
-    confused: '有些疑惑',
-    embarrassed: '害羞不好意思',
-    excited: '兴奋雀跃',
-    affectionate: '软软亲近',
-    proud: '悄悄自豪',
-    curious: '认真好奇',
-    worried: '有点担心',
-    playful: '调皮活泼',
+    idle: 'character.preset.mao.mood.idle',
+    thinking: 'character.preset.mao.mood.thinking',
+    happy: 'character.preset.mao.mood.happy',
+    sleepy: 'character.preset.mao.mood.sleepy',
+    surprised: 'character.preset.mao.mood.surprised',
+    confused: 'character.preset.mao.mood.confused',
+    embarrassed: 'character.preset.mao.mood.embarrassed',
+    excited: 'character.preset.mao.mood.excited',
+    affectionate: 'character.preset.mao.mood.affectionate',
+    proud: 'character.preset.mao.mood.proud',
+    curious: 'character.preset.mao.mood.curious',
+    worried: 'character.preset.mao.mood.worried',
+    playful: 'character.preset.mao.mood.playful',
   },
   voiceStateDescriptors: {
-    idle: '安静待命',
-    listening: '认真聆听',
-    processing: '整理回应',
-    speaking: '正在说话',
+    idle: 'character.preset.mao.voice_state.idle',
+    listening: 'character.preset.mao.voice_state.listening',
+    processing: 'character.preset.mao.voice_state.processing',
+    speaking: 'character.preset.mao.voice_state.speaking',
   },
-  dockIdleHint: '当前使用柔和陪伴界面，强调层次感、轻提示和即时反馈。',
-  dockActiveHint: '连续语音开启后，角色的口型、表情和注视会更明显地跟随你的交流节奏。',
-  stageAmbientHint: '当前使用的是 Live2D 桌面陪伴形态，界面气质偏温暖、纸感和陪伴式结构。',
-  portraitTitle: 'Nexus Companion',
-  portraitDetail: '主面板使用柔和的视觉层级与温和色彩，把陪伴感直接带到桌面中。',
-  motionLabel: '口型 / 表情 / 注视联动',
+  dockIdleHint: 'character.preset.mao.dock_idle_hint',
+  dockActiveHint: 'character.preset.mao.dock_active_hint',
+  stageAmbientHint: 'character.preset.mao.stage_ambient_hint',
+  portraitTitle: 'character.preset.mao.portrait_title',
+  portraitDetail: 'character.preset.mao.portrait_detail',
+  motionLabel: 'character.preset.mao.motion_label',
 }
 
 export function resolveCharacterPreset() {

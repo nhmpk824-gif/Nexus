@@ -4,6 +4,7 @@ import { getWebSearchProviderPreset } from '../lib/webSearchProviders'
 import { getApiProviderPreset } from '../lib'
 import { pickTranslatedUiText } from '../lib/uiLanguage'
 import type { AppSettings, DailyMemoryEntry, DebugConsoleEvent, MemoryItem, UiLanguage } from '../types'
+import type { TranslationKey } from '../types/i18n'
 
 export type SettingsSectionDescriptionMap = Record<SettingsSectionId, string>
 
@@ -96,7 +97,7 @@ export function buildSettingsSectionMeta(input: BuildSettingsSectionMetaInput): 
       description: descriptions.chat,
       preview: [
         draft.companionName || ti('settings.preview.chat.unnamed'),
-        petModel?.label ?? ti('settings.preview.chat.no_live2d'),
+        petModel?.label ? ti(petModel.label as TranslationKey) : ti('settings.preview.chat.no_live2d'),
         draft.characterProfiles.length
           ? ti('settings.preview.chat.profile_count', { count: draft.characterProfiles.length })
           : '',
@@ -147,7 +148,7 @@ export function buildSettingsSectionMeta(input: BuildSettingsSectionMetaInput): 
       glyph: 'window',
       description: descriptions.window,
       preview: [
-        petModel?.label ?? ti('settings.preview.window.desktop_pet'),
+        petModel?.label ? ti(petModel.label as TranslationKey) : ti('settings.preview.window.desktop_pet'),
         clickThroughEnabled
           ? ti('settings.preview.window.click_through_on')
           : ti('settings.preview.window.interactive'),

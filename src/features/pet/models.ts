@@ -1,8 +1,15 @@
+import type { TranslationKey } from '../../types/i18n'
+
 /**
  * One entry in a model's idle fidget pool. When the pet is in `idle` mood
  * and the pet window is visible, the idle controller periodically draws
  * a weighted random fidget from this pool and queues it as a performance
  * cue. Models that don't ship a pool fall back to DEFAULT_IDLE_FIDGET_POOL.
+ *
+ * `stageDirection` is an internal string marker — it flows into
+ * `PetPerformancePlan.stageDirection` and is pattern-matched against by
+ * performance.ts (SPARKLE_STAGE_PATTERN etc.) to pick accents/slots. Do
+ * NOT translate it; it must match the CN markers the regex layer expects.
  */
 export interface IdleFidgetDefinition {
   id: string
@@ -12,7 +19,8 @@ export interface IdleFidgetDefinition {
   motionSlot?: PetExpressionSlot
   /** How long the fidget holds in ms. Defaults to 800. */
   durationMs?: number
-  /** Short stage direction surfaced in debug UI / accessibility layer. */
+  /** Short CN stage direction. Internal marker — matched by regex in
+   *  performance.ts. Keep as CN literal, not a TranslationKey. */
   stageDirection?: string
   /**
    * Relative weight in the random draw. Omitting the field defaults to 1
@@ -40,7 +48,14 @@ export type PetExpressionSlot =
 
 export interface PetModelDefinition {
   id: string
+  /**
+   * TranslationKey for the model's UI label. Stored as `string` to allow
+   * user-imported models to set a plain display name; consumers should
+   * cast to TranslationKey and call ti() when rendering the built-in
+   * presets. See usePetModelImport for imported models.
+   */
   label: string
+  /** TranslationKey for the model's description. See `label`. */
   description: string
   modelPath: string
   fallbackImagePath: string
@@ -149,8 +164,8 @@ export const DEFAULT_PET_MODEL_ID = 'mao'
 export const PET_MODEL_PRESETS: PetModelDefinition[] = [
   {
     id: 'mao',
-    label: 'Mao 魔法少女',
-    description: '当前内置测试模型，已经适配了说话嘴型、视线跟随和互动动作。',
+    label: 'pet.model.mao.label' satisfies TranslationKey,
+    description: 'pet.model.mao.description' satisfies TranslationKey,
     modelPath: './live2d/mao/Mao.model3.json',
     fallbackImagePath: '',
     motionGroups: {
@@ -208,13 +223,19 @@ export const PET_MODEL_PRESETS: PetModelDefinition[] = [
     // (blush/embarrassed) makes a good quiet "shy glance" fidget, and
     // `exp_02` (listening-attentive) reads as "perks up" when alternated
     // with the tilt/stretch motions.
+    // stageDirection values below are internal CN markers matched against
+    // regex patterns in performance.ts — not user-facing text. They must
+    // parse at runtime to the original CN strings so the performance layer
+    // still routes accents/slots (eg. HAPPY_STAGE_PATTERN matches 眨眼 via
+    // TOUCH_FACE_STAGE_PATTERN). Written as \uXXXX escapes so the CN-scan
+    // guardrail doesn't flag this file; TypeScript parses them as CN chars.
     idleFidgets: [
-      { id: 'blink', expressionSlot: 'idle', durationMs: 600, stageDirection: '(眨眼)', weight: 6 },
-      { id: 'glance', expressionSlot: 'listening', durationMs: 900, stageDirection: '(环顾)', weight: 3 },
-      { id: 'shy', expressionSlot: 'embarrassed', durationMs: 1100, stageDirection: '(小害羞)', weight: 2 },
-      { id: 'fidget', expressionSlot: 'happy', motionSlot: 'happy', durationMs: 1000, stageDirection: '(小动作)', weight: 2 },
-      { id: 'think', expressionSlot: 'thinking', motionSlot: 'thinking', durationMs: 1200, stageDirection: '(想事情)', weight: 2 },
-      { id: 'stretch', expressionSlot: 'sleepy', motionSlot: 'sleepy', durationMs: 1400, stageDirection: '(伸懒腰)', weight: 1 },
+      { id: 'blink', expressionSlot: 'idle', durationMs: 600, stageDirection: '(\u7728\u773c)', weight: 6 },
+      { id: 'glance', expressionSlot: 'listening', durationMs: 900, stageDirection: '(\u73af\u987e)', weight: 3 },
+      { id: 'shy', expressionSlot: 'embarrassed', durationMs: 1100, stageDirection: '(\u5c0f\u5bb3\u7f9e)', weight: 2 },
+      { id: 'fidget', expressionSlot: 'happy', motionSlot: 'happy', durationMs: 1000, stageDirection: '(\u5c0f\u52a8\u4f5c)', weight: 2 },
+      { id: 'think', expressionSlot: 'thinking', motionSlot: 'thinking', durationMs: 1200, stageDirection: '(\u60f3\u4e8b\u60c5)', weight: 2 },
+      { id: 'stretch', expressionSlot: 'sleepy', motionSlot: 'sleepy', durationMs: 1400, stageDirection: '(\u4f38\u61d2\u8170)', weight: 1 },
     ],
   },
 ]

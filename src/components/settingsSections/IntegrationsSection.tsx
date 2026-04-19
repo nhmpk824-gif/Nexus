@@ -1,7 +1,6 @@
 import { memo, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { parseNumberInput } from '../settingsDrawerSupport'
 import {
-  getIntegrationText,
   getInspectableIntegrationModules,
   getRoadmapIntegrationModules,
   type IntegrationModuleDescriptor,
@@ -216,7 +215,7 @@ export const IntegrationsSection = memo(function IntegrationsSection({
   ) {
     const selected = activePanelId === descriptor.panelId
     const runtime = descriptor.panelId ? getModuleRuntime(descriptor.panelId) : null
-    const badge = runtime ? getStatusLabel(runtime.status) : getIntegrationText(uiLanguage, descriptor.badge)
+    const badge = runtime ? getStatusLabel(runtime.status) : ti(descriptor.badge)
 
     return (
       <button
@@ -227,11 +226,11 @@ export const IntegrationsSection = memo(function IntegrationsSection({
         onClick={() => descriptor.panelId && setActivePanelId(descriptor.panelId)}
       >
         <span className="settings-choice-card__header">
-          <strong>{getIntegrationText(uiLanguage, descriptor.title)}</strong>
+          <strong>{ti(descriptor.title)}</strong>
           <span className="settings-choice-card__badge">{badge}</span>
         </span>
         <span className="settings-choice-card__description">
-          {getIntegrationText(uiLanguage, descriptor.summary)}
+          {ti(descriptor.summary)}
         </span>
       </button>
     )
@@ -242,19 +241,19 @@ export const IntegrationsSection = memo(function IntegrationsSection({
       <article key={descriptor.id} className="settings-drawer__card">
         <div className="settings-section__title-row">
           <div>
-            <h5>{getIntegrationText(uiLanguage, descriptor.title)}</h5>
-            <p className="settings-drawer__hint">{getIntegrationText(uiLanguage, descriptor.summary)}</p>
+            <h5>{ti(descriptor.title)}</h5>
+            <p className="settings-drawer__hint">{ti(descriptor.summary)}</p>
           </div>
           <div className="settings-page__meta">
-            <span>{getIntegrationText(uiLanguage, descriptor.badge)}</span>
+            <span>{ti(descriptor.badge)}</span>
           </div>
         </div>
 
         <p className="settings-inline-note">
-          {getIntegrationText(uiLanguage, descriptor.designPattern)}
+          {ti(descriptor.designPattern)}
         </p>
         <p className="settings-inline-note">
-          {getIntegrationText(uiLanguage, descriptor.nextStep)}
+          {ti(descriptor.nextStep)}
         </p>
         <p className="settings-inline-note">
           {`${ti('settings.integrations.design_refs')}: ${descriptor.references.join(' / ')}`}
