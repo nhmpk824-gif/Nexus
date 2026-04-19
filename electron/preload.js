@@ -221,6 +221,10 @@ contextBridge.exposeInMainWorld('desktopPet', {
   personaOpenDir: () => ipcRenderer.invoke('persona:open-dir'),
   personaInit: (payload) => ipcRenderer.invoke('persona:init', payload),
 
+  // v2 per-profile persona (userData/personas/<id>/soul.md + style.json + ...)
+  personaLoadProfile: (profileId) => ipcRenderer.invoke('persona:load-profile', { profileId }),
+  personaProfileDir: (profileId) => ipcRenderer.invoke('persona:profile-dir', { profileId }),
+
   // Sandboxed workspace fs (agent loop tools)
   workspaceSetRoot: (payload) => ipcRenderer.invoke('workspace:set-root', payload),
   workspaceGetRoot: () => ipcRenderer.invoke('workspace:get-root'),

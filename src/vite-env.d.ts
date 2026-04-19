@@ -442,6 +442,35 @@ declare global {
       personaPaths: () => Promise<{ personaDir: string; soulPath: string; memoryPath: string }>
       personaOpenDir: () => Promise<{ ok: boolean }>
       personaInit: (payload: { defaultSoul: string }) => Promise<{ personaDir: string; soulPath: string; memoryPath: string }>
+      /**
+       * Load a v2 per-profile persona (userData/personas/<id>/soul.md etc.).
+       * Every file on disk is optional; missing files become empty strings /
+       * empty objects / empty arrays. `present` is true iff at least one
+       * file was actually read.
+       */
+      personaLoadProfile: (profileId: string) => Promise<{
+        id: string
+        rootDir: string
+        soul: string
+        memory: string
+        examplesRaw: string
+        examples: Array<{ user: string; assistant: string }>
+        style: {
+          signaturePhrases?: string[]
+          forbiddenPhrases?: string[]
+          toneTags?: string[]
+        }
+        voice: {
+          providerId?: string
+          voice?: string
+          model?: string
+          instructions?: string
+          apiBaseUrl?: string
+        }
+        tools: { allowlist?: string[]; blocklist?: string[] }
+        present: boolean
+      }>
+      personaProfileDir: (profileId: string) => Promise<{ dir: string }>
 
       // Sandboxed workspace fs (agent loop tools)
       workspaceSetRoot: (payload: { root: string }) => Promise<{ ok: boolean; root: string }>

@@ -42,4 +42,23 @@ export function register() {
     requireTrustedSender(event)
     return personaLoader.ensurePersonaDir(String(payload?.defaultSoul ?? ''))
   })
+
+  // ── v2 per-profile persona (soul/memory/examples/style/voice/tools) ──
+  ipcMain.handle('persona:load-profile', async (event, payload) => {
+    requireTrustedSender(event)
+    const profileId = String(payload?.profileId ?? '').trim()
+    if (!profileId) {
+      throw new Error('persona:load-profile 需要非空的 profileId。')
+    }
+    return personaLoader.loadPersonaProfile(profileId)
+  })
+
+  ipcMain.handle('persona:profile-dir', async (event, payload) => {
+    requireTrustedSender(event)
+    const profileId = String(payload?.profileId ?? '').trim()
+    if (!profileId) {
+      throw new Error('persona:profile-dir 需要非空的 profileId。')
+    }
+    return { dir: personaLoader.getPersonaProfileDir(profileId) }
+  })
 }
