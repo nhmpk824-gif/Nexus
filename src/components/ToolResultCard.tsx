@@ -8,6 +8,8 @@ import type {
   WebSearchResultItem,
 } from '../types'
 import { stripWeatherPeriodPrefix } from '../features/tools/weatherText.ts'
+import { useTranslation } from '../i18n/useTranslation.ts'
+type TranslateFn = ReturnType<typeof useTranslation>['t']
 
 function isSafeUrl(url: string): boolean {
   const lower = String(url ?? '').trim().toLowerCase()
@@ -332,16 +334,16 @@ function renderChatSearchBody(result: WebSearchResponse) {
   )
 }
 
-function getSearchEyebrow(result: WebSearchResponse) {
+function getSearchEyebrow(result: WebSearchResponse, t: TranslateFn) {
   if (result.display?.mode === 'lyrics' || (!result.display && isLyricsSearchQuery(result.query))) {
-    return '内容摘录'
+    return t('tool_result.search.eyebrow_excerpt')
   }
 
   if (result.display?.mode === 'answer') {
-    return '搜索整理'
+    return t('tool_result.search.eyebrow_answer')
   }
 
-  return `结果整理 · ${result.items.length} 条`
+  return t('tool_result.search.eyebrow_result', { count: result.items.length })
 }
 
 function getSearchTitle(result: WebSearchResponse) {
@@ -353,11 +355,11 @@ function getSearchTitle(result: WebSearchResponse) {
   return result.query
 }
 
-function renderSearchMeta(result: WebSearchResponse) {
+function renderSearchMeta(result: WebSearchResponse, t: TranslateFn) {
   const metaPieces = [
-    result.providerLabel ? `来源 ${result.providerLabel}` : '',
+    result.providerLabel ? t('tool_result.search.source_prefix', { provider: result.providerLabel }) : '',
     result.executedQuery && result.executedQuery !== result.query
-      ? `执行检索 ${result.executedQuery}`
+      ? t('tool_result.search.executed_prefix', { query: result.executedQuery })
       : '',
   ].filter(Boolean)
 
@@ -380,22 +382,25 @@ function renderSearchMeta(result: WebSearchResponse) {
 }
 
 export const ToolResultCard = memo(function ToolResultCard({ toolResult, variant = 'chat' }: ToolResultCardProps) {
+  const { t } = useTranslation()
   const className = `tool-result-card tool-result-card--${toolResult.kind} tool-result-card--${variant}`
 
   if (toolResult.kind === 'weather') {
+    const todayLabel = t('tool_result.weather.today_prefix')
+    const tomorrowLabel = t('tool_result.weather.tomorrow_prefix')
     return (
       <section className={className}>
-        <div className="tool-result-card__eyebrow">天气结果</div>
+        <div className="tool-result-card__eyebrow">{t('tool_result.weather.eyebrow')}</div>
         <strong className="tool-result-card__title">{toolResult.result.resolvedName}</strong>
         <p className="tool-result-card__summary">{toolResult.result.currentSummary}</p>
         {toolResult.result.todaySummary ? (
           <p className="tool-result-card__meta">
-            今天：{stripWeatherPeriodPrefix(toolResult.result.todaySummary, '今天')}
+            {todayLabel}：{stripWeatherPeriodPrefix(toolResult.result.todaySummary, '今天')}
           </p>
         ) : null}
         {toolResult.result.tomorrowSummary ? (
           <p className="tool-result-card__meta">
-            明天：{stripWeatherPeriodPrefix(toolResult.result.tomorrowSummary, '明天')}
+            {tomorrowLabel}：{stripWeatherPeriodPrefix(toolResult.result.tomorrowSummary, '明天')}
           </p>
         ) : null}
       </section>
@@ -405,7 +410,7 @@ export const ToolResultCard = memo(function ToolResultCard({ toolResult, variant
   if (toolResult.kind === 'open_external') {
     return (
       <section className={className}>
-        <div className="tool-result-card__eyebrow">外部链接</div>
+        <div className="tool-result-card__eyebrow">{t('tool_result.external.eyebrow')}</div>
         {isSafeUrl(toolResult.result.url) ? (
           <a
             href={toolResult.result.url}
@@ -426,9 +431,9 @@ export const ToolResultCard = memo(function ToolResultCard({ toolResult, variant
 
   return (
     <section className={className}>
-      <div className="tool-result-card__eyebrow">{getSearchEyebrow(toolResult.result)}</div>
+      <div className="tool-result-card__eyebrow">{getSearchEyebrow(toolResult.result, t)}</div>
       <strong className="tool-result-card__title">{getSearchTitle(toolResult.result)}</strong>
-      {renderSearchMeta(toolResult.result)}
+      {renderSearchMeta(toolResult.result, t)}
       {variant === 'pet'
         ? renderPetSearchBody(toolResult.result)
         : renderChatSearchBody(toolResult.result)}

@@ -6,14 +6,28 @@ import {
   type BackgroundTaskStatus,
 } from '../features/agent/backgroundTaskStore'
 import type { AgentStep, AgentStepType, AgentStopReason } from '../features/agent/agentLoop'
+import { useTranslation } from '../i18n/useTranslation.ts'
+import type { TranslationKey } from '../types/i18n'
 
 type TraceStatusFilter = 'all' | 'running' | 'done' | 'error'
 
-const TRACE_FILTER_LABEL: Record<TraceStatusFilter, string> = {
-  all: '全部',
-  running: '运行中',
-  done: '完成',
-  error: '错误',
+// Module-level label keys — resolved to text at render time via
+// useTranslation so the filter row and status badges actually track the
+// user's UI language instead of staying on the zh-CN strings the
+// constants used to hold.
+const TRACE_FILTER_LABEL_KEY: Record<TraceStatusFilter, TranslationKey> = {
+  all: 'agent_trace.filter.all',
+  running: 'agent_trace.filter.running',
+  done: 'agent_trace.filter.done',
+  error: 'agent_trace.filter.error',
+}
+
+const TASK_STATUS_LABEL_KEY: Record<BackgroundTaskStatus, TranslationKey> = {
+  running: 'agent_trace.status.running',
+  completed: 'agent_trace.status.completed',
+  failed: 'agent_trace.status.failed',
+  cancelled: 'agent_trace.status.cancelled',
+  orphaned: 'agent_trace.status.orphaned',
 }
 
 function matchesTraceFilter(trace: AgentTrace, filter: TraceStatusFilter): boolean {
@@ -78,14 +92,6 @@ const TASK_STATUS_COLOR: Record<BackgroundTaskStatus, string> = {
   orphaned: '#a78bfa',
 }
 
-const TASK_STATUS_LABEL: Record<BackgroundTaskStatus, string> = {
-  running: '运行中',
-  completed: '已完成',
-  failed: '失败',
-  cancelled: '已取消',
-  orphaned: '已中断',
-}
-
 function formatTime(ts: number): string {
   return new Intl.DateTimeFormat('zh-CN', {
     month: '2-digit',
@@ -95,8 +101,8 @@ function formatTime(ts: number): string {
   }).format(new Date(ts))
 }
 
-function formatDuration(start: number, end?: number): string {
-  if (!end) return '进行中'
+function formatDuration(start: number, end: number | undefined, inProgressLabel: string): string {
+  if (!end) return inProgressLabel
   const ms = end - start
   if (ms < 1000) return `${ms}ms`
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
@@ -140,6 +146,7 @@ const StepRow = memo(function StepRow({ step }: { step: AgentStep }) {
 })
 
 const TraceCard = memo(function TraceCard({ trace }: { trace: AgentTrace }) {
+  const { t } = useTranslation()
   const hasError = traceHasError(trace)
   // Errors auto-expand so users see what broke without an extra click.
   const [expanded, setExpanded] = useState(hasError)
@@ -179,7 +186,7 @@ const TraceCard = memo(function TraceCard({ trace }: { trace: AgentTrace }) {
         </div>
       </div>
       <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
-        {formatTime(trace.startedAt)} · {formatDuration(trace.startedAt, trace.endedAt)} · {trace.steps.length} 步
+        {formatTime(trace.startedAt)} · {formatDuration(trace.startedAt, trace.endedAt, t('agent_trace.in_progress'))} · {trace.steps.length} {t('agent_trace.steps_suffix')}
       </div>
       <button
         onClick={() => setExpanded(!expanded)}
@@ -194,7 +201,7 @@ const TraceCard = memo(function TraceCard({ trace }: { trace: AgentTrace }) {
           cursor: 'pointer',
         }}
       >
-        {expanded ? '收起' : '展开步骤'}
+        {expanded ? t('agent_trace.collapse_steps') : t('agent_trace.expand_steps')}
       </button>
       {expanded && (
         <>
@@ -203,7 +210,7 @@ const TraceCard = memo(function TraceCard({ trace }: { trace: AgentTrace }) {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索步骤..."
+              placeholder={t('agent_trace.search_placeholder')}
               style={{
                 flex: 1,
                 fontSize: 11,
@@ -222,7 +229,7 @@ const TraceCard = memo(function TraceCard({ trace }: { trace: AgentTrace }) {
                 onChange={(e) => setErrorsOnly(e.target.checked)}
                 style={{ margin: 0 }}
               />
-              仅错误
+              {t('agent_trace.errors_only')}
             </label>
           </div>
           <ul
@@ -236,7 +243,7 @@ const TraceCard = memo(function TraceCard({ trace }: { trace: AgentTrace }) {
           >
             {filteredSteps.length === 0 ? (
               <li style={{ fontSize: 11, color: '#64748b', padding: '4px 0' }}>
-                没有符合条件的步骤。
+                {t('agent_trace.no_matching_steps')}
               </li>
             ) : (
               filteredSteps.map((step, idx) => (
@@ -251,6 +258,7 @@ const TraceCard = memo(function TraceCard({ trace }: { trace: AgentTrace }) {
 })
 
 const TaskRow = memo(function TaskRow({ task }: { task: BackgroundTask }) {
+  const { t } = useTranslation()
   return (
     <div
       style={{
@@ -266,11 +274,11 @@ const TaskRow = memo(function TaskRow({ task }: { task: BackgroundTask }) {
           {task.label}
         </div>
         <div style={{ fontSize: 10, color: TASK_STATUS_COLOR[task.status], fontWeight: 600 }}>
-          {TASK_STATUS_LABEL[task.status]}
+          {t(TASK_STATUS_LABEL_KEY[task.status])}
         </div>
       </div>
       <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
-        {formatTime(task.startedAt)} · {formatDuration(task.startedAt, task.endedAt)}
+        {formatTime(task.startedAt)} · {formatDuration(task.startedAt, task.endedAt, t('agent_trace.in_progress'))}
       </div>
       {task.summary && (
         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, whiteSpace: 'pre-wrap' }}>
@@ -291,7 +299,7 @@ const TaskRow = memo(function TaskRow({ task }: { task: BackgroundTask }) {
               cursor: 'pointer',
             }}
           >
-            取消
+            {t('agent_trace.cancel')}
           </button>
         )}
         {task.status !== 'running' && (
@@ -307,7 +315,7 @@ const TaskRow = memo(function TaskRow({ task }: { task: BackgroundTask }) {
               cursor: 'pointer',
             }}
           >
-            移除
+            {t('agent_trace.remove')}
           </button>
         )}
       </div>
@@ -316,6 +324,7 @@ const TaskRow = memo(function TaskRow({ task }: { task: BackgroundTask }) {
 })
 
 export const AgentTracePanel = memo(function AgentTracePanel() {
+  const { t } = useTranslation()
   const [traces, setTraces] = useState<AgentTrace[]>(() => agentTraceStore.list())
   const [tasks, setTasks] = useState<BackgroundTask[]>(() => backgroundTaskStore.list())
   const [filter, setFilter] = useState<TraceStatusFilter>('all')
@@ -337,7 +346,7 @@ export const AgentTracePanel = memo(function AgentTracePanel() {
   if (traces.length === 0 && tasks.length === 0) {
     return (
       <div style={{ padding: 16, color: '#64748b', fontSize: 12 }}>
-        Agent 还没有跑过任务。运行 agent loop 后，这里会显示步骤轨迹和后台任务。
+        {t('agent_trace.empty_state')}
       </div>
     )
   }
@@ -347,7 +356,7 @@ export const AgentTracePanel = memo(function AgentTracePanel() {
       {tasks.length > 0 && (
         <section>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 6, letterSpacing: 0.5 }}>
-            后台任务
+            {t('agent_trace.background_tasks')}
           </div>
           {tasks.map((task) => <TaskRow key={task.id} task={task} />)}
         </section>
@@ -364,10 +373,10 @@ export const AgentTracePanel = memo(function AgentTracePanel() {
             }}
           >
             <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: 0.5 }}>
-              最近的 Agent 轨迹
+              {t('agent_trace.recent_traces')}
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
-              {(Object.keys(TRACE_FILTER_LABEL) as TraceStatusFilter[]).map((key) => {
+              {(Object.keys(TRACE_FILTER_LABEL_KEY) as TraceStatusFilter[]).map((key) => {
                 const isActive = filter === key
                 return (
                   <button
@@ -384,7 +393,7 @@ export const AgentTracePanel = memo(function AgentTracePanel() {
                       cursor: 'pointer',
                     }}
                   >
-                    {TRACE_FILTER_LABEL[key]}
+                    {t(TRACE_FILTER_LABEL_KEY[key])}
                   </button>
                 )
               })}
@@ -392,7 +401,7 @@ export const AgentTracePanel = memo(function AgentTracePanel() {
           </div>
           {filteredTraces.length === 0 ? (
             <div style={{ fontSize: 11, color: '#64748b', padding: '4px 0' }}>
-              没有符合「{TRACE_FILTER_LABEL[filter]}」的轨迹。
+              {t('agent_trace.no_matching_traces', { filter: t(TRACE_FILTER_LABEL_KEY[filter]) })}
             </div>
           ) : (
             filteredTraces.map((trace) => <TraceCard key={trace.id} trace={trace} />)
