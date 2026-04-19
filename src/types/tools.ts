@@ -110,6 +110,13 @@ export interface WeatherLookupResponse {
   tomorrowSummary?: string
   usedFallbackLocation?: boolean
   message: string
+  // Structured fields for ambient weather UI (corner chip). The LLM-facing
+  // *Summary strings above are the canonical narration path — these numeric
+  // counterparts let non-LLM consumers render a compact widget without
+  // parsing Chinese prose.
+  currentTemperature?: number | null
+  currentWeatherCode?: number | null
+  currentConditionLabel?: string
 }
 
 export interface ExternalLinkRequest {

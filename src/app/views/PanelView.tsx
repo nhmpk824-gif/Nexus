@@ -13,6 +13,7 @@ import { getLiveTranscriptLabel, getTimeGreeting, voiceStateLabelMap } from '../
 import { ActivePlanStrip, MessageBubble, SubagentTaskStrip } from '../../components'
 import { resolveCharacterPreset } from '../../features/character/presets'
 import { resolveActivePanelScene } from '../../features/panelScene'
+import { useAmbientWeather } from '../../hooks/useAmbientWeather'
 import { shorten } from '../../lib'
 import type { UseAppControllerResult } from '../controllers/useAppController'
 
@@ -63,9 +64,18 @@ export function PanelView({
   }, [settings.panelSceneMode])
   const activePanelScene = useMemo(
     () => resolveActivePanelScene(settings.panelSceneMode),
+    // sceneTick is an intentional invalidation key that bumps every 10
+    // minutes so the resolver re-reads `new Date()` even when the mode
+    // hasn't changed — the memo body doesn't reference it directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [settings.panelSceneMode, sceneTick],
   )
   const panelSceneClassName = activePanelScene ? `panel-scene--${activePanelScene}` : ''
+
+  const ambientWeather = useAmbientWeather(
+    settings.ambientWeatherLocation,
+    settings.ambientWeatherEnabled,
+  )
   const voiceStateLabel = voiceStateLabelMap[voice.voiceState]
   const nextSchedulerStatusLabel = runtimeSnapshot.schedulerArmed
     ? runtimeSnapshot.activeTaskLabel
@@ -341,6 +351,22 @@ export function PanelView({
                 <span className="companion-chat__toolbar-status">{liveStatusLine || companionStatusChipLabel}</span>
               </div>
               <div className="panel-window__header-actions panel-window__header-actions--hero">
+                {ambientWeather ? (
+                  <span
+                    className="ambient-weather-chip"
+                    title={ambientWeather.fullSummary || ambientWeather.resolvedName}
+                  >
+                    <span className="ambient-weather-chip__condition">
+                      {ambientWeather.conditionLabel || '天气'}
+                    </span>
+                    {ambientWeather.temperatureC !== null ? (
+                      <span className="ambient-weather-chip__temp">
+                        {Math.round(ambientWeather.temperatureC)}°
+                      </span>
+                    ) : null}
+                    <span className="ambient-weather-chip__place">{ambientWeather.resolvedName}</span>
+                  </span>
+                ) : null}
                 <button className="ghost-button" type="button" onClick={openSettingsPanel}>
                   设置
                 </button>

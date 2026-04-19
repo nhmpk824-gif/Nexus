@@ -586,5 +586,11 @@ export async function lookupWeatherByLocation(location, fallbackLocation = '') {
     tomorrowSummary: formatDailyWeatherSummary('明天', daily, 1),
     usedFallbackLocation,
     message: `已获取 ${resolvedName} 的天气。`,
+    // Structured fields consumed by the ambient weather chip in the panel —
+    // the LLM-facing summary strings above stay untouched so existing tool
+    // calls keep returning exactly the text the model was trained on.
+    currentTemperature: Number.isFinite(currentTemperature) ? currentTemperature : null,
+    currentWeatherCode: Number.isFinite(Number(current.weather_code)) ? Number(current.weather_code) : null,
+    currentConditionLabel: getWeatherCodeDescription(current.weather_code),
   }
 }

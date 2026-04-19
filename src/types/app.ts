@@ -77,6 +77,15 @@ export interface AppearanceSettings {
    * it. See `src/features/panelScene/resolver.ts`.
    */
   panelSceneMode: PanelSceneMode
+  /**
+   * Compact corner chip in the chat panel that shows current temperature
+   * + condition label for `ambientWeatherLocation`. Disabled by default
+   * because it triggers a recurring network call to Nominatim + Open-Meteo
+   * — the user has to opt in by filling a city name.
+   */
+  ambientWeatherEnabled: boolean
+  /** City / place query passed through to the weather tool's geocoder. */
+  ambientWeatherLocation: string
 }
 
 export interface TextProviderSettings {

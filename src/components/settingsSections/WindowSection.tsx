@@ -99,6 +99,40 @@ export const WindowSection = memo(function WindowSection({
       <p className="settings-drawer__hint">
         「按时间自动切换」会每 10 分钟根据本机时钟选清晨 / 正午 / 午后 / 黄昏 / 夜晚之一；选固定场景会一直停留在该氛围里。
       </p>
+
+      <label className="settings-toggle">
+        <span>面板右上角显示天气</span>
+        <input
+          type="checkbox"
+          checked={draft.ambientWeatherEnabled}
+          onChange={(event) =>
+            setDraft((prev) => ({
+              ...prev,
+              ambientWeatherEnabled: event.target.checked,
+            }))
+          }
+        />
+      </label>
+
+      {draft.ambientWeatherEnabled ? (
+        <label className="settings-section__field">
+          <span>城市 / 地点</span>
+          <input
+            value={draft.ambientWeatherLocation}
+            placeholder="例如 北京 / 上海 / Tokyo"
+            onChange={(event) =>
+              setDraft((prev) => ({
+                ...prev,
+                ambientWeatherLocation: event.target.value,
+              }))
+            }
+          />
+        </label>
+      ) : null}
+
+      <p className="settings-drawer__hint">
+        天气每 30 分钟自动刷新一次，数据来自 Nominatim + Open-Meteo，不需要 API key。地点留空或网络异常时角标会自动隐藏。
+      </p>
     </section>
   )
 })

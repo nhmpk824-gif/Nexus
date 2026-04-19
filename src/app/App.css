@@ -78,6 +78,45 @@
     linear-gradient(180deg, #06080f 0%, #090c17 50%, #04060c 100%);
 }
 
+/* Ambient weather chip — compact info strip sitting in the panel toolbar.
+ * Kept intentionally low-contrast so it reads as ambient info, not an
+ * actionable control; hover lifts it slightly for the tooltip cue. */
+.ambient-weather-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: default;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.ambient-weather-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.ambient-weather-chip__condition {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.ambient-weather-chip__temp {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+}
+
+.ambient-weather-chip__place {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .eyebrow {
   margin: 0 0 6px;
   font-size: 11px;
