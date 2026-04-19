@@ -95,6 +95,12 @@
   white-space: nowrap;
   cursor: default;
   transition: background 0.2s ease, color 0.2s ease;
+  /* Keep the chip from punching through a narrow panel; the place name is
+   * the part most likely to blow out, so we let it truncate individually
+   * while the condition + temp stay pinned at their intrinsic width. */
+  max-width: 240px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .ambient-weather-chip:hover {
@@ -115,6 +121,12 @@
 .ambient-weather-chip__place {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.5);
+  /* Truncate a long city name (e.g. "北京市朝阳区") instead of pushing the
+   * rest of the header row past the panel edge. The full name stays in the
+   * native tooltip. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .eyebrow {

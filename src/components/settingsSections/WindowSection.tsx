@@ -77,7 +77,7 @@ export const WindowSection = memo(function WindowSection({
 
       <p className="settings-drawer__hint">{ti('settings.window.click_through_note')}</p>
 
-      <label className="settings-section__field">
+      <label>
         <span>聊天面板背景</span>
         <select
           value={draft.panelSceneMode}
@@ -115,7 +115,7 @@ export const WindowSection = memo(function WindowSection({
       </label>
 
       {draft.ambientWeatherEnabled ? (
-        <label className="settings-section__field">
+        <label>
           <span>城市 / 地点</span>
           <input
             value={draft.ambientWeatherLocation}
