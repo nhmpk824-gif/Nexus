@@ -2,7 +2,7 @@ import { PromptModeStreamFilter } from '../../features/chat/promptModeMcp'
 import { applyChatOutputTransforms } from '../../features/chat/chatOutputTransforms'
 import { selectToolDeliveryMode } from '../../features/chat/systemPromptBuilder'
 import { requestAssistantReplyStreaming } from '../../features/chat/runtime'
-import { selectTriggeredLorebookEntries } from '../../features/chat/lorebookInjection'
+import { selectTriggeredLorebookEntriesWithSemantic } from '../../features/chat/lorebookInjection'
 import { loadLorebookEntries } from '../../lib/storage/lorebooks'
 import { loadSubagentSettings } from '../../lib/storage'
 import { buildSpawnSubagentDescriptor } from '../../features/autonomy/subagents/spawnSubagentTool'
@@ -204,7 +204,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
       }
 
       // Run all independent context-loading tasks in parallel
-      const [desktopContext, mcpTools, gameContext, memoryContext, pluginSkillContext] = await Promise.all([
+      const [desktopContext, mcpTools, gameContext, memoryContext, pluginSkillContext, triggeredLorebookEntries] = await Promise.all([
         dependencies.ctx.loadDesktopContextSnapshot(),
         loadAvailableTools(currentSettings),
         loadGameContext().then(formatGameContext).catch((err) => {
@@ -225,6 +225,14 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
         loadRelevantSkills(content).catch((err) => {
           console.warn('[assistantReply] loadRelevantSkills failed; continuing without skill context.', err)
           return ''
+        }),
+        selectTriggeredLorebookEntriesWithSemantic(
+          loadLorebookEntries(),
+          nextMessages,
+          { embeddingModel: currentSettings.memoryEmbeddingModel },
+        ).catch((err) => {
+          console.warn('[assistantReply] lorebook semantic pass failed; continuing without lorebook injection.', err)
+          return []
         }),
       ])
 
@@ -312,10 +320,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           mcpTools,
           gameContext,
           autoSkillContext,
-          triggeredLorebookEntries: selectTriggeredLorebookEntries(
-            loadLorebookEntries(),
-            nextMessages,
-          ),
+          triggeredLorebookEntries,
           onBuiltInToolResult: handleBuiltInToolResult,
           // Current emotion/relationship/rhythm awareness — the latest values
           // come from useAutonomyController via a ref wrapper. These getters

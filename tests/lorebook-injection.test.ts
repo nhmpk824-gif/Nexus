@@ -4,7 +4,9 @@ import { test } from 'node:test'
 import {
   buildLorebookSection,
   selectTriggeredLorebookEntries,
+  selectTriggeredLorebookEntriesWithSemantic,
 } from '../src/features/chat/lorebookInjection.ts'
+import { LOCAL_HASH_MEMORY_MODEL_ID } from '../src/features/memory/constants.ts'
 import type { ChatMessage } from '../src/types/chat.ts'
 import type { LorebookEntry } from '../src/types/lorebooks.ts'
 
@@ -87,4 +89,73 @@ test('buildLorebookSection truncates oversize content with ellipsis', () => {
   const section = buildLorebookSection([makeEntry({ id: 'big', content: huge })])
   // MAX_LOREBOOK_CONTENT_CHARS is 500 — allow the ellipsis suffix.
   assert.ok(section.includes('x'.repeat(500) + '\u2026'))
+})
+
+// ── Semantic hybrid pass ──────────────────────────────────────────────────
+
+test('semantic hybrid still returns keyword hits when both paths fire', async () => {
+  const entries = [
+    makeEntry({ id: 'mom', keywords: ['妈妈'], content: '用户的母亲住在上海。' }),
+  ]
+  const messages = [userMessage('我妈妈今天打电话来了')]
+  const hits = await selectTriggeredLorebookEntriesWithSemantic(entries, messages, {
+    embeddingModel: LOCAL_HASH_MEMORY_MODEL_ID,
+  })
+  assert.equal(hits.length, 1)
+  assert.equal(hits[0].id, 'mom')
+})
+
+test('semantic hybrid picks up an entry whose keywords the user never spelled out', async () => {
+  // User talks about "厦门" (Xiamen). The lorebook entry is keyed on a
+  // different city name but shares overlapping ngrams in the content body.
+  // The local hash embedder's ngram tokens should give the 厦门-content
+  // entry a similarity score above the default 0.55 threshold even though
+  // the literal keyword "厦门" never appears in scan messages.
+  const entries = [
+    makeEntry({
+      id: 'xiamen-history',
+      keywords: ['鼓浪屿'],
+      content: '厦门是福建省的港口城市，鼓浪屿和环岛路都是本地代表景点。',
+      priority: 5,
+    }),
+    // Decoy entry — unrelated content should not pass threshold.
+    makeEntry({
+      id: 'cat-food',
+      keywords: ['猫粮'],
+      content: '皇家猫粮适合成年英短，每日两次。',
+      priority: 5,
+    }),
+  ]
+  const messages = [userMessage('我这周末想去厦门玩，有没有什么推荐的景点？')]
+  const hits = await selectTriggeredLorebookEntriesWithSemantic(entries, messages, {
+    embeddingModel: LOCAL_HASH_MEMORY_MODEL_ID,
+  })
+  const ids = hits.map((h) => h.id)
+  assert.ok(ids.includes('xiamen-history'), `expected xiamen-history in hits, got ${ids.join(',')}`)
+  assert.ok(!ids.includes('cat-food'), 'cat-food should not pass the semantic threshold')
+})
+
+test('semantic hybrid de-duplicates entries that hit via both keyword and semantic', async () => {
+  const entries = [
+    makeEntry({ id: 'a', keywords: ['apple'], content: 'apple computer is a fruit' }),
+  ]
+  const messages = [userMessage('i ate an apple')]
+  const hits = await selectTriggeredLorebookEntriesWithSemantic(entries, messages, {
+    embeddingModel: LOCAL_HASH_MEMORY_MODEL_ID,
+  })
+  assert.equal(hits.length, 1)
+  assert.equal(hits[0].id, 'a')
+})
+
+test('semantic hybrid honors MAX_LOREBOOK_ENTRIES_PER_TURN cap', async () => {
+  // Make 10 entries that all keyword-match "pet". Combined with potential
+  // semantic pickup, the result must still cap at MAX_LOREBOOK_ENTRIES_PER_TURN.
+  const entries = Array.from({ length: 10 }, (_, i) =>
+    makeEntry({ id: `p${i}`, keywords: ['pet'], content: `pet trivia ${i}`, priority: i }),
+  )
+  const messages = [userMessage('tell me about my pet')]
+  const hits = await selectTriggeredLorebookEntriesWithSemantic(entries, messages, {
+    embeddingModel: LOCAL_HASH_MEMORY_MODEL_ID,
+  })
+  assert.ok(hits.length <= 6, `expected ≤ 6 hits, got ${hits.length}`)
 })
