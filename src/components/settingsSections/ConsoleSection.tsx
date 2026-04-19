@@ -3,7 +3,7 @@ import { formatReminderScheduleSummaryForUi } from '../../features/reminders/sch
 import { getMeterSnapshot } from '../../features/metering/contextMeter'
 import { getArchiveStats } from '../../features/memory/coldArchive'
 import { loadNarrative } from '../../features/memory/narrativeMemory'
-import { pickTranslatedUiText, resolveLocalizedText } from '../../lib/uiLanguage'
+import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import { getCoreRuntime } from '../../lib/coreRuntime'
 import type {
   DebugConsoleEvent,
@@ -66,8 +66,6 @@ export const ConsoleSection = memo(function ConsoleSection({
   autonomyPhase,
 }: ConsoleSectionProps) {
   const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) => pickTranslatedUiText(uiLanguage, key)
-  const t = (zhCN: string, enUS: string) =>
-    resolveLocalizedText(uiLanguage, { 'zh-CN': zhCN, 'en-US': enUS })
   const enabledReminderCount = reminderTasks.filter((task) => task.enabled).length
   const nextReminderTask = reminderTasks.find((task) => task.enabled && task.nextRunAt)
   const voiceStateLabel = formatVoiceStateLabel(voiceState, uiLanguage)
@@ -98,8 +96,8 @@ export const ConsoleSection = memo(function ConsoleSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debugConsoleEvents])
   let budgetCapNote = ''
-  if (budgetSnapshot.shouldHardStop) budgetCapNote = ` · ${t('已达上限', 'Limit reached')}`
-  else if (budgetSnapshot.shouldDowngrade) budgetCapNote = ` · ${t('降级中', 'Downgraded')}`
+  if (budgetSnapshot.shouldHardStop) budgetCapNote = ` · ${ti('settings.console.limit_reached')}`
+  else if (budgetSnapshot.shouldDowngrade) budgetCapNote = ` · ${ti('settings.console.downgraded')}`
   return (
     <section className={`settings-section ${active ? 'is-active' : 'is-hidden'}`}>
       <div className="settings-section__title-row">
@@ -284,8 +282,8 @@ export const ConsoleSection = memo(function ConsoleSection({
         <details className="settings-console-section">
           <summary className="settings-console-section__header">
             <div>
-              <h5>{t('工具调用记录', 'Tool call history')}</h5>
-              <p className="settings-section__note">{t('搜索、天气、MCP 工具等的调用记录和返回结果。', 'History of web search, weather, MCP tool calls, and their results.')}</p>
+              <h5>{ti('settings.console.tool_call_history')}</h5>
+              <p className="settings-section__note">{ti('settings.console.tool_call_history_note')}</p>
             </div>
             <span className="settings-console-section__meta">
               {debugConsoleEvents.filter((e) => e.source === 'tool').length} {ti('settings.console.items')}
@@ -297,7 +295,7 @@ export const ConsoleSection = memo(function ConsoleSection({
                 .filter((e) => e.source === 'tool')
                 .slice(0, 10)
               if (!toolEvents.length) {
-                return <p className="settings-console-list__empty">{t('还没有工具调用记录。', 'No tool calls recorded yet.')}</p>
+                return <p className="settings-console-list__empty">{ti('settings.console.tool_call_empty')}</p>
               }
               return toolEvents.map((event) => (
                 <article
@@ -360,18 +358,17 @@ function ObservabilityPanel({
   autonomyPhase?: string
   uiLanguage: UiLanguage
 }) {
-  const t = (zhCN: string, enUS: string) =>
-    resolveLocalizedText(uiLanguage, { 'zh-CN': zhCN, 'en-US': enUS })
+  const ti = (key: Parameters<typeof pickTranslatedUiText>[1]) => pickTranslatedUiText(uiLanguage, key)
   const meter = getMeterSnapshot()
   const archiveStats = getArchiveStats()
   const narrative = loadNarrative()
 
   const emotionBars = emotionState
     ? [
-        { label: t('活力', 'Energy'), value: emotionState.energy },
-        { label: t('温暖', 'Warmth'), value: emotionState.warmth },
-        { label: t('好奇', 'Curiosity'), value: emotionState.curiosity },
-        { label: t('关心', 'Concern'), value: emotionState.concern },
+        { label: ti('settings.console.emotion.energy'), value: emotionState.energy },
+        { label: ti('settings.console.emotion.warmth'), value: emotionState.warmth },
+        { label: ti('settings.console.emotion.curiosity'), value: emotionState.curiosity },
+        { label: ti('settings.console.emotion.concern'), value: emotionState.concern },
       ]
     : null
 
@@ -381,8 +378,8 @@ function ObservabilityPanel({
     <section className="settings-console-section">
       <div className="settings-console-section__header">
         <div>
-          <h5>{t('可观测性仪表盘', 'Observability Dashboard')}</h5>
-          <p className="settings-section__note">{t('情绪、记忆、Token 用量一览', 'Emotions, memory, and token usage at a glance')}</p>
+          <h5>{ti('settings.console.dashboard_title')}</h5>
+          <p className="settings-section__note">{ti('settings.console.dashboard_subtitle')}</p>
         </div>
         <span className="settings-console-section__meta">{autonomyPhase ?? 'idle'}</span>
       </div>
@@ -391,7 +388,7 @@ function ObservabilityPanel({
         {emotionBars && (
           <article className="settings-console-card">
             <div className="settings-console-card__header">
-              <span className="settings-console-badge">{t('情绪状态', 'Emotions')}</span>
+              <span className="settings-console-badge">{ti('settings.console.emotion_badge')}</span>
             </div>
             {emotionBars.map((bar) => (
               <div key={bar.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -415,28 +412,28 @@ function ObservabilityPanel({
 
         <article className="settings-console-card">
           <div className="settings-console-card__header">
-            <span className="settings-console-badge">{t('记忆统计', 'Memory')}</span>
+            <span className="settings-console-badge">{ti('settings.console.memory_badge')}</span>
           </div>
           <div className="settings-console-card__headline">
-            <strong>{memoryCount ?? '—'} {t('条活跃记忆', 'active memories')}</strong>
+            <strong>{memoryCount ?? '—'} {ti('settings.console.memory_active_suffix')}</strong>
           </div>
-          <p>{t('归档', 'Archived')} {archiveStats.count} · {t('叙事线', 'Narratives')} {narrative.threads.length}</p>
+          <p>{ti('settings.console.memory_archived')} {archiveStats.count} · {ti('settings.console.memory_narratives')} {narrative.threads.length}</p>
         </article>
 
         <article className="settings-console-card">
           <div className="settings-console-card__header">
-            <span className="settings-console-badge">{t('Token 用量', 'Token usage')}</span>
+            <span className="settings-console-badge">{ti('settings.console.token_badge')}</span>
           </div>
           <div className="settings-console-card__headline">
-            <strong>{t('今日', 'Today')} {formatTokens(meter.daily.totalInputTokens + meter.daily.totalOutputTokens)} tokens</strong>
+            <strong>{ti('settings.console.token_today')} {formatTokens(meter.daily.totalInputTokens + meter.daily.totalOutputTokens)} tokens</strong>
           </div>
           <p>
-            {t('本轮', 'Session')} {formatTokens(meter.session.totalInputTokens + meter.session.totalOutputTokens)} ·
-            {meter.daily.callCount} {t('次调用', 'calls')}
+            {ti('settings.console.token_session')} {formatTokens(meter.session.totalInputTokens + meter.session.totalOutputTokens)} ·
+            {meter.daily.callCount} {ti('settings.console.token_calls_suffix')}
           </p>
           <div className="settings-console-card__meta">
-            <span>{t('输入', 'In')} {formatTokens(meter.daily.totalInputTokens)}</span>
-            <span>{t('输出', 'Out')} {formatTokens(meter.daily.totalOutputTokens)}</span>
+            <span>{ti('settings.console.token_input')} {formatTokens(meter.daily.totalInputTokens)}</span>
+            <span>{ti('settings.console.token_output')} {formatTokens(meter.daily.totalOutputTokens)}</span>
           </div>
         </article>
       </div>
@@ -446,8 +443,8 @@ function ObservabilityPanel({
           {narrative.threads.slice(0, 5).map((thread) => (
             <article key={thread.id} className="settings-console-list__item">
               <div className="settings-console-list__header">
-                <span className="settings-console-list__badge">{t('叙事线', 'Narrative')}</span>
-                <span className="settings-console-list__meta">{thread.memoryIds.length} {t('条记忆', 'memories')}</span>
+                <span className="settings-console-list__badge">{ti('settings.console.memory_narratives')}</span>
+                <span className="settings-console-list__meta">{thread.memoryIds.length} {ti('settings.console.memories_suffix')}</span>
               </div>
               <strong>{thread.title}</strong>
               <p>{thread.summary}</p>
