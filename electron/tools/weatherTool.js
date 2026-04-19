@@ -487,6 +487,12 @@ export async function lookupWeatherByLocation(location, fallbackLocation = '') {
   let place = null
   let resolvedLocation = locationCandidates[0]
   let bestScore = Number.NEGATIVE_INFINITY
+  // An exact name/admin match in pickBestWeatherPlace scores 18+ on its own;
+  // once we've seen one we can stop iterating candidates — remaining variants
+  // are just defensive reformulations of the same query, firing more of them
+  // burns through Nominatim's ~1 req/sec hospitality for no accuracy gain and
+  // adds noticeable latency to voice-triggered "帮我看一下北京天气" lookups.
+  const STRONG_GEOCODE_MATCH_SCORE = 18
 
   for (const candidate of locationCandidates) {
     // Use Nominatim instead of open-meteo's geocoding subdomain. See
@@ -529,6 +535,9 @@ export async function lookupWeatherByLocation(location, fallbackLocation = '') {
       place = matchedResult.place
       resolvedLocation = candidate
       bestScore = matchedResult.score
+    }
+    if (bestScore >= STRONG_GEOCODE_MATCH_SCORE) {
+      break
     }
   }
 
