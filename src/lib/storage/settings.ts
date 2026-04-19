@@ -167,10 +167,12 @@ const defaultSettings: AppSettings = {
   autonomyMonologueEnabled: false,
   autonomyMonologueIntervalTicks: 6,
   autonomyMonologueSpeechThreshold: 65,
-  // v2 engine — dormant until its code paths land. Users can flip this today
-  // without behavioural change so migration happens at one flag write, not a
-  // settings-schema migration later.
-  autonomyEngineV2: false,
+  // v2 engine — now the default path (Phase 5b landed the full pipeline).
+  // Only kicks in when autonomyEnabled is also true, so users who haven't
+  // opted into autonomy at all are unaffected. Legacy v1 proactiveEngine
+  // stays in the codebase until Phase 6 so users can flip back via this
+  // flag if the LLM-driven behaviour isn't what they want.
+  autonomyEngineV2: true,
   autonomyLevelV2: 'med',
   autonomyModelV2: '',
   autonomyPersonaStrictnessV2: 'med',
