@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from '../../../i18n/useTranslation.ts'
 
 type ModelEntry = {
   id: string
@@ -52,6 +53,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function ModelSetupOverlay({ suppressed = false }: Props) {
+  const { t } = useTranslation()
   const [inventory, setInventory] = useState<Inventory | null>(null)
   const [progress, setProgress] = useState<Record<string, PerModelProgress>>({})
   const [busy, setBusy] = useState(false)
@@ -114,7 +116,7 @@ export function ModelSetupOverlay({ suppressed = false }: Props) {
       if (result?.inventory) setInventory(result.inventory)
       const failed = result?.results.filter(r => !r.ok) ?? []
       if (failed.length) {
-        setErrorBanner(`部分模型下载失败：${failed.map(f => f.id).join(', ')}。请检查网络后重试。`)
+        setErrorBanner(t('model_setup.partial_failure', { ids: failed.map(f => f.id).join(', ') }))
       }
     } catch (err) {
       setErrorBanner(err instanceof Error ? err.message : String(err))
@@ -158,22 +160,22 @@ export function ModelSetupOverlay({ suppressed = false }: Props) {
           <div className="model-setup__row-title">
             <strong>{model.label}</strong>
             <span className="model-setup__size">{model.sizeLabel}</span>
-            {!model.required ? <span className="model-setup__tag">可选</span> : null}
+            {!model.required ? <span className="model-setup__tag">{t('model_setup.optional_tag')}</span> : null}
           </div>
           <div className="model-setup__row-desc">{model.purpose}</div>
           {model.present ? (
-            <div className="model-setup__row-status model-setup__row-status--ok">已安装</div>
+            <div className="model-setup__row-status model-setup__row-status--ok">{t('model_setup.installed')}</div>
           ) : isActive ? (
             <div className="model-setup__row-status">
-              {pct !== null ? `${pct}% · ${formatBytes(p.downloaded)} / ${formatBytes(p.total)}` : '正在下载…'}
+              {pct !== null ? `${pct}% · ${formatBytes(p.downloaded)} / ${formatBytes(p.total)}` : t('model_setup.downloading')}
               {p?.fileName ? <span className="model-setup__row-file"> · {p.fileName}</span> : null}
             </div>
           ) : hasError ? (
             <div className="model-setup__row-status model-setup__row-status--error">
-              失败{p?.message ? `：${p.message}` : ''}
+              {p?.message ? t('model_setup.failed_with_message', { message: p.message }) : t('model_setup.failed')}
             </div>
           ) : (
-            <div className="model-setup__row-status model-setup__row-status--pending">待下载</div>
+            <div className="model-setup__row-status model-setup__row-status--pending">{t('model_setup.pending')}</div>
           )}
         </div>
 
@@ -185,7 +187,7 @@ export function ModelSetupOverlay({ suppressed = false }: Props) {
               onClick={() => retryModel(model.id)}
               disabled={busy}
             >
-              {hasError ? '重试' : '下载'}
+              {hasError ? t('model_setup.retry') : t('model_setup.download')}
             </button>
           ) : null}
         </div>
@@ -204,22 +206,20 @@ export function ModelSetupOverlay({ suppressed = false }: Props) {
       <section className="model-setup-card">
         <header className="model-setup-card__header">
           <div>
-            <p className="eyebrow">首次启动</p>
-            <h2>安装本地语音模型</h2>
+            <p className="eyebrow">{t('model_setup.eyebrow')}</p>
+            <h2>{t('model_setup.title')}</h2>
             <p className="model-setup-card__copy">
-              Nexus 的语音唤醒、转写功能使用本地开源模型（
-              sherpa-onnx / Silero VAD）。点击下方按钮自动下载到
-              <code className="model-setup-card__path">{inventory.primaryDir}</code>。
+              {t('model_setup.body_prefix', { path: inventory.primaryDir })}
             </p>
           </div>
           <button className="ghost-button" type="button" onClick={handleDismiss} disabled={busy}>
-            稍后再说
+            {t('model_setup.dismiss')}
           </button>
         </header>
 
         {networkProbe && !networkProbe.huggingFaceReachable ? (
           <div className="model-setup__hint">
-            检测到 HuggingFace 不可直连，将优先使用 GitHub Releases / ModelScope 国内镜像。
+            {t('model_setup.network_hf_unreachable')}
           </div>
         ) : null}
 
@@ -228,12 +228,12 @@ export function ModelSetupOverlay({ suppressed = false }: Props) {
         ) : null}
 
         <div className="model-setup__list">
-          <h3>必需模型</h3>
+          <h3>{t('model_setup.required_heading')}</h3>
           {requiredModels.map(renderRow)}
 
           {optionalModels.length ? (
             <>
-              <h3 className="model-setup__optional-title">可选模型</h3>
+              <h3 className="model-setup__optional-title">{t('model_setup.optional_heading')}</h3>
               {optionalModels.map(renderRow)}
             </>
           ) : null}
@@ -241,17 +241,15 @@ export function ModelSetupOverlay({ suppressed = false }: Props) {
 
         {pythonStatus ? (
           <div className="model-setup__python">
-            <strong>Python 可选服务</strong>
+            <strong>{t('model_setup.python_title')}</strong>
             <div>
               {pythonStatus.pythonAvailable
-                ? `已检测到 Python ${pythonStatus.version ?? ''}`
-                : '未检测到 Python（可选，仅影响 OmniVoice TTS / GLM-ASR）'}
+                ? t('model_setup.python_detected', { version: pythonStatus.version ?? '' })
+                : t('model_setup.python_not_detected')}
             </div>
             {pythonStatus.pythonAvailable && !pythonStatus.omniVoice.ready ? (
               <div className="model-setup__python-note">
-                OmniVoice TTS 缺少依赖：{pythonStatus.omniVoice.missingImports.join(', ')} — 运行
-                <code> pip install -r requirements.txt </code>
-                安装（不安装也不影响基础对话）。
+                {t('model_setup.python_missing_deps', { deps: pythonStatus.omniVoice.missingImports.join(', ') })}
               </div>
             ) : null}
           </div>
@@ -264,7 +262,7 @@ export function ModelSetupOverlay({ suppressed = false }: Props) {
             onClick={startDownloadAll}
             disabled={busy || inventory.missingRequired.length === 0}
           >
-            {busy ? '正在下载…' : `一键下载缺失的 ${inventory.missingRequired.length} 个模型`}
+            {busy ? t('model_setup.downloading') : t('model_setup.download_all', { count: inventory.missingRequired.length })}
           </button>
           <button
             type="button"
@@ -272,7 +270,7 @@ export function ModelSetupOverlay({ suppressed = false }: Props) {
             onClick={refreshInventory}
             disabled={busy}
           >
-            重新检测
+            {t('model_setup.refresh')}
           </button>
         </footer>
       </section>

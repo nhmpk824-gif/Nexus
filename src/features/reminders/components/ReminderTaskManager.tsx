@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from '../../../i18n/useTranslation.ts'
 import type { ReminderTask } from '../../../types'
 import {
   formatReminderScheduleSummary,
@@ -28,9 +29,9 @@ function toDateTimeLocalValue(value?: string) {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
 }
 
-function formatDateTimeLabel(value?: string) {
+function formatDateTimeLabel(value: string | undefined, unsetLabel: string) {
   if (!value) {
-    return '未设置'
+    return unsetLabel
   }
 
   const timestamp = Date.parse(value)
@@ -46,7 +47,7 @@ function formatDateTimeLabel(value?: string) {
   }).format(new Date(timestamp))
 }
 
-function buildTaskTitle(title: string, prompt: string) {
+function buildTaskTitle(title: string, prompt: string, fallback: string) {
   const normalizedTitle = title.trim()
   if (normalizedTitle) {
     return normalizedTitle
@@ -54,7 +55,7 @@ function buildTaskTitle(title: string, prompt: string) {
 
   const normalizedPrompt = prompt.trim()
   if (!normalizedPrompt) {
-    return '新的提醒'
+    return fallback
   }
 
   return normalizedPrompt.slice(0, 18)
@@ -66,6 +67,7 @@ export function ReminderTaskManager({
   onRemoveTask,
   onToggleTask,
 }: ReminderTaskManagerProps) {
+  const { t } = useTranslation()
   const [editingId, setEditingId] = useState('')
   const [title, setTitle] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -77,7 +79,8 @@ export function ReminderTaskManager({
   const [enabled, setEnabled] = useState(true)
   const [formError, setFormError] = useState('')
 
-  const saveLabel = editingId ? '更新提醒' : '添加提醒'
+  const saveLabel = editingId ? t('reminder_mgr.update') : t('reminder_mgr.add')
+  const unsetLabel = t('reminder_mgr.unset')
   const emptyState = useMemo(() => !tasks.length, [tasks.length])
 
   function resetForm() {
@@ -118,10 +121,10 @@ export function ReminderTaskManager({
   }
 
   function handleSave() {
-    const nextTitle = buildTaskTitle(title, prompt)
+    const nextTitle = buildTaskTitle(title, prompt, t('reminder_mgr.title_new'))
     const nextPrompt = prompt.trim() || nextTitle
     if (!nextPrompt) {
-      setFormError('请先填写提醒内容。')
+      setFormError(t('reminder_mgr.error.prompt_required'))
       return
     }
 
@@ -130,13 +133,13 @@ export function ReminderTaskManager({
 
     if (scheduleKind === 'at') {
       if (!atValue) {
-        setFormError('请先选择提醒时间。')
+        setFormError(t('reminder_mgr.error.time_required'))
         return
       }
 
       const date = new Date(atValue)
       if (Number.isNaN(date.getTime())) {
-        setFormError('提醒时间格式不正确。')
+        setFormError(t('reminder_mgr.error.time_invalid'))
         return
       }
 
@@ -147,7 +150,7 @@ export function ReminderTaskManager({
     } else if (scheduleKind === 'every') {
       const minutes = Math.max(1, Math.round(Number(everyMinutes) || 0))
       if (!minutes) {
-        setFormError('循环提醒至少要 1 分钟。')
+        setFormError(t('reminder_mgr.error.every_minimum'))
         return
       }
 
@@ -157,7 +160,7 @@ export function ReminderTaskManager({
       }
     } else {
       if (!cronExpression.trim()) {
-        setFormError('请先填写 Cron 表达式。')
+        setFormError(t('reminder_mgr.error.cron_required'))
         return
       }
 
@@ -182,50 +185,50 @@ export function ReminderTaskManager({
     <div className="reminder-task-manager">
       <div className="settings-grid settings-grid--two">
         <label>
-          <span>提醒标题</span>
+          <span>{t('reminder_mgr.title_label')}</span>
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="比如：喝水 / 开会 / 站起来活动"
+            placeholder={t('reminder_mgr.title_placeholder')}
           />
         </label>
 
         <label>
-          <span>触发方式</span>
+          <span>{t('reminder_mgr.trigger_method')}</span>
           <select
             value={scheduleKind}
             onChange={(event) => setScheduleKind(event.target.value as ScheduleKind)}
           >
-            <option value="at">单次提醒</option>
-            <option value="every">循环提醒</option>
-            <option value="cron">Cron</option>
+            <option value="at">{t('reminder_mgr.trigger.once')}</option>
+            <option value="every">{t('reminder_mgr.trigger.every')}</option>
+            <option value="cron">{t('reminder_mgr.cron_label')}</option>
           </select>
         </label>
       </div>
 
       <label>
-        <span>展示内容</span>
+        <span>{t('reminder_mgr.prompt_label')}</span>
         <textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           rows={3}
-          placeholder="比如：起来喝点水，顺便活动一下肩颈。"
+          placeholder={t('reminder_mgr.prompt_placeholder')}
         />
       </label>
 
       <label>
-        <span>TTS 播报内容，可选</span>
+        <span>{t('reminder_mgr.speech_label')}</span>
         <textarea
           value={speechText}
           onChange={(event) => setSpeechText(event.target.value)}
           rows={2}
-          placeholder="留空时会直接朗读上面的提醒内容。"
+          placeholder={t('reminder_mgr.speech_hint')}
         />
       </label>
 
       {scheduleKind === 'at' ? (
         <label>
-          <span>提醒时间</span>
+          <span>{t('reminder_mgr.time_label')}</span>
           <input
             type="datetime-local"
             value={atValue}
@@ -236,7 +239,7 @@ export function ReminderTaskManager({
 
       {scheduleKind === 'every' ? (
         <label>
-          <span>循环间隔（分钟）</span>
+          <span>{t('reminder_mgr.every_minutes_label')}</span>
           <input
             type="number"
             min={1}
@@ -249,7 +252,7 @@ export function ReminderTaskManager({
 
       {scheduleKind === 'cron' ? (
         <label>
-          <span>Cron 表达式</span>
+          <span>{t('reminder_mgr.trigger.cron')}</span>
           <input
             value={cronExpression}
             onChange={(event) => setCronExpression(event.target.value)}
@@ -259,7 +262,7 @@ export function ReminderTaskManager({
       ) : null}
 
       <label className="settings-toggle">
-        <span>启用这个提醒</span>
+        <span>{t('reminder_mgr.enable_this')}</span>
         <input
           type="checkbox"
           checked={enabled}
@@ -273,7 +276,7 @@ export function ReminderTaskManager({
           className="ghost-button"
           onClick={resetForm}
         >
-          清空表单
+          {t('reminder_mgr.clear_form')}
         </button>
         <button
           type="button"
@@ -285,7 +288,7 @@ export function ReminderTaskManager({
       </div>
 
       <p className="settings-section__note">
-        支持 `at / every / cron` 三种调度方式。提醒触发后会直接进入桌宠气泡；如果开启语音输出，也会按单独的播报文案朗读。
+        {t('reminder_mgr.note')}
       </p>
 
       {formError ? (
@@ -294,7 +297,7 @@ export function ReminderTaskManager({
 
       {emptyState ? (
         <div className="settings-inline-note">
-          还没有提醒任务。你可以先加一个“30 分钟后提醒我喝水”，桌宠到点会直接弹气泡和播报。
+          {t('reminder_mgr.empty_state')}
         </div>
       ) : null}
 
@@ -308,14 +311,14 @@ export function ReminderTaskManager({
                   <p>{task.prompt}</p>
                 </div>
                 <span className={`settings-summary-chip ${task.enabled ? '' : 'is-muted'}`}>
-                  {task.enabled ? '启用中' : '已暂停'}
+                  {task.enabled ? t('reminder_mgr.enabled') : t('reminder_mgr.paused')}
                 </span>
               </div>
 
               <div className="reminder-task-card__meta">
-                <span>调度：{formatReminderScheduleSummary(task)}</span>
-                <span>下次：{formatDateTimeLabel(task.nextRunAt)}</span>
-                <span>上次：{formatDateTimeLabel(task.lastTriggeredAt)}</span>
+                <span>{t('reminder_mgr.schedule_prefix', { summary: formatReminderScheduleSummary(task) })}</span>
+                <span>{t('reminder_mgr.next_trigger', { time: formatDateTimeLabel(task.nextRunAt, unsetLabel) })}</span>
+                <span>{t('reminder_mgr.last_trigger', { time: formatDateTimeLabel(task.lastTriggeredAt, unsetLabel) })}</span>
               </div>
 
               <div className="reminder-task-card__actions">
@@ -324,21 +327,21 @@ export function ReminderTaskManager({
                   className="ghost-button"
                   onClick={() => loadTaskIntoForm(task)}
                 >
-                  编辑
+                  {t('reminder_mgr.edit')}
                 </button>
                 <button
                   type="button"
                   className="ghost-button"
                   onClick={() => onToggleTask(task.id, !task.enabled)}
                 >
-                  {task.enabled ? '暂停' : '启用'}
+                  {task.enabled ? t('reminder_mgr.pause') : t('reminder_mgr.enable')}
                 </button>
                 <button
                   type="button"
                   className="ghost-button"
                   onClick={() => onRemoveTask(task.id)}
                 >
-                  删除
+                  {t('reminder_mgr.delete')}
                 </button>
               </div>
             </article>

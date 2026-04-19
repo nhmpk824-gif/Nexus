@@ -1,12 +1,10 @@
 import { useState, type KeyboardEvent } from 'react'
-import {
-  resolveLocalizedText,
-  type LocalizedText,
-} from '../../../lib/uiLanguage'
+import { pickTranslatedUiText } from '../../../lib/uiLanguage'
 import type {
   DailyMemoryEntry,
   MemoryItem,
   MemorySearchMode,
+  TranslationKey,
   UiLanguage,
 } from '../../../types'
 
@@ -25,75 +23,29 @@ type MemoryPanelProps = {
   uiLanguage: UiLanguage
 }
 
-const MEMORY_CATEGORY_LABELS: Record<MemoryItem['category'], LocalizedText> = {
-  profile: {
-    'zh-CN': '设定',
-    'en-US': 'Profile',
-  },
-  preference: {
-    'zh-CN': '喜好',
-    'en-US': 'Preference',
-  },
-  goal: {
-    'zh-CN': '目标',
-    'en-US': 'Goal',
-  },
-  habit: {
-    'zh-CN': '习惯',
-    'en-US': 'Habit',
-  },
-  manual: {
-    'zh-CN': '手动',
-    'en-US': 'Manual',
-  },
-  feedback: {
-    'zh-CN': '反馈',
-    'en-US': 'Feedback',
-  },
-  project: {
-    'zh-CN': '项目',
-    'en-US': 'Project',
-  },
-  reference: {
-    'zh-CN': '引用',
-    'en-US': 'Reference',
-  },
+const MEMORY_CATEGORY_KEY: Record<MemoryItem['category'], TranslationKey> = {
+  profile: 'memory_panel.category.profile',
+  preference: 'memory_panel.category.preference',
+  goal: 'memory_panel.category.goal',
+  habit: 'memory_panel.category.habit',
+  manual: 'memory_panel.category.manual',
+  feedback: 'memory_panel.category.feedback',
+  project: 'memory_panel.category.project',
+  reference: 'memory_panel.category.reference',
 }
 
-const SEARCH_MODE_LABELS: Record<MemorySearchMode, LocalizedText> = {
-  keyword: {
-    'zh-CN': '关键词检索',
-    'en-US': 'Keyword search',
-  },
-  hybrid: {
-    'zh-CN': '混合检索',
-    'en-US': 'Hybrid search',
-  },
-  vector: {
-    'zh-CN': '向量检索',
-    'en-US': 'Vector search',
-  },
-}
-
-function translateCopy(uiLanguage: UiLanguage, copy: LocalizedText) {
-  return resolveLocalizedText(uiLanguage, copy)
+const SEARCH_MODE_KEY: Record<MemorySearchMode, TranslationKey> = {
+  keyword: 'memory_search.keyword.label',
+  hybrid: 'memory_search.hybrid.label',
+  vector: 'memory_search.vector.label',
 }
 
 function getCategoryLabel(category: MemoryItem['category'], uiLanguage: UiLanguage) {
-  return translateCopy(uiLanguage, MEMORY_CATEGORY_LABELS[category])
+  return pickTranslatedUiText(uiLanguage, MEMORY_CATEGORY_KEY[category])
 }
 
 function getSearchModeLabel(searchMode: MemorySearchMode, uiLanguage: UiLanguage) {
-  return translateCopy(uiLanguage, SEARCH_MODE_LABELS[searchMode])
-}
-
-function getSearchModeSummary(searchMode: MemorySearchMode, uiLanguage: UiLanguage) {
-  const modeLabel = getSearchModeLabel(searchMode, uiLanguage)
-
-  return translateCopy(uiLanguage, {
-    'zh-CN': `当前会话、每日日志和长期记忆会一起参与回复；检索模式现在是 ${modeLabel}。`,
-    'en-US': `Current chat, daily diary, and long-term memory all contribute to replies. The current retrieval mode is ${modeLabel}.`,
-  })
+  return pickTranslatedUiText(uiLanguage, SEARCH_MODE_KEY[searchMode])
 }
 
 export function MemoryPanel({
@@ -110,7 +62,12 @@ export function MemoryPanel({
   searchMode,
   uiLanguage,
 }: MemoryPanelProps) {
-  const t = (copy: LocalizedText) => translateCopy(uiLanguage, copy)
+  const ti = (
+    key: TranslationKey,
+    params?: Parameters<typeof pickTranslatedUiText>[2],
+  ) => pickTranslatedUiText(uiLanguage, key, params)
+  const getSearchModeSummary = (searchMode: MemorySearchMode) =>
+    ti('memory_panel.search_mode_summary', { mode: getSearchModeLabel(searchMode, uiLanguage) })
   const [manualMemory, setManualMemory] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
@@ -141,10 +98,7 @@ export function MemoryPanel({
   function saveMemoryEdit(id: string) {
     const trimmed = editingContent.trim()
     if (!trimmed) {
-      setEditError(t({
-        'zh-CN': '记忆内容不能为空。',
-        'en-US': 'Memory content cannot be empty.',
-      }))
+      setEditError(ti('memory_panel.empty_memory_content'))
       return
     }
 
@@ -152,20 +106,14 @@ export function MemoryPanel({
       onUpdateMemory(id, trimmed)
       cancelEditing()
     } catch (error) {
-      setEditError(error instanceof Error ? error.message : t({
-        'zh-CN': '编辑记忆失败，请稍后再试。',
-        'en-US': 'Failed to edit memory. Please try again later.',
-      }))
+      setEditError(error instanceof Error ? error.message : ti('memory_panel.edit_memory_failed'))
     }
   }
 
   function saveDailyEdit(id: string, day: string) {
     const trimmed = editingContent.trim()
     if (!trimmed) {
-      setEditError(t({
-        'zh-CN': '日志内容不能为空。',
-        'en-US': 'Diary content cannot be empty.',
-      }))
+      setEditError(ti('memory_panel.empty_diary_content'))
       return
     }
 
@@ -173,10 +121,7 @@ export function MemoryPanel({
       onUpdateDailyEntry?.(id, day, trimmed)
       cancelEditing()
     } catch (error) {
-      setEditError(error instanceof Error ? error.message : t({
-        'zh-CN': '编辑日志失败，请稍后再试。',
-        'en-US': 'Failed to edit diary entry. Please try again later.',
-      }))
+      setEditError(error instanceof Error ? error.message : ti('memory_panel.edit_diary_failed'))
     }
   }
 
@@ -200,31 +145,19 @@ export function MemoryPanel({
     <section className="memory-card">
       <div className="memory-card__header">
         <div>
-          <p className="eyebrow">{t({
-            'zh-CN': '记忆系统',
-            'en-US': 'Memory system',
-          })}</p>
-          <h3>{t({
-            'zh-CN': '三层记忆',
-            'en-US': 'Three-layer memory',
-          })}</h3>
-          <p className="memory-card__hint">{getSearchModeSummary(searchMode, uiLanguage)}</p>
+          <p className="eyebrow">{ti('memory_panel.system_badge')}</p>
+          <h3>{ti('memory_panel.title')}</h3>
+          <p className="memory-card__hint">{getSearchModeSummary(searchMode)}</p>
         </div>
         <span className="memory-count">{memories.length}</span>
       </div>
 
       <div className="memory-card__meta">
         <span className="memory-pill__category">
-          {t({
-            'zh-CN': '长期',
-            'en-US': 'Long-term',
-          })} {memories.length}
+          {ti('memory_panel.category.long_term')} {memories.length}
         </span>
         <span className="memory-pill__category">
-          {t({
-            'zh-CN': '日志',
-            'en-US': 'Diary',
-          })} {dailyEntries.length}
+          {ti('memory_panel.category.diary')} {dailyEntries.length}
         </span>
         <span className="memory-pill__category">{embeddingModel}</span>
       </div>
@@ -233,24 +166,15 @@ export function MemoryPanel({
         <textarea
           rows={3}
           value={manualMemory}
-          placeholder={t({
-            'zh-CN': '手动补一条长期记忆，例如：我更喜欢安静一点的陪伴方式。',
-            'en-US': 'Add a long-term memory manually, for example: I prefer a quieter companion style.',
-          })}
+          placeholder={ti('memory_panel.manual_placeholder')}
           onChange={(event) => setManualMemory(event.target.value)}
         />
         <div className="memory-card__actions">
           <button type="button" className="ghost-button" onClick={handleAddMemory}>
-            {t({
-              'zh-CN': '保存到长期记忆',
-              'en-US': 'Save to long-term memory',
-            })}
+            {ti('memory_panel.save_to_long_term')}
           </button>
           <button type="button" className="ghost-button" onClick={onClearDaily}>
-            {t({
-              'zh-CN': '清空今日日志',
-              'en-US': "Clear today's diary",
-            })}
+            {ti('memory_panel.clear_diary')}
           </button>
         </div>
       </div>
@@ -278,25 +202,16 @@ export function MemoryPanel({
                   {editError && <p className="memory-pill__error">{editError}</p>}
                   <div className="memory-pill__actions">
                     <button type="button" onClick={() => saveMemoryEdit(memory.id)}>
-                      {t({
-                        'zh-CN': '保存',
-                        'en-US': 'Save',
-                      })}
+                      {ti('memory_panel.save')}
                     </button>
                     <button type="button" onClick={cancelEditing}>
-                      {t({
-                        'zh-CN': '取消',
-                        'en-US': 'Cancel',
-                      })}
+                      {ti('memory_panel.cancel')}
                     </button>
                   </div>
                 </div>
               ) : deletingId === memory.id ? (
                 <div className="memory-pill__confirm">
-                  <p>{t({
-                    'zh-CN': '确认删除这条记忆？',
-                    'en-US': 'Delete this memory?',
-                  })}</p>
+                  <p>{ti('memory_panel.confirm_delete_memory')}</p>
                   <div className="memory-pill__actions">
                     <button
                       type="button"
@@ -305,16 +220,10 @@ export function MemoryPanel({
                         cancelDelete()
                       }}
                     >
-                      {t({
-                        'zh-CN': '删除',
-                        'en-US': 'Delete',
-                      })}
+                      {ti('memory_panel.delete')}
                     </button>
                     <button type="button" onClick={cancelDelete}>
-                      {t({
-                        'zh-CN': '取消',
-                        'en-US': 'Cancel',
-                      })}
+                      {ti('memory_panel.cancel')}
                     </button>
                   </div>
                 </div>
@@ -323,16 +232,10 @@ export function MemoryPanel({
                   <p>{memory.content}</p>
                   <div className="memory-pill__actions">
                     <button type="button" onClick={() => startEditing(memory.id, memory.content)}>
-                      {t({
-                        'zh-CN': '编辑',
-                        'en-US': 'Edit',
-                      })}
+                      {ti('memory_panel.edit')}
                     </button>
                     <button type="button" onClick={() => confirmDelete(memory.id)}>
-                      {t({
-                        'zh-CN': '删除',
-                        'en-US': 'Delete',
-                      })}
+                      {ti('memory_panel.delete')}
                     </button>
                   </div>
                 </>
@@ -341,10 +244,7 @@ export function MemoryPanel({
           ))
         ) : (
           <div className="memory-empty">
-            {t({
-              'zh-CN': '现在还没有积累到长期记忆。多聊几句，或者手动补一条，她就会慢慢记住你。',
-              'en-US': 'There is no long-term memory yet. Talk a little more or add one manually, and it will gradually learn about you.',
-            })}
+            {ti('memory_panel.empty_long_term')}
           </div>
         )}
       </div>
@@ -352,15 +252,9 @@ export function MemoryPanel({
       <div className="memory-card__daily">
         <div className="settings-section__title-row">
           <div>
-            <h4>{t({
-              'zh-CN': '今日日志预览',
-              'en-US': "Today's diary preview",
-            })}</h4>
+            <h4>{ti('memory_panel.diary_preview_title')}</h4>
             <p className="settings-drawer__hint">
-              {t({
-                'zh-CN': '这里显示最近的日志片段，用来承接上下文，不会把整段聊天原样塞给模型。',
-                'en-US': 'This shows recent diary fragments used for context, without dumping the entire raw chat into the model.',
-              })}
+              {ti('memory_panel.diary_hint')}
             </p>
           </div>
         </div>
@@ -371,10 +265,7 @@ export function MemoryPanel({
               <article key={entry.id} className="memory-pill memory-pill--daily" onKeyDown={handleKeyDown}>
                 <span className="memory-pill__category">
                   {entry.role === 'user'
-                    ? t({
-                        'zh-CN': '你',
-                        'en-US': 'You',
-                      })
+                    ? ti('memory_panel.user_label')
                     : assistantName}
                 </span>
 
@@ -395,25 +286,16 @@ export function MemoryPanel({
                     {editError && <p className="memory-pill__error">{editError}</p>}
                     <div className="memory-pill__actions">
                       <button type="button" onClick={() => saveDailyEdit(entry.id, entry.day)}>
-                        {t({
-                          'zh-CN': '保存',
-                          'en-US': 'Save',
-                        })}
+                        {ti('memory_panel.save')}
                       </button>
                       <button type="button" onClick={cancelEditing}>
-                        {t({
-                          'zh-CN': '取消',
-                          'en-US': 'Cancel',
-                        })}
+                        {ti('memory_panel.cancel')}
                       </button>
                     </div>
                   </div>
                 ) : deletingId === entry.id ? (
                   <div className="memory-pill__confirm">
-                    <p>{t({
-                      'zh-CN': '确认删除这条日志？',
-                      'en-US': 'Delete this diary entry?',
-                    })}</p>
+                    <p>{ti('memory_panel.confirm_delete_diary')}</p>
                     <div className="memory-pill__actions">
                       <button
                         type="button"
@@ -422,16 +304,10 @@ export function MemoryPanel({
                           cancelDelete()
                         }}
                       >
-                        {t({
-                          'zh-CN': '删除',
-                          'en-US': 'Delete',
-                        })}
+                        {ti('memory_panel.delete')}
                       </button>
                       <button type="button" onClick={cancelDelete}>
-                        {t({
-                          'zh-CN': '取消',
-                          'en-US': 'Cancel',
-                        })}
+                        {ti('memory_panel.cancel')}
                       </button>
                     </div>
                   </div>
@@ -442,18 +318,12 @@ export function MemoryPanel({
                       <div className="memory-pill__actions">
                         {onUpdateDailyEntry && (
                           <button type="button" onClick={() => startEditing(entry.id, entry.content)}>
-                            {t({
-                              'zh-CN': '编辑',
-                              'en-US': 'Edit',
-                            })}
+                            {ti('memory_panel.edit')}
                           </button>
                         )}
                         {onRemoveDailyEntry && (
                           <button type="button" onClick={() => confirmDelete(entry.id)}>
-                            {t({
-                              'zh-CN': '删除',
-                              'en-US': 'Delete',
-                            })}
+                            {ti('memory_panel.delete')}
                           </button>
                         )}
                       </div>
@@ -464,10 +334,7 @@ export function MemoryPanel({
             ))
           ) : (
             <div className="memory-empty">
-              {t({
-                'zh-CN': '今天的日志还是空的。等你开始说话或聊天后，这里会自动积累当天的重要片段。',
-                'en-US': "Today's diary is still empty. Once you start talking or chatting, important moments from today will accumulate here automatically.",
-              })}
+              {ti('memory_panel.diary_empty')}
             </div>
           )}
         </div>
