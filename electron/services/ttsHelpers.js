@@ -1,5 +1,6 @@
 import { normalizeBaseUrl, normalizeLanguageCode } from '../net.js'
 import {
+  isEdgeTtsSpeechOutputProvider,
   isElevenLabsProvider,
   isOmniVoiceSpeechOutputProvider,
   isVolcengineSpeechOutputProvider,
@@ -13,6 +14,16 @@ export function resolveSpeechOutputBaseUrl(providerId, baseUrl) {
 
   if (isOmniVoiceSpeechOutputProvider(providerId)) {
     return normalized || 'http://127.0.0.1:8000/v1'
+  }
+
+  // Edge TTS talks to a fixed Microsoft WebSocket endpoint and doesn't
+  // use an HTTP baseUrl, but the !baseUrl gate in ttsService.js rejects
+  // empty strings for every provider. Return a marker so that gate passes
+  // — the actual Edge TTS branch never reads this value. Without it,
+  // selecting Edge TTS (no URL needed) triggers
+  // "请先填写语音输出 API Base URL。" and no audio plays.
+  if (isEdgeTtsSpeechOutputProvider(providerId)) {
+    return normalized || 'wss://speech.platform.bing.com'
   }
 
   return normalized

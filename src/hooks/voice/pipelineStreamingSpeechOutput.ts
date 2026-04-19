@@ -163,24 +163,26 @@ export function createPipelineStreamingSpeechController(
 }
 
 /**
- * Feature flag for the pipecat-style TTS pipeline. Phase 5 flipped the
- * default from "opt-in" to "default-on"; the legacy
- * streamingSpeechOutput controller stays available as an emergency
- * fallback. Flip via DevTools if the new path regresses:
+ * Feature flag for the pipecat-style TTS pipeline. Originally default-on,
+ * but in practice it stalls `waitForCompletion()` without emitting audio
+ * — the chat turn hits the 12 s "TTS wait timeout" and no sound ever
+ * plays. Rolled the default back to `false` so Edge TTS + other simple
+ * providers work out of the box. The new pipeline stays available for
+ * explicit opt-in while it's being debugged:
  *
- *   localStorage.setItem('nexus:useTtsPipeline', 'false')
+ *   localStorage.setItem('nexus:useTtsPipeline', 'true')
  *   location.reload()
  *
- * Default: true. Set to the string 'false' to explicitly opt out; any
- * other value (unset, 'true', '1') keeps the new pipeline active.
+ * Default: false. Any value other than exactly 'true' keeps the legacy
+ * streamingSpeechOutput controller (which worked reliably in v0.2.x).
  */
 export function isPipelineTtsEnabled(): boolean {
   try {
     if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
-      return window.localStorage.getItem('nexus:useTtsPipeline') !== 'false'
+      return window.localStorage.getItem('nexus:useTtsPipeline') === 'true'
     }
   } catch {
     // localStorage access can throw in some sandboxed renderer contexts.
   }
-  return true
+  return false
 }

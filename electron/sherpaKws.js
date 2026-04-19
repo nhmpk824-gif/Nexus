@@ -434,6 +434,10 @@ class SherpaKwsService {
       // Threshold/score tuned for short Chinese wake words (2 chars): the
       // default 0.25/1.0 is too strict for "星绘" and similar — acoustic
       // evidence is thin, so loosen the threshold and boost the keyword path.
+      // Dropped to 0.10 after real-world testing on low-gain headset mics
+      // (avgRms ~0.0005) consistently missed triggers at 0.15. 0.10 is the
+      // lowest value that still survives ambient keyboard / fan noise in
+      // short bench tests; drop further only if users still report misses.
       this.spotter = new sherpa.KeywordSpotter({
         featConfig: {
           sampleRate: SAMPLE_RATE,
@@ -441,8 +445,8 @@ class SherpaKwsService {
         },
         modelConfig: modelConfigPayload,
         keywordsFile: modelConfig.keywordsFile,
-        keywordsThreshold: 0.15,
-        keywordsScore: 2.0,
+        keywordsThreshold: 0.10,
+        keywordsScore: 2.5,
         maxActivePaths: 4,
         numTrailingBlanks: 2,
       })
