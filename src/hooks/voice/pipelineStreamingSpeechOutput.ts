@@ -59,10 +59,12 @@ export function createPipelineStreamingSpeechController(
   let aborted = false
   let onStartFired = false
 
-  // Head processor: observes frames for hasStarted/onStart telemetry. It
-  // forwards everything unchanged so the rest of the pipeline behaves
-  // as if it were the true head.
-  class HeadObserver extends FrameProcessor {
+  // Tail observer sits AFTER AudioPlayerSink so it can see AudioFrames —
+  // those are injected by TTSStreamService's IPC callback into the
+  // downstream chain, so anything upstream of TTSStreamService would
+  // never see them. Tracks hasAudio for hasStarted() and fires onStart
+  // on the first chunk that actually reaches the player.
+  class TailObserver extends FrameProcessor {
     async process(frame: Frame): Promise<void> {
       if (frame.type === 'audio' && !hasAudio) {
         hasAudio = true
@@ -76,7 +78,6 @@ export function createPipelineStreamingSpeechController(
   }
 
   const pipeline = new Pipeline([
-    new HeadObserver(),
     new SentenceAggregator({
       maxSentenceChars: getMaxRequestCharsForProvider(speechSettings.speechOutputProviderId),
     }),
@@ -85,17 +86,27 @@ export function createPipelineStreamingSpeechController(
       ipc: bridge,
     }),
     new AudioPlayerSink({ getPlayer: () => player }),
+    new TailObserver(),
   ])
 
-  // Kick the pipeline off with a StartFrame so aggregator/service/sink
-  // reset their per-turn state. Fire-and-forget; any error bubbles
-  // through the TTSStreamService's ErrorFrame path rather than throwing.
-  void pipeline.push(createStartFrame(turnId))
+  // Serialize every frame push through one chained promise so StartFrame
+  // has fully propagated (TTSStreamService sets activeTurnId/requestId,
+  // subscribes to IPC) before any TextDeltaFrame arrives. `void pipeline.push`
+  // would let those race and drop the first sentence as "stale turn".
+  let pushChain: Promise<void> = Promise.resolve()
+  const enqueue = (frame: Frame): Promise<void> => {
+    pushChain = pushChain.then(() => pipeline.push(frame)).catch((err) => {
+      console.error('[TTS pipeline] frame push failed:', err)
+    })
+    return pushChain
+  }
+
+  enqueue(createStartFrame(turnId))
 
   const controller: StreamingSpeechOutputController = {
     pushDelta(delta: string) {
       if (!delta || finishRequested || aborted) return
-      void pipeline.push(createTextDeltaFrame(turnId, delta))
+      void enqueue(createTextDeltaFrame(turnId, delta))
     },
 
     flushPending() {
@@ -111,11 +122,25 @@ export function createPipelineStreamingSpeechController(
 
       void (async () => {
         try {
-          await pipeline.push(createEndFrame(turnId))
+          await enqueue(createEndFrame(turnId))
           // TTSStreamService has called ttsStreamFinish; the main
           // process drains its chain and the last chunks are on their
-          // way. Wait for playback to actually finish.
-          await player.waitForDrain()
+          // way. Wait for playback to actually finish — but cap the
+          // wait so a dropped chunk path can't hang the completion
+          // promise forever (the upstream chat handler has its own 12 s
+          // limit; 10 s here lets us surface a cleaner error first).
+          const DRAIN_TIMEOUT_MS = 10_000
+          await Promise.race([
+            player.waitForDrain(),
+            new Promise<never>((_, reject) => {
+              setTimeout(
+                () => reject(new Error(hasAudio
+                  ? 'Pipeline drain timeout — some audio played but player never marked idle.'
+                  : 'Pipeline drain timeout — no audio ever reached the player.')),
+                DRAIN_TIMEOUT_MS,
+              )
+            }),
+          ])
           if (resolveCompletion) resolveCompletion()
           options?.onEnd?.()
         } catch (error) {
@@ -135,7 +160,7 @@ export function createPipelineStreamingSpeechController(
       finishRequested = true
       void (async () => {
         try {
-          await pipeline.push(createInterruptionFrame(turnId, 'abort-requested'))
+          await enqueue(createInterruptionFrame(turnId, 'abort-requested'))
         } catch {
           // InterruptionFrame propagation should never throw; if it
           // does, the abort signal is still delivered by stop() below.
