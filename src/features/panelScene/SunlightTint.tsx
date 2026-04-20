@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
 import type { PetTimePreview } from '../../types'
+import { PET_TIME_PREVIEW_HOURS } from './resolver.ts'
 import { resolveSunlightTone, resolveSunlightState, type SunlightState, type SunlightTone } from './sunlightState.ts'
 
 type SunlightTintProps = {
@@ -9,18 +10,9 @@ type SunlightTintProps = {
    * smooth across the day without hammering state. The CSS transition
    * on `filter` absorbs the step between readings so no abrupt jumps. */
   refreshIntervalMs?: number
-  /** When set to a specific band, lock the filter to that time of day
-   * (canonical hour of the band). 'auto' uses the real clock. */
+  /** When set to a specific time state, lock the filter to that state's
+   * canonical hour. 'auto' uses the real clock. */
   timePreview?: PetTimePreview
-}
-
-/** Canonical hours used when timePreview pins a band. Matches the
- * midpoint of each SunlightTone keyframe band so the preview looks
- * like the typical feel of that time. */
-const PREVIEW_HOUR: Record<Exclude<PetTimePreview, 'auto'>, number> = {
-  day: 12,
-  dusk: 18.5,
-  night: 22,
 }
 
 function dateAtHour(hoursDecimal: number): Date {
@@ -60,7 +52,7 @@ export function SunlightTint({
 
   const snapshot = timePreview !== 'auto'
     ? (() => {
-      const simulatedDate = dateAtHour(PREVIEW_HOUR[timePreview])
+      const simulatedDate = dateAtHour(PET_TIME_PREVIEW_HOURS[timePreview])
       return {
         tone: resolveSunlightTone(simulatedDate),
         state: resolveSunlightState(simulatedDate),

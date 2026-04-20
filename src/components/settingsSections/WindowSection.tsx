@@ -22,8 +22,19 @@ const PET_SCENE_LOCATION_OPTIONS: Array<{ id: PetSceneLocation; labelKey: Transl
 
 const PET_TIME_PREVIEW_OPTIONS: Array<{ id: PetTimePreview; labelKey: TranslationKey }> = [
   { id: 'auto', labelKey: 'settings.window.pet_time.auto' },
-  { id: 'day', labelKey: 'settings.window.pet_time.day' },
+  { id: 'deep_night', labelKey: 'settings.window.pet_time.deep_night' },
+  { id: 'late_night', labelKey: 'settings.window.pet_time.late_night' },
+  { id: 'predawn', labelKey: 'settings.window.pet_time.predawn' },
+  { id: 'dawn', labelKey: 'settings.window.pet_time.dawn' },
+  { id: 'sunrise', labelKey: 'settings.window.pet_time.sunrise' },
+  { id: 'morning', labelKey: 'settings.window.pet_time.morning' },
+  { id: 'late_morning', labelKey: 'settings.window.pet_time.late_morning' },
+  { id: 'noon', labelKey: 'settings.window.pet_time.noon' },
+  { id: 'afternoon', labelKey: 'settings.window.pet_time.afternoon' },
+  { id: 'golden_hour', labelKey: 'settings.window.pet_time.golden_hour' },
+  { id: 'sunset', labelKey: 'settings.window.pet_time.sunset' },
   { id: 'dusk', labelKey: 'settings.window.pet_time.dusk' },
+  { id: 'early_night', labelKey: 'settings.window.pet_time.early_night' },
   { id: 'night', labelKey: 'settings.window.pet_time.night' },
 ]
 

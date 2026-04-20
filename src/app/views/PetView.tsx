@@ -15,6 +15,7 @@ import { resolveCharacterPreset } from '../../features/character/presets'
 import {
   classifyWeatherCondition,
   getTimeOfDayBand,
+  PET_TIME_PREVIEW_BANDS,
   SceneBackdrop,
   SunlightTint,
   WeatherAmbient,
@@ -84,7 +85,9 @@ export function PetView({
     const intervalId = window.setInterval(update, 5 * 60 * 1000)
     return () => window.clearInterval(intervalId)
   }, [])
-  const timeBand = settings.petTimePreview !== 'auto' ? settings.petTimePreview : autoTimeBand
+  const timeBand = settings.petTimePreview !== 'auto'
+    ? PET_TIME_PREVIEW_BANDS[settings.petTimePreview]
+    : autoTimeBand
   const voiceStateLabel = getVoiceStateLabel(voice.voiceState, ti)
   const petSignalLabel = voice.voiceState !== 'idle'
     ? voiceStateLabel

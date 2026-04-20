@@ -113,7 +113,12 @@ export type PetSceneLocation =
   | 'fields'
   | 'mountain'
 
-export type PetTimePreview = 'auto' | 'day' | 'dusk' | 'night'
+export type PetTimePreview =
+  | 'auto'
+  | 'deep_night' | 'late_night' | 'predawn'
+  | 'dawn' | 'sunrise' | 'morning' | 'late_morning'
+  | 'noon' | 'afternoon' | 'golden_hour'
+  | 'sunset' | 'dusk' | 'early_night' | 'night'
 
 export type PetWeatherPreview =
   | 'auto'
