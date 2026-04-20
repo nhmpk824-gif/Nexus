@@ -1,4 +1,4 @@
-import { resolveLocalizedText } from '../../lib/uiLanguage.ts'
+import { pickTranslatedUiText } from '../../lib/uiLanguage.ts'
 import type { ReminderTask, ReminderTaskAction, ReminderTaskSchedule, UiLanguage } from '../../types'
 
 const MINUTE_MS = 60_000
@@ -41,19 +41,6 @@ function resolveReminderScheduleLocale(uiLanguage: UiLanguage) {
     default:
       return 'zh-CN'
   }
-}
-
-function pickReminderScheduleText(
-  uiLanguage: UiLanguage,
-  zhCN: string,
-  enUS: string,
-  zhTW = zhCN,
-) {
-  return resolveLocalizedText(uiLanguage, {
-    'zh-CN': zhCN,
-    'en-US': enUS,
-    'zh-TW': zhTW,
-  })
 }
 
 function normalizeReminderTaskAction(action: ReminderTaskAction | null | undefined): ReminderTaskAction {
@@ -404,7 +391,7 @@ export function formatReminderScheduleSummaryForUi(task: ReminderTask, uiLanguag
   if (task.schedule.kind === 'at') {
     const at = Date.parse(task.schedule.at)
     if (Number.isNaN(at)) {
-      return pickReminderScheduleText(uiLanguage, '一次性提醒', 'One-time reminder', '單次提醒')
+      return pickTranslatedUiText(uiLanguage, 'reminder.schedule.once')
     }
 
     return new Intl.DateTimeFormat(resolveReminderScheduleLocale(uiLanguage), {
@@ -417,7 +404,7 @@ export function formatReminderScheduleSummaryForUi(task: ReminderTask, uiLanguag
 
   if (task.schedule.kind === 'every') {
     const minutes = clampEveryMinutes(task.schedule.everyMinutes)
-    return pickReminderScheduleText(uiLanguage, `每 ${minutes} 分钟`, `Every ${minutes} min`, `每 ${minutes} 分鐘`)
+    return pickTranslatedUiText(uiLanguage, 'reminder.schedule.every_minutes', { minutes })
   }
 
   return `Cron: ${task.schedule.expression}`

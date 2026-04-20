@@ -1754,4 +1754,6 @@ export const zhTWMessages: TranslationDictionary = {
   'file.picker.canceled': '已取消開啟。',
   'file.picker.read_success': '已讀取 {fileName}',
   'file.picker.read_failed': '讀取檔案失敗，請稍後再試。',
+  'reminder.schedule.once': '單次提醒',
+  'reminder.schedule.every_minutes': '每 {minutes} 分鐘',
 }

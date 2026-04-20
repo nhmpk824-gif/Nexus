@@ -1754,4 +1754,6 @@ export const jaMessages: TranslationDictionary = {
   'file.picker.canceled': '開くのをキャンセルしました。',
   'file.picker.read_success': '{fileName} を読み込みました',
   'file.picker.read_failed': 'ファイルの読み込みに失敗しました。しばらくしてからお試しください。',
+  'reminder.schedule.once': '1回きりのリマインダー',
+  'reminder.schedule.every_minutes': '{minutes} 分ごと',
 }

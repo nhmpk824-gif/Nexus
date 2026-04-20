@@ -41,10 +41,13 @@ type LocalVoiceModelsStatusProps = {
 }
 
 export function LocalVoiceModelsStatus({ uiLanguage }: LocalVoiceModelsStatusProps) {
-  const ti = (
-    key: Parameters<typeof pickTranslatedUiText>[1],
-    params?: Parameters<typeof pickTranslatedUiText>[2],
-  ) => pickTranslatedUiText(uiLanguage, key, params)
+  const ti = useCallback(
+    (
+      key: Parameters<typeof pickTranslatedUiText>[1],
+      params?: Parameters<typeof pickTranslatedUiText>[2],
+    ) => pickTranslatedUiText(uiLanguage, key, params),
+    [uiLanguage],
+  )
   const [inventory, setInventory] = useState<ModelInventoryLike | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -78,7 +81,7 @@ export function LocalVoiceModelsStatus({ uiLanguage }: LocalVoiceModelsStatusPro
       }
     })
     return () => unsubscribe?.()
-  }, [refreshInventory])
+  }, [refreshInventory, ti])
 
   const handleDownload = useCallback(async () => {
     setDownloading(true)
@@ -97,7 +100,7 @@ export function LocalVoiceModelsStatus({ uiLanguage }: LocalVoiceModelsStatusPro
       setProgressText(null)
       void refreshInventory()
     }
-  }, [refreshInventory])
+  }, [refreshInventory, ti])
 
   // Bridge unavailable or pre-mount: render nothing so the step layout
   // doesn't get a phantom placeholder.

@@ -1754,4 +1754,6 @@ export const koMessages: TranslationDictionary = {
   'file.picker.canceled': '열기를 취소했어요.',
   'file.picker.read_success': '{fileName} 을(를) 읽었어요',
   'file.picker.read_failed': '파일 읽기에 실패했어요. 잠시 후 다시 시도해 주세요.',
+  'reminder.schedule.once': '1회성 알림',
+  'reminder.schedule.every_minutes': '{minutes} 분마다',
 }

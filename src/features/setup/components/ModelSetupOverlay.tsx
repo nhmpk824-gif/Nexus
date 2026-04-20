@@ -123,7 +123,7 @@ export function ModelSetupOverlay({ suppressed = false }: Props) {
     } finally {
       setBusy(false)
     }
-  }, [])
+  }, [t])
 
   const retryModel = useCallback(async (modelId: string) => {
     setErrorBanner(null)

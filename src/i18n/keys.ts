@@ -1751,4 +1751,6 @@ export const translationKeys: TranslationKey[] = [
   'file.picker.canceled',
   'file.picker.read_success',
   'file.picker.read_failed',
+  'reminder.schedule.once',
+  'reminder.schedule.every_minutes',
 ]
