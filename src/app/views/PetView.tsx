@@ -14,6 +14,7 @@ import { MusicPopupCard, PetControlIcon, PetDialogBubble, PetThoughtBubble } fro
 import { resolveCharacterPreset } from '../../features/character/presets'
 import {
   classifyWeatherCondition,
+  getTimeOfDayBand,
   SceneBackdrop,
   SunlightTint,
   WeatherAmbient,
@@ -77,6 +78,12 @@ export function PetView({
     },
     [ambientWeather, settings.petWeatherPreview],
   )
+  const [timeBand, setTimeBand] = useState(() => getTimeOfDayBand())
+  useEffect(() => {
+    const update = () => setTimeBand(getTimeOfDayBand())
+    const intervalId = window.setInterval(update, 5 * 60 * 1000)
+    return () => window.clearInterval(intervalId)
+  }, [])
   const voiceStateLabel = getVoiceStateLabel(voice.voiceState, ti)
   const petSignalLabel = voice.voiceState !== 'idle'
     ? voiceStateLabel
@@ -297,7 +304,7 @@ export function PetView({
           <div className="pet-window__stage-shell">
             <div className="pet-window__stage-backdrop" aria-hidden="true" />
             <SunlightTint>
-              <SceneBackdrop location={settings.petSceneLocation} />
+              <SceneBackdrop location={settings.petSceneLocation} timeBand={timeBand} />
               <WeatherAmbient condition={weatherCondition} />
             </SunlightTint>
             <div className="pet-window__stage-orbit pet-window__stage-orbit--large" aria-hidden="true" />

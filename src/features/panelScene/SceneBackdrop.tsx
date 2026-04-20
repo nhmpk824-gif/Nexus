@@ -1,40 +1,70 @@
 import type { PetSceneLocation } from '../../types'
-import cityImage from './scenes/city.jpg'
-import countrysideImage from './scenes/countryside.jpg'
-import seasideImage from './scenes/seaside.jpg'
-import fieldsImage from './scenes/fields.jpg'
-import mountainImage from './scenes/mountain.jpg'
+import type { TimeOfDayBand } from './weatherCondition.ts'
+import cityDay from './scenes/city.day.jpg'
+import cityDusk from './scenes/city.dusk.jpg'
+import cityNight from './scenes/city.night.jpg'
+import countrysideDay from './scenes/countryside.day.jpg'
+import countrysideDusk from './scenes/countryside.dusk.jpg'
+import countrysideNight from './scenes/countryside.night.jpg'
+import seasideDay from './scenes/seaside.day.jpg'
+import seasideDusk from './scenes/seaside.dusk.jpg'
+import seasideNight from './scenes/seaside.night.jpg'
+import fieldsDay from './scenes/fields.day.jpg'
+import fieldsDusk from './scenes/fields.dusk.jpg'
+import fieldsNight from './scenes/fields.night.jpg'
+import mountainDay from './scenes/mountain.day.jpg'
+import mountainDusk from './scenes/mountain.dusk.jpg'
+import mountainNight from './scenes/mountain.night.jpg'
 
 type SceneBackdropProps = {
   location: PetSceneLocation
+  timeBand: TimeOfDayBand
 }
 
-const SCENE_IMAGES: Record<Exclude<PetSceneLocation, 'off'>, string> = {
-  city: cityImage,
-  countryside: countrysideImage,
-  seaside: seasideImage,
-  fields: fieldsImage,
-  mountain: mountainImage,
+type SceneVariants = Record<TimeOfDayBand, string>
+
+const SCENE_IMAGES: Record<Exclude<PetSceneLocation, 'off'>, SceneVariants> = {
+  city: { day: cityDay, dusk: cityDusk, night: cityNight },
+  countryside: { day: countrysideDay, dusk: countrysideDusk, night: countrysideNight },
+  seaside: { day: seasideDay, dusk: seasideDusk, night: seasideNight },
+  fields: { day: fieldsDay, dusk: fieldsDusk, night: fieldsNight },
+  mountain: { day: mountainDay, dusk: mountainDusk, night: mountainNight },
 }
 
 /**
- * Bottom layer of the 3-layer pet stage — a static anime-style painting
- * picked by the user. Images are hand-prompted Flux/SD outputs bundled
- * with the app so there's zero runtime fetch + zero ugly geometric
- * placeholder fallback.
+ * Bottom layer of the 3-layer pet stage. Each scene ships three
+ * hand-prompted variants — day / dusk / night — and we swap between
+ * them as the clock moves across bands. Within a band, the SunlightTint
+ * filter does the per-minute fine-tuning (brightness/saturation/hue).
  *
- * Layered above this (via SunlightTint parent): the animated weather
- * particles and the 14-state time-of-day color wash. The scene image
- * itself is neutral enough that the sunlight tint shifts the feel
- * across the day without fighting baked-in lighting.
+ * Renders both the active variant and a ghost of the other two stacked
+ * behind it so CSS transitions (opacity) can crossfade between them
+ * instead of flicker-cutting when the time band flips.
  */
-export function SceneBackdrop({ location }: SceneBackdropProps) {
+export function SceneBackdrop({ location, timeBand }: SceneBackdropProps) {
   if (location === 'off') return null
-  const src = SCENE_IMAGES[location]
+  const variants = SCENE_IMAGES[location]
 
   return (
     <div className={`scene-backdrop scene-backdrop--${location}`} aria-hidden="true">
-      <img className="scene-backdrop__art" src={src} alt="" draggable={false} />
+      <img
+        className={`scene-backdrop__art scene-backdrop__art--day${timeBand === 'day' ? ' is-active' : ''}`}
+        src={variants.day}
+        alt=""
+        draggable={false}
+      />
+      <img
+        className={`scene-backdrop__art scene-backdrop__art--dusk${timeBand === 'dusk' ? ' is-active' : ''}`}
+        src={variants.dusk}
+        alt=""
+        draggable={false}
+      />
+      <img
+        className={`scene-backdrop__art scene-backdrop__art--night${timeBand === 'night' ? ' is-active' : ''}`}
+        src={variants.night}
+        alt=""
+        draggable={false}
+      />
     </div>
   )
 }

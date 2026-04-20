@@ -18,38 +18,30 @@ export interface SunlightTone {
 }
 
 /**
- * Keyframe table: (hour, tone). Linearly interpolated at runtime. Keep
- * hueRotate magnitude small — CSS hue-rotate shifts all hues uniformly,
- * so ±12deg is about the max before greens turn weird blue. Warmth at
- * golden hour comes more from saturation bump than hue-rotate.
+ * Keyframe table: (hour, tone). Linearly interpolated at runtime.
+ * Since SceneBackdrop now ships dedicated day/dusk/night artwork,
+ * the filter only needs to fine-tune *within* each band — it's no
+ * longer responsible for turning daylight into night. That means
+ * gentler brightness/saturation moves across the day and subtle
+ * (rather than aggressive) color shifts.
  */
 const KEYFRAMES: ReadonlyArray<readonly [hour: number, tone: SunlightTone]> = [
-  [0,     { brightness: 0.3,  saturation: 0.45, hueRotate: -12 }],
-  [2,     { brightness: 0.3,  saturation: 0.45, hueRotate: -12 }],
-  [4,     { brightness: 0.4,  saturation: 0.55, hueRotate: -10 }],
-  [5,     { brightness: 0.52, saturation: 0.7,  hueRotate: -6 }],
-  [5.75,  { brightness: 0.68, saturation: 0.85, hueRotate: 0 }],
-  [6.5,   { brightness: 0.8,  saturation: 0.95, hueRotate: 3 }],
-  [7.25,  { brightness: 0.9,  saturation: 1.0,  hueRotate: 2 }],
-  [8,     { brightness: 0.96, saturation: 1.0,  hueRotate: 1 }],
-  [9,     { brightness: 0.99, saturation: 1.0,  hueRotate: 0 }],
-  [10,    { brightness: 1.02, saturation: 1.0,  hueRotate: 0 }],
-  [11,    { brightness: 1.05, saturation: 1.02, hueRotate: 0 }],
-  [12,    { brightness: 1.08, saturation: 1.03, hueRotate: 0 }],
-  [13,    { brightness: 1.07, saturation: 1.03, hueRotate: 0 }],
-  [14,    { brightness: 1.05, saturation: 1.02, hueRotate: 0 }],
-  [15,    { brightness: 1.02, saturation: 1.0,  hueRotate: 1 }],
-  [16,    { brightness: 0.98, saturation: 1.02, hueRotate: 3 }],
-  [16.75, { brightness: 0.92, saturation: 1.08, hueRotate: 6 }],
-  [17.25, { brightness: 0.85, saturation: 1.1,  hueRotate: 8 }],
-  [17.75, { brightness: 0.76, saturation: 1.05, hueRotate: 5 }],
-  [18.25, { brightness: 0.66, saturation: 0.98, hueRotate: 2 }],
-  [18.75, { brightness: 0.56, saturation: 0.88, hueRotate: -2 }],
-  [19.5,  { brightness: 0.46, saturation: 0.72, hueRotate: -6 }],
-  [20.5,  { brightness: 0.38, saturation: 0.58, hueRotate: -9 }],
-  [21.5,  { brightness: 0.33, saturation: 0.5,  hueRotate: -11 }],
-  [22.5,  { brightness: 0.3,  saturation: 0.45, hueRotate: -12 }],
-  [24,    { brightness: 0.3,  saturation: 0.45, hueRotate: -12 }],
+  [0,    { brightness: 0.9,  saturation: 1.0,  hueRotate: 0 }],   // deep night — art is already dark
+  [4,    { brightness: 0.95, saturation: 1.0,  hueRotate: 0 }],
+  [5,    { brightness: 1.0,  saturation: 1.0,  hueRotate: 0 }],
+  [6,    { brightness: 0.95, saturation: 1.0,  hueRotate: 0 }],   // dawn (dusk art shows)
+  [7,    { brightness: 0.98, saturation: 1.02, hueRotate: 0 }],
+  [8,    { brightness: 1.0,  saturation: 1.0,  hueRotate: 0 }],   // day art begins
+  [10,   { brightness: 1.04, saturation: 1.02, hueRotate: 0 }],
+  [12,   { brightness: 1.08, saturation: 1.04, hueRotate: 0 }],   // noon peak
+  [14,   { brightness: 1.06, saturation: 1.03, hueRotate: 0 }],
+  [16,   { brightness: 1.0,  saturation: 1.02, hueRotate: 0 }],
+  [17,   { brightness: 0.98, saturation: 1.04, hueRotate: 0 }],   // just before dusk
+  [18,   { brightness: 1.0,  saturation: 1.05, hueRotate: 0 }],   // dusk art takes over
+  [19,   { brightness: 0.95, saturation: 1.02, hueRotate: 0 }],
+  [20,   { brightness: 0.92, saturation: 1.0,  hueRotate: 0 }],   // night art takes over
+  [22,   { brightness: 0.9,  saturation: 1.0,  hueRotate: 0 }],
+  [24,   { brightness: 0.9,  saturation: 1.0,  hueRotate: 0 }],
 ]
 
 export function resolveSunlightTone(date: Date = new Date()): SunlightTone {
