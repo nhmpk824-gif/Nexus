@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
+import { useTranslation } from '../../i18n/useTranslation.ts'
 import type { PetModelDefinition } from '../../features/pet'
 import type { ConnectionResult } from '../settingsDrawerSupport'
 import type { AppSettings } from '../../types'
@@ -16,6 +17,7 @@ export function usePetModelImport({
   onImportPetModel,
   setDraft,
 }: UsePetModelImportOptions) {
+  const { t } = useTranslation()
   const [importingPetModel, setImportingPetModel] = useState(false)
   const [petModelStatus, setPetModelStatus] = useState<ConnectionResult | null>(null)
 
@@ -41,7 +43,7 @@ export function usePetModelImport({
     } catch (error) {
       setPetModelStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '导入本地 Live2D 模型失败，请稍后再试。',
+        message: error instanceof Error ? error.message : t('settings.pet.import_error'),
       })
     } finally {
       setImportingPetModel(false)

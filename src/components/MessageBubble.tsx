@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import type { ReactNode } from 'react'
+import { useTranslation } from '../i18n/useTranslation.ts'
 import type { ChatMessage } from '../types'
 import { ToolResultCard } from './ToolResultCard'
 
@@ -55,12 +56,14 @@ function renderLinkedContent(content: string) {
   return parts.length ? parts : content
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, assistantName = '星绘' }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message, assistantName }: MessageBubbleProps) {
+  const { t } = useTranslation()
+  const resolvedAssistantName = assistantName ?? t('message_bubble.role.assistant_default')
   const speakerLabel = message.role === 'assistant'
-    ? assistantName
+    ? resolvedAssistantName
     : message.role === 'system'
-      ? '系统'
-      : '你'
+      ? t('message_bubble.role.system')
+      : t('message_bubble.role.user')
   const timestampLabel = formatMessageTimestamp(message.createdAt)
 
   const bubbleClassName = [
@@ -87,7 +90,7 @@ export const MessageBubble = memo(function MessageBubble({ message, assistantNam
               <img
                 key={`${message.id}-img-${index}`}
                 src={url}
-                alt="附加图片"
+                alt={t('message_bubble.image_alt')}
                 className="message-bubble__image"
               />
             ))}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from '../../i18n/useTranslation.ts'
 import type { ConnectionResult } from '../settingsDrawerSupport'
 import type { DailyMemoryEntry, MemoryItem } from '../../types'
 
@@ -28,6 +29,7 @@ export function useMemoryArchiveActions({
   onImportMemoryArchive,
   onClearMemoryArchive,
 }: UseMemoryArchiveActionsOptions) {
+  const { t } = useTranslation()
   const [memoryArchiveStatus, setMemoryArchiveStatus] = useState<ConnectionResult | null>(null)
   const [exportingMemoryArchive, setExportingMemoryArchive] = useState(false)
   const [importingMemoryArchive, setImportingMemoryArchive] = useState(false)
@@ -50,7 +52,7 @@ export function useMemoryArchiveActions({
     } catch (error) {
       setMemoryArchiveStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '导出记忆库失败，请稍后再试。',
+        message: error instanceof Error ? error.message : t('settings.memory.export_error'),
       })
     } finally {
       setExportingMemoryArchive(false)
@@ -59,7 +61,7 @@ export function useMemoryArchiveActions({
 
   async function handleImportMemoryArchive() {
     if (memories.length || dailyMemoryEntries.length) {
-      const confirmed = window.confirm('导入会替换当前长期记忆和每日日志。要继续吗？')
+      const confirmed = window.confirm(t('settings.memory.import_confirm'))
       if (!confirmed) {
         return
       }
@@ -81,7 +83,7 @@ export function useMemoryArchiveActions({
     } catch (error) {
       setMemoryArchiveStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '导入记忆库失败，请稍后再试。',
+        message: error instanceof Error ? error.message : t('settings.memory.import_error'),
       })
     } finally {
       setImportingMemoryArchive(false)
@@ -92,12 +94,12 @@ export function useMemoryArchiveActions({
     if (!memories.length && !dailyMemoryEntries.length) {
       setMemoryArchiveStatus({
         ok: false,
-        message: '当前没有可清空的记忆内容。',
+        message: t('settings.memory.nothing_to_clear'),
       })
       return
     }
 
-    const confirmed = window.confirm('确认清空当前长期记忆和每日日志吗？')
+    const confirmed = window.confirm(t('settings.memory.clear_confirm'))
     if (!confirmed) {
       return
     }
@@ -118,7 +120,7 @@ export function useMemoryArchiveActions({
     } catch (error) {
       setMemoryArchiveStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '清空记忆库失败，请稍后再试。',
+        message: error instanceof Error ? error.message : t('settings.memory.clear_error'),
       })
     } finally {
       setClearingMemoryArchive(false)

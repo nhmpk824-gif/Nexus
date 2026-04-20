@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from '../../i18n/useTranslation.ts'
 import type { PetWindowState } from '../../types'
 
 export type UseWindowStateSyncOptions = {
@@ -6,6 +7,7 @@ export type UseWindowStateSyncOptions = {
 }
 
 export function useWindowStateSync({ open }: UseWindowStateSyncOptions) {
+  const { t } = useTranslation()
   const [petWindowState, setPetWindowState] = useState<PetWindowState>({
     isPinned: true,
     clickThrough: false,
@@ -60,13 +62,13 @@ export function useWindowStateSync({ open }: UseWindowStateSyncOptions) {
     }
 
     windowStateTouchedRef.current = true
-    setWindowStatusMessage('正在同步桌面状态…')
+    setWindowStatusMessage(t('settings.window.syncing'))
     try {
       await window.desktopPet?.updatePetWindowState?.(nextState)
       setPetWindowState(nextState)
-      setWindowStatusMessage('桌面行为已同步')
+      setWindowStatusMessage(t('settings.window.synced'))
     } catch {
-      setWindowStatusMessage('桌面行为同步失败，请重试')
+      setWindowStatusMessage(t('settings.window.sync_failed'))
     }
   }
 

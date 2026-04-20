@@ -10,7 +10,6 @@ import {
   switchSpeechOutputProvider,
   switchTextProvider,
   clampPresenceIntervalMinutes,
-  resolveLocalizedText,
   UI_LANGUAGE_OPTIONS,
 } from '../lib'
 import { pickTranslatedUiText } from '../lib/uiLanguage'
@@ -228,10 +227,6 @@ export function SettingsDrawer({
   const petModel = petModelPresets.find((preset) => preset.id === draft.petModelId) ?? petModelPresets[0]
 
   const uiLanguage = draft.uiLanguage
-  const t = (zhCN: string, enUS: string) => resolveLocalizedText(uiLanguage, {
-    'zh-CN': zhCN,
-    'en-US': enUS,
-  })
   const ti = (
     key: Parameters<typeof pickTranslatedUiText>[1],
     params?: Parameters<typeof pickTranslatedUiText>[2],
@@ -365,7 +360,7 @@ export function SettingsDrawer({
         className="settings-drawer"
         role="dialog"
         aria-modal="true"
-        aria-label={t(`${settings.companionName} 设置面板`, `${settings.companionName} settings panel`)}
+        aria-label={ti('settings.panel', { name: settings.companionName })}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="settings-drawer__header">
@@ -373,7 +368,7 @@ export function SettingsDrawer({
             <div className="settings-drawer__title-stack">
               <h3 className="settings-drawer__window-title">
                 <span className="settings-drawer__window-title-name">{draft.companionName}</span>
-                <span className="settings-drawer__window-title-label">{t('设置', 'Settings')}</span>
+                <span className="settings-drawer__window-title-label">{ti('settings.title')}</span>
               </h3>
             </div>
 
@@ -396,7 +391,7 @@ export function SettingsDrawer({
                 </select>
               </label>
               <button type="button" className="ghost-button" onClick={handleDismiss}>
-                {t('关闭', 'Close')}
+                {ti('common.close')}
               </button>
             </div>
           </div>
@@ -431,7 +426,7 @@ export function SettingsDrawer({
               <div className="settings-page__header">
                 <button type="button" className="settings-page__back" onClick={handleReturnToSettingsHome}>
                   <span aria-hidden="true">{'<'}</span>
-                  <span>{t('返回卡片', 'Back to cards')}</span>
+                  <span>{ti('settings.page.back')}</span>
                 </button>
 
                 <div className="settings-page__headline">
@@ -616,7 +611,7 @@ export function SettingsDrawer({
 
       <div className="settings-drawer__actions">
         <button type="button" className="ghost-button" onClick={handleDismiss}>
-          {t('取消', 'Cancel')}
+          {ti('common.cancel')}
         </button>
         <button
           type="button"
@@ -629,7 +624,7 @@ export function SettingsDrawer({
               ),
             })}
         >
-          {t('保存设置', 'Save settings')}
+          {ti('settings.save')}
         </button>
       </div>
       </aside>

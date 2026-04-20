@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from '../../i18n/useTranslation.ts'
 import type { ConnectionResult } from '../settingsDrawerSupport'
 
 export type UseChatHistoryActionsOptions = {
@@ -25,6 +26,7 @@ export function useChatHistoryActions({
   onImportChatHistory,
   onClearChatHistory,
 }: UseChatHistoryActionsOptions) {
+  const { t } = useTranslation()
   const [chatHistoryStatus, setChatHistoryStatus] = useState<ConnectionResult | null>(null)
   const [exportingChatHistory, setExportingChatHistory] = useState(false)
   const [importingChatHistory, setImportingChatHistory] = useState(false)
@@ -47,7 +49,7 @@ export function useChatHistoryActions({
     } catch (error) {
       setChatHistoryStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '导出聊天记录失败，请稍后再试。',
+        message: error instanceof Error ? error.message : t('settings.chat_history.export_error'),
       })
     } finally {
       setExportingChatHistory(false)
@@ -56,7 +58,7 @@ export function useChatHistoryActions({
 
   async function handleImportChatHistory() {
     if (chatMessageCount > 0) {
-      const confirmed = window.confirm('导入会替换当前聊天记录，但不会改动记忆库。要继续吗？')
+      const confirmed = window.confirm(t('settings.chat_history.import_confirm'))
       if (!confirmed) {
         return
       }
@@ -78,7 +80,7 @@ export function useChatHistoryActions({
     } catch (error) {
       setChatHistoryStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '导入聊天记录失败，请稍后再试。',
+        message: error instanceof Error ? error.message : t('settings.chat_history.import_error'),
       })
     } finally {
       setImportingChatHistory(false)
@@ -89,12 +91,12 @@ export function useChatHistoryActions({
     if (!chatMessageCount) {
       setChatHistoryStatus({
         ok: false,
-        message: '当前没有可清空的聊天记录。',
+        message: t('settings.chat_history.nothing_to_clear'),
       })
       return
     }
 
-    const confirmed = window.confirm('确认清空当前聊天记录吗？这不会删除长期记忆和每日日志。')
+    const confirmed = window.confirm(t('settings.chat_history.clear_confirm'))
     if (!confirmed) {
       return
     }
@@ -115,7 +117,7 @@ export function useChatHistoryActions({
     } catch (error) {
       setChatHistoryStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '清空聊天记录失败，请稍后再试。',
+        message: error instanceof Error ? error.message : t('settings.chat_history.clear_error'),
       })
     } finally {
       setClearingChatHistory(false)

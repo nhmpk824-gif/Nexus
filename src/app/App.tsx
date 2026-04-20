@@ -4,6 +4,7 @@ import './App.css'
 import { useAppController } from './controllers'
 import { PetView, PanelView } from './views'
 import { ModelSetupOverlay } from '../features/setup/components/ModelSetupOverlay'
+import { t as translate } from '../i18n/runtime.ts'
 
 class AppErrorBoundary extends Component<
   { children: ReactNode },
@@ -23,9 +24,9 @@ class AppErrorBoundary extends Component<
     if (this.state.error) {
       return (
         <div style={{ padding: 32, fontFamily: 'system-ui', color: '#333' }}>
-          <h2 style={{ margin: '0 0 12px' }}>出了点问题</h2>
+          <h2 style={{ margin: '0 0 12px' }}>{translate('app.error_boundary.title')}</h2>
           <p style={{ margin: '0 0 16px', color: '#666' }}>
-            应用遇到意外错误，请重启应用。
+            {translate('app.error_boundary.body')}
           </p>
           <pre style={{ fontSize: 12, color: '#999', whiteSpace: 'pre-wrap' }}>
             {this.state.error.message}
@@ -42,7 +43,7 @@ class AppErrorBoundary extends Component<
             }}
             onClick={() => window.location.reload()}
           >
-            重新加载
+            {translate('app.error_boundary.reload')}
           </button>
         </div>
       )

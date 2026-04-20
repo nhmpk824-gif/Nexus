@@ -3,6 +3,7 @@ import {
   getAvailableSpeechSynthesisVoices,
   getFallbackSpeechOutputVoices,
 } from '../../lib'
+import { useTranslation } from '../../i18n/useTranslation.ts'
 import type { ConnectionResult } from '../settingsDrawerSupport'
 import type {
   AppSettings,
@@ -27,11 +28,12 @@ export function useSpeechVoiceManagement({
   onPreviewSpeech,
   onRunAudioSmokeTest,
 }: UseSpeechVoiceManagementOptions) {
+  const { t } = useTranslation()
   const [speechVoiceOptions, setSpeechVoiceOptions] = useState<SpeechVoiceOption[]>([])
   const [speechVoiceStatus, setSpeechVoiceStatus] = useState<ConnectionResult | null>(null)
   const [loadingSpeechVoices, setLoadingSpeechVoices] = useState(false)
-  const [speechPreviewText, setSpeechPreviewText] = useState(
-    `你好，我是${settings.companionName}，现在来试一下当前的语音播报。`,
+  const [speechPreviewText, setSpeechPreviewText] = useState(() =>
+    t('settings.voice.test_message', { companionName: settings.companionName }),
   )
   const [previewingSpeech, setPreviewingSpeech] = useState(false)
   const [speechPreviewStatus, setSpeechPreviewStatus] = useState<ConnectionResult | null>(null)
@@ -104,7 +106,7 @@ export function useSpeechVoiceManagement({
       if (showStatus) {
         setSpeechVoiceStatus({
           ok: false,
-          message: error instanceof Error ? error.message : '拉取在线音色列表失败，请稍后再试。',
+          message: error instanceof Error ? error.message : t('settings.voice.fetch_voices_error'),
         })
       }
     } finally {
@@ -118,7 +120,7 @@ export function useSpeechVoiceManagement({
     if (!previewText) {
       setSpeechPreviewStatus({
         ok: false,
-        message: '请先填写一段试听文本。',
+        message: t('settings.voice.empty_preview_text'),
       })
       return
     }
@@ -135,7 +137,7 @@ export function useSpeechVoiceManagement({
     } catch (error) {
       setSpeechPreviewStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '试听失败，请稍后再试。',
+        message: error instanceof Error ? error.message : t('settings.voice.preview_error'),
       })
     } finally {
       setPreviewingSpeech(false)
@@ -152,7 +154,7 @@ export function useSpeechVoiceManagement({
     } catch (error) {
       setAudioSmokeStatus({
         ok: false,
-        message: error instanceof Error ? error.message : '音频链路自检失败，请稍后再试。',
+        message: error instanceof Error ? error.message : t('settings.voice.audio_smoke_error'),
       })
     } finally {
       setRunningAudioSmoke(false)
@@ -174,7 +176,7 @@ export function useSpeechVoiceManagement({
   }
 
   function syncPreviewText(companionName: string) {
-    setSpeechPreviewText(`你好，我是${companionName}，现在来试一下当前的语音播报。`)
+    setSpeechPreviewText(t('settings.voice.test_message', { companionName }))
   }
 
   return {

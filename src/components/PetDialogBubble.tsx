@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from '../i18n/useTranslation.ts'
 import type { PetDialogBubbleState } from '../types'
 import { ToolResultCard } from './ToolResultCard'
 
@@ -58,16 +59,24 @@ function shouldPreferToolOnlyContent(bubble: PetDialogBubbleState) {
   return bubble.toolResult?.kind === 'web_search'
 }
 
-export function PetDialogBubble({ bubble, assistantName = '星绘' }: PetDialogBubbleProps) {
+export function PetDialogBubble({ bubble, assistantName }: PetDialogBubbleProps) {
+  const { t } = useTranslation()
+  const resolvedAssistantName = assistantName ?? t('pet_bubble.assistant_default')
   const showTextContent = Boolean(bubble.content.trim()) && !shouldPreferToolOnlyContent(bubble)
   const timestampLabel = formatBubbleTimestamp(bubble.createdAt)
+
+  const metaLabel = bubble.streaming
+    ? t('pet_bubble.streaming_label')
+    : bubble.toolResult
+      ? t('pet_bubble.tool_result_label')
+      : t('pet_bubble.reply_label')
 
   return (
     <aside className={`pet-dialog-bubble ${bubble.streaming ? 'is-streaming' : ''}`} aria-live="polite">
       <div className="pet-dialog-bubble__label">
-        <span>{assistantName}</span>
+        <span>{resolvedAssistantName}</span>
         <span className="pet-dialog-bubble__label-meta">
-          <span>{bubble.streaming ? '整理中' : bubble.toolResult ? '结果展示' : '回复'}</span>
+          <span>{metaLabel}</span>
           {timestampLabel ? <span className="pet-dialog-bubble__timestamp">{timestampLabel}</span> : null}
         </span>
       </div>

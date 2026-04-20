@@ -1,4 +1,5 @@
 import { memo, useEffect, useState } from 'react'
+import { useTranslation } from '../i18n/useTranslation.ts'
 import { planStore, type Plan } from '../features/plan/planStore'
 
 function pickActivePlan(plans: Plan[]): Plan | undefined {
@@ -6,6 +7,7 @@ function pickActivePlan(plans: Plan[]): Plan | undefined {
 }
 
 export const ActivePlanStrip = memo(function ActivePlanStrip() {
+  const { t } = useTranslation()
   const [activePlan, setActivePlan] = useState<Plan | undefined>(() =>
     pickActivePlan(planStore.list()),
   )
@@ -49,14 +51,14 @@ export const ActivePlanStrip = memo(function ActivePlanStrip() {
       >
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontSize: 11, color: '#94a3b8', letterSpacing: 0.5 }}>
-            执行中
+            {t('plan_strip.executing')}
           </span>
           <span style={{ fontSize: 13, color: '#e2e8f0', flex: 1, fontWeight: 600 }}>
             {activePlan.goal}
           </span>
           <span style={{ fontSize: 11, color: failed ? '#f87171' : '#64748b' }}>
             {completed}/{total}
-            {failed ? ` · ${failed} 失败` : ''}
+            {failed ? t('plan_strip.failed_suffix', { count: failed }) : ''}
           </span>
         </div>
         <div
