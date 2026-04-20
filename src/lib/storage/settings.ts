@@ -11,7 +11,6 @@ import {
 } from '../audioProviders.ts'
 import { inferApiProviderId } from '../apiProviders.ts'
 import {
-  normalizePanelSceneMode,
   normalizePetSceneLocation,
   normalizePetTimePreview,
   normalizePetWeatherPreview,
@@ -53,7 +52,6 @@ const defaultSettings: AppSettings = {
   petModelId: DEFAULT_PET_MODEL_ID,
   uiLanguage: 'zh-CN',
   themeId: 'nexus-default',
-  panelSceneMode: 'auto',
   ambientWeatherEnabled: false,
   petSceneLocation: 'off',
   petWeatherPreview: 'auto',
@@ -376,7 +374,6 @@ export function loadSettings(): AppSettings {
     settingsSchemaVersion: CURRENT_SETTINGS_SCHEMA_VERSION,
     uiLanguage: resolvedUiLanguage,
     themeId: resolveThemeId(stored.themeId),
-    panelSceneMode: normalizePanelSceneMode(stored.panelSceneMode),
     ambientWeatherEnabled: stored.ambientWeatherEnabled === true,
     petSceneLocation: normalizePetSceneLocation(stored.petSceneLocation),
     petWeatherPreview: normalizePetWeatherPreview(stored.petWeatherPreview),

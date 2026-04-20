@@ -12,7 +12,6 @@ import {
 import { getLiveTranscriptLabel, getTimeGreeting, getVoiceStateLabel } from '../appSupport'
 import { ActivePlanStrip, MessageBubble, SubagentTaskStrip } from '../../components'
 import { resolveCharacterPreset } from '../../features/character/presets'
-import { resolveActivePanelScene } from '../../features/panelScene'
 import { useAmbientWeather } from '../../hooks/useAmbientWeather'
 import { shorten } from '../../lib'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
@@ -54,28 +53,6 @@ export function PanelView({
   ) => pickTranslatedUiText(settings.uiLanguage, key, params)
   const characterPreset = useMemo(() => resolveCharacterPreset(), [])
   const timeGreeting = getTimeGreeting(ti)
-
-  // Re-evaluate the panel scene every 10 minutes so the 'auto' mode drifts
-  // with the clock without needing the user to reopen the panel. Manual
-  // mode returns the same scene on every tick — the sentinel still bumps
-  // but React bails on identical prop values, no wasted renders.
-  const [sceneTick, setSceneTick] = useState(0)
-  useEffect(() => {
-    if (settings.panelSceneMode !== 'auto') return
-    const intervalId = window.setInterval(() => {
-      setSceneTick((prev) => prev + 1)
-    }, 10 * 60 * 1000)
-    return () => window.clearInterval(intervalId)
-  }, [settings.panelSceneMode])
-  const activePanelScene = useMemo(
-    () => resolveActivePanelScene(settings.panelSceneMode),
-    // sceneTick is an intentional invalidation key that bumps every 10
-    // minutes so the resolver re-reads `new Date()` even when the mode
-    // hasn't changed — the memo body doesn't reference it directly.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [settings.panelSceneMode, sceneTick],
-  )
-  const panelSceneClassName = activePanelScene ? `panel-scene--${activePanelScene}` : ''
 
   const ambientWeather = useAmbientWeather(
     settings.toolWeatherDefaultLocation,
@@ -318,7 +295,7 @@ export function PanelView({
   }, [visibleMessages])
 
   return (
-    <div className={`desktop-pet-root desktop-pet-root--panel ${characterPreset.themeClassName} ${panelSceneClassName} ${panelCollapsed ? 'desktop-pet-root--panel-collapsed' : ''}`}>
+    <div className={`desktop-pet-root desktop-pet-root--panel ${characterPreset.themeClassName} ${panelCollapsed ? 'desktop-pet-root--panel-collapsed' : ''}`}>
       <section className={`panel-window panel-window--simple panel-window--companion ${panelCollapsed ? 'is-collapsed' : ''}`}>
         {panelCollapsed ? (
           <>

@@ -1,6 +1,5 @@
 import { memo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { PanelSceneMode } from '../../features/panelScene'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type {
   AppSettings,
@@ -11,18 +10,6 @@ import type {
   TranslationKey,
   UiLanguage,
 } from '../../types'
-
-// Panel scene mode options resolved to i18n keys at render time so the
-// dropdown labels actually change when the user switches UI language.
-const PANEL_SCENE_OPTIONS: Array<{ id: PanelSceneMode; labelKey: TranslationKey }> = [
-  { id: 'off', labelKey: 'settings.window.panel_scene.off' },
-  { id: 'auto', labelKey: 'settings.window.panel_scene.auto' },
-  { id: 'morning', labelKey: 'settings.window.panel_scene.morning' },
-  { id: 'noon', labelKey: 'settings.window.panel_scene.noon' },
-  { id: 'afternoon', labelKey: 'settings.window.panel_scene.afternoon' },
-  { id: 'dusk', labelKey: 'settings.window.panel_scene.dusk' },
-  { id: 'night', labelKey: 'settings.window.panel_scene.night' },
-]
 
 const PET_SCENE_LOCATION_OPTIONS: Array<{ id: PetSceneLocation; labelKey: TranslationKey }> = [
   { id: 'off', labelKey: 'settings.window.pet_scene.off' },
@@ -130,27 +117,6 @@ export const WindowSection = memo(function WindowSection({
       </label>
 
       <p className="settings-drawer__hint">{ti('settings.window.click_through_note')}</p>
-
-      <label>
-        <span>{ti('settings.window.panel_scene_label')}</span>
-        <select
-          value={draft.panelSceneMode}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              panelSceneMode: event.target.value as typeof prev.panelSceneMode,
-            }))
-          }
-        >
-          {PANEL_SCENE_OPTIONS.map((option) => (
-            <option key={option.id} value={option.id}>
-              {ti(option.labelKey)}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <p className="settings-drawer__hint">{ti('settings.window.panel_scene_hint')}</p>
 
       <label>
         <span>{ti('settings.window.pet_scene_label')}</span>
