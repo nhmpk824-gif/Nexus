@@ -30,17 +30,11 @@
 }
 
 .desktop-pet-root--panel {
-  position: relative;
   min-height: 100vh;
   padding: 18px;
-  overflow: hidden;
+  overflow: visible;
   background: #0a0c10;
   transition: background 1.2s ease;
-}
-
-.desktop-pet-root--panel > .panel-window {
-  position: relative;
-  z-index: 1;
 }
 
 /*

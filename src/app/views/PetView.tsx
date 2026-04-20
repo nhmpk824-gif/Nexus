@@ -12,6 +12,8 @@ import {
 import { getVoiceStateLabel, pickHoverReaction } from '../appSupport'
 import { MusicPopupCard, PetControlIcon, PetDialogBubble, PetThoughtBubble } from '../../components'
 import { resolveCharacterPreset } from '../../features/character/presets'
+import { classifyWeatherCondition, WeatherAmbient } from '../../features/panelScene'
+import { useAmbientWeather } from '../../hooks/useAmbientWeather'
 import { clamp } from '../../lib'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type { PetTouchZone } from '../../types'
@@ -58,6 +60,18 @@ export function PetView({
     params?: Parameters<typeof pickTranslatedUiText>[2],
   ) => pickTranslatedUiText(settings.uiLanguage, key, params)
   const characterPreset = useMemo(() => resolveCharacterPreset(), [])
+  const ambientWeather = useAmbientWeather(
+    settings.ambientWeatherLocation,
+    settings.ambientWeatherEnabled,
+  )
+  const weatherCondition = useMemo(
+    () => (
+      ambientWeather
+        ? classifyWeatherCondition(ambientWeather.weatherCode, ambientWeather.windSpeedKmh)
+        : null
+    ),
+    [ambientWeather],
+  )
   const voiceStateLabel = getVoiceStateLabel(voice.voiceState, ti)
   const petSignalLabel = voice.voiceState !== 'idle'
     ? voiceStateLabel
@@ -277,6 +291,7 @@ export function PetView({
         >
           <div className="pet-window__stage-shell">
             <div className="pet-window__stage-backdrop" aria-hidden="true" />
+            <WeatherAmbient condition={weatherCondition} />
             <div className="pet-window__stage-orbit pet-window__stage-orbit--large" aria-hidden="true" />
             <div className="pet-window__stage-orbit pet-window__stage-orbit--small" aria-hidden="true" />
 

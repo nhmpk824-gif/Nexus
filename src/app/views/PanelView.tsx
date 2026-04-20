@@ -12,7 +12,7 @@ import {
 import { getLiveTranscriptLabel, getTimeGreeting, getVoiceStateLabel } from '../appSupport'
 import { ActivePlanStrip, MessageBubble, SubagentTaskStrip } from '../../components'
 import { resolveCharacterPreset } from '../../features/character/presets'
-import { classifyWeatherCondition, resolveActivePanelScene, WeatherAmbient } from '../../features/panelScene'
+import { resolveActivePanelScene } from '../../features/panelScene'
 import { useAmbientWeather } from '../../hooks/useAmbientWeather'
 import { shorten } from '../../lib'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
@@ -80,14 +80,6 @@ export function PanelView({
   const ambientWeather = useAmbientWeather(
     settings.ambientWeatherLocation,
     settings.ambientWeatherEnabled,
-  )
-  const weatherCondition = useMemo(
-    () => (
-      ambientWeather && settings.panelSceneMode !== 'off'
-        ? classifyWeatherCondition(ambientWeather.weatherCode, ambientWeather.windSpeedKmh)
-        : null
-    ),
-    [ambientWeather, settings.panelSceneMode],
   )
   const voiceStateLabel = getVoiceStateLabel(voice.voiceState, ti)
   const nextSchedulerStatusLabel = runtimeSnapshot.schedulerArmed
@@ -327,7 +319,6 @@ export function PanelView({
 
   return (
     <div className={`desktop-pet-root desktop-pet-root--panel ${characterPreset.themeClassName} ${panelSceneClassName} ${panelCollapsed ? 'desktop-pet-root--panel-collapsed' : ''}`}>
-      <WeatherAmbient condition={weatherCondition} />
       <section className={`panel-window panel-window--simple panel-window--companion ${panelCollapsed ? 'is-collapsed' : ''}`}>
         {panelCollapsed ? (
           <>
@@ -373,6 +364,9 @@ export function PanelView({
                     className="ambient-weather-chip"
                     title={ambientWeather.fullSummary || ambientWeather.resolvedName}
                   >
+                    <span className="ambient-weather-chip__condition">
+                      {ambientWeather.conditionLabel || ti('panel.weather.fallback_label')}
+                    </span>
                     {ambientWeather.temperatureC !== null ? (
                       <span className="ambient-weather-chip__temp">
                         {Math.round(ambientWeather.temperatureC)}°
