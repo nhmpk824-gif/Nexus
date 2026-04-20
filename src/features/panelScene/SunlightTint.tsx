@@ -1,41 +1,53 @@
 import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
-import { resolveSunlightState, type SunlightState } from './sunlightState.ts'
+import type { ReactNode, CSSProperties } from 'react'
+import { resolveSunlightTone, resolveSunlightState, type SunlightState, type SunlightTone } from './sunlightState.ts'
 
 type SunlightTintProps = {
   children?: ReactNode
-  /** Re-check the clock this often (ms). Default 2 minutes — sunlight moods
-   * change gradually enough that 2-minute granularity is plenty, and the
-   * CSS transition between states smooths any visible step. */
+  /** Re-check the clock this often (ms). 60s keeps the filter glide
+   * smooth across the day without hammering state. The CSS transition
+   * on `filter` absorbs the step between readings so no abrupt jumps. */
   refreshIntervalMs?: number
 }
 
 /**
- * Top layer of the 3-layer pet stage — a container that re-binds the scene
- * palette (via CSS custom properties on `.scene-sunlight--<state>`) as the
- * clock advances through 14 hand-designed time-of-day moods. Places the
- * scene backdrop + animated overlay inside so the palette flows down.
- *
- * The overlay itself paints a subtle wash over the children, tuned per
- * state to match the mood (e.g. warm gold at golden hour, cool blue at
- * deep night). Opacity is small (<15%) so it tints rather than dominates.
+ * Time-of-day layer. Applies a CSS `filter` chain to the whole scene
+ * stack (backdrop + weather particles) that scales brightness,
+ * saturation, and hue-rotation so the image actually *looks* like the
+ * time of day — not just dimmer. Night is cool + desaturated; noon is
+ * neutral; golden hour bumps saturation slightly for that amber glow.
+ * Per-weather *color* washes still live in WeatherAmbient and stack on
+ * top of this exposure treatment.
  */
 export function SunlightTint({
   children,
-  refreshIntervalMs = 2 * 60 * 1000,
+  refreshIntervalMs = 60 * 1000,
 }: SunlightTintProps) {
-  const [state, setState] = useState<SunlightState>(() => resolveSunlightState())
+  const [snapshot, setSnapshot] = useState<{ tone: SunlightTone; state: SunlightState }>(() => ({
+    tone: resolveSunlightTone(),
+    state: resolveSunlightState(),
+  }))
 
   useEffect(() => {
-    const update = () => setState(resolveSunlightState())
+    const update = () => setSnapshot({
+      tone: resolveSunlightTone(),
+      state: resolveSunlightState(),
+    })
     const intervalId = window.setInterval(update, refreshIntervalMs)
     return () => window.clearInterval(intervalId)
   }, [refreshIntervalMs])
 
+  const { tone, state } = snapshot
+  const inlineStyle: CSSProperties = {
+    filter: `brightness(${tone.brightness.toFixed(3)}) saturate(${tone.saturation.toFixed(3)}) hue-rotate(${tone.hueRotate.toFixed(2)}deg)`,
+  }
+
   return (
-    <div className={`scene-sunlight scene-sunlight--${state}`}>
+    <div
+      className={`scene-sunlight scene-sunlight--${state}`}
+      style={inlineStyle}
+    >
       {children}
-      <div className="scene-sunlight__wash" aria-hidden="true" />
     </div>
   )
 }
