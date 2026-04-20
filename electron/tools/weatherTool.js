@@ -592,5 +592,6 @@ export async function lookupWeatherByLocation(location, fallbackLocation = '') {
     currentTemperature: Number.isFinite(currentTemperature) ? currentTemperature : null,
     currentWeatherCode: Number.isFinite(Number(current.weather_code)) ? Number(current.weather_code) : null,
     currentConditionLabel: getWeatherCodeDescription(current.weather_code),
+    currentWindSpeedKmh: Number.isFinite(currentWind) ? currentWind : null,
   }
 }

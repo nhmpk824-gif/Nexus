@@ -30,11 +30,17 @@
 }
 
 .desktop-pet-root--panel {
+  position: relative;
   min-height: 100vh;
   padding: 18px;
-  overflow: visible;
+  overflow: hidden;
   background: #0a0c10;
   transition: background 1.2s ease;
+}
+
+.desktop-pet-root--panel > .panel-window {
+  position: relative;
+  z-index: 1;
 }
 
 /*
@@ -5089,5 +5095,340 @@
   }
   .model-setup-card__actions {
     border-color: #2f3649;
+  }
+}
+
+/* ============================================================
+   Weather ambient layer — animated overlay drawn behind the chat
+   panel-window. Composes on top of .panel-scene--* gradients and
+   below .panel-window. `aria-hidden="true"` on the JSX root keeps
+   it out of accessibility tree; pointer-events: none keeps it
+   non-interactive. All animations are pure CSS so the GPU
+   compositor handles them with effectively zero CPU cost.
+   ============================================================ */
+.weather-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  animation: weather-ambient-fade-in 420ms ease forwards;
+  --weather-tint: transparent;
+  --weather-line-color: rgba(255, 255, 255, 0.55);
+  --weather-glow-color: rgba(255, 220, 150, 0.32);
+}
+
+@keyframes weather-ambient-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.weather-ambient__tint {
+  position: absolute;
+  inset: 0;
+  background: var(--weather-tint);
+  transition: background 1.2s ease;
+}
+
+/* ── Time-of-day tint layer ─────────────────────────────────── */
+.weather-ambient--day {
+  --weather-line-color: rgba(255, 255, 255, 0.6);
+  --weather-glow-color: rgba(255, 220, 150, 0.32);
+  --weather-tint: transparent;
+}
+.weather-ambient--dusk {
+  --weather-line-color: rgba(255, 195, 170, 0.55);
+  --weather-glow-color: rgba(255, 150, 100, 0.28);
+  --weather-tint: radial-gradient(
+    ellipse at 50% 100%,
+    rgba(200, 80, 120, 0.14),
+    rgba(60, 40, 80, 0.08) 60%,
+    transparent 90%
+  );
+}
+.weather-ambient--night {
+  --weather-line-color: rgba(180, 200, 255, 0.45);
+  --weather-glow-color: rgba(130, 160, 255, 0.22);
+  --weather-tint: linear-gradient(
+    180deg,
+    rgba(10, 18, 40, 0.2) 0%,
+    rgba(15, 20, 40, 0.12) 100%
+  );
+}
+
+/* ── Clear / Sunny ──────────────────────────────────────────── */
+.weather-ambient--clear .weather-ambient__sun-glow {
+  position: absolute;
+  top: -80px;
+  right: -80px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--weather-glow-color) 0%,
+    transparent 70%
+  );
+  animation: weather-sun-pulse 6s ease-in-out infinite;
+}
+
+.weather-ambient--clear .weather-ambient__sun-rays {
+  position: absolute;
+  top: -160px;
+  right: -160px;
+  width: 480px;
+  height: 480px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--weather-glow-color) 12deg,
+    transparent 24deg,
+    transparent 60deg,
+    var(--weather-glow-color) 72deg,
+    transparent 84deg,
+    transparent 120deg,
+    var(--weather-glow-color) 132deg,
+    transparent 144deg,
+    transparent 240deg,
+    var(--weather-glow-color) 252deg,
+    transparent 264deg,
+    transparent 300deg,
+    var(--weather-glow-color) 312deg,
+    transparent 324deg
+  );
+  opacity: 0.35;
+  mix-blend-mode: screen;
+  animation: weather-sun-rays-rotate 60s linear infinite;
+}
+
+.weather-ambient--clear.weather-ambient--night .weather-ambient__sun-glow {
+  /* "Sun" becomes a moonlit pool at night. */
+  background: radial-gradient(
+    circle,
+    rgba(200, 215, 255, 0.22) 0%,
+    transparent 70%
+  );
+}
+.weather-ambient--clear.weather-ambient--night .weather-ambient__sun-rays {
+  opacity: 0.18;
+}
+
+@keyframes weather-sun-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50%      { transform: scale(1.05); opacity: 1; }
+}
+
+@keyframes weather-sun-rays-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Cloudy ─────────────────────────────────────────────────── */
+.weather-ambient--cloudy .weather-ambient__clouds {
+  position: absolute;
+  inset: 0;
+}
+
+.weather-ambient--cloudy .weather-ambient__cloud {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(32px);
+  background: rgba(230, 235, 245, 0.18);
+  animation: weather-cloud-drift 80s linear infinite;
+}
+
+.weather-ambient--cloudy.weather-ambient--night .weather-ambient__cloud {
+  background: rgba(140, 155, 195, 0.15);
+}
+
+.weather-ambient--cloudy .weather-ambient__cloud--1 {
+  top: 12%;
+  left: -15%;
+  width: 260px;
+  height: 120px;
+  animation-delay: 0s;
+  animation-duration: 90s;
+}
+.weather-ambient--cloudy .weather-ambient__cloud--2 {
+  top: 40%;
+  left: -25%;
+  width: 360px;
+  height: 160px;
+  animation-delay: -35s;
+  animation-duration: 110s;
+  opacity: 0.75;
+}
+.weather-ambient--cloudy .weather-ambient__cloud--3 {
+  top: 68%;
+  left: -20%;
+  width: 220px;
+  height: 100px;
+  animation-delay: -60s;
+  animation-duration: 100s;
+  opacity: 0.6;
+}
+
+@keyframes weather-cloud-drift {
+  from { transform: translateX(0); }
+  to   { transform: translateX(140vw); }
+}
+
+/* ── Fog ────────────────────────────────────────────────────── */
+.weather-ambient--fog .weather-ambient__fog-a,
+.weather-ambient--fog .weather-ambient__fog-b {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(220, 225, 235, 0.18) 30%,
+    rgba(220, 225, 235, 0.22) 50%,
+    rgba(220, 225, 235, 0.18) 70%,
+    transparent 100%
+  );
+  filter: blur(18px);
+}
+
+.weather-ambient--fog .weather-ambient__fog-a {
+  animation: weather-fog-drift-a 50s ease-in-out infinite alternate;
+}
+.weather-ambient--fog .weather-ambient__fog-b {
+  animation: weather-fog-drift-b 70s ease-in-out infinite alternate;
+  opacity: 0.6;
+}
+
+.weather-ambient--fog.weather-ambient--night .weather-ambient__fog-a,
+.weather-ambient--fog.weather-ambient--night .weather-ambient__fog-b {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(120, 135, 160, 0.22) 30%,
+    rgba(120, 135, 160, 0.26) 50%,
+    rgba(120, 135, 160, 0.22) 70%,
+    transparent 100%
+  );
+}
+
+@keyframes weather-fog-drift-a {
+  from { transform: translateX(-20%); }
+  to   { transform: translateX(20%); }
+}
+@keyframes weather-fog-drift-b {
+  from { transform: translateX(30%); }
+  to   { transform: translateX(-30%); }
+}
+
+/* ── Rain / Thunder ─────────────────────────────────────────── */
+.weather-ambient__rain {
+  position: absolute;
+  inset: 0;
+}
+
+.weather-ambient__raindrop {
+  position: absolute;
+  top: -30px;
+  width: 1.5px;
+  height: 22px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--weather-line-color) 40%,
+    var(--weather-line-color) 100%
+  );
+  opacity: 0.6;
+  animation-name: weather-rain-fall;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+@keyframes weather-rain-fall {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-20px, 105vh, 0); }
+}
+
+.weather-ambient--thunder .weather-ambient__flash {
+  position: absolute;
+  inset: 0;
+  background: rgba(235, 240, 255, 0.85);
+  opacity: 0;
+  mix-blend-mode: screen;
+  animation: weather-thunder-flash 9s linear infinite;
+}
+
+@keyframes weather-thunder-flash {
+  0%, 92%, 97%, 100% { opacity: 0; }
+  93%, 93.5%          { opacity: 0.6; }
+  94%                 { opacity: 0.1; }
+  94.5%, 95%          { opacity: 0.8; }
+  96%                 { opacity: 0; }
+}
+
+/* ── Snow ───────────────────────────────────────────────────── */
+.weather-ambient__snow {
+  position: absolute;
+  inset: 0;
+}
+
+.weather-ambient__snowflake {
+  position: absolute;
+  top: -12px;
+  border-radius: 50%;
+  background: var(--weather-line-color);
+  opacity: 0.75;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+  animation-name: weather-snow-fall;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+@keyframes weather-snow-fall {
+  0%   { transform: translate3d(0, 0, 0); }
+  50%  { transform: translate3d(20px, 50vh, 0); }
+  100% { transform: translate3d(-10px, 105vh, 0); }
+}
+
+/* ── Wind (anime speed lines) ────────────────────────────────── */
+.weather-ambient__wind {
+  position: absolute;
+  inset: 0;
+}
+
+.weather-ambient__wind-streak {
+  position: absolute;
+  left: -80px;
+  height: 1.2px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    var(--weather-line-color) 50%,
+    transparent 100%
+  );
+  opacity: 0.7;
+  animation-name: weather-wind-streak;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-out;
+  transform: translateX(0);
+}
+
+@keyframes weather-wind-streak {
+  0%   { transform: translateX(0); opacity: 0; }
+  15%  { opacity: 0.7; }
+  85%  { opacity: 0.7; }
+  100% { transform: translateX(110vw); opacity: 0; }
+}
+
+/* ── Reduced motion: freeze every animation, keep only tints ── */
+@media (prefers-reduced-motion: reduce) {
+  .weather-ambient *,
+  .weather-ambient {
+    animation: none !important;
+    transition: none !important;
+  }
+  .weather-ambient__raindrop,
+  .weather-ambient__snowflake,
+  .weather-ambient__wind-streak,
+  .weather-ambient__flash {
+    display: none;
   }
 }

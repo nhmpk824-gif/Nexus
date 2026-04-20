@@ -12,6 +12,8 @@ export type AmbientWeatherSnapshot = {
   temperatureC: number | null
   conditionLabel: string
   fullSummary: string
+  weatherCode: number | null
+  windSpeedKmh: number | null
   fetchedAt: number
 }
 
@@ -68,6 +70,8 @@ export function useAmbientWeather(
           temperatureC: temperature,
           conditionLabel: typed.currentConditionLabel ?? '',
           fullSummary: typed.currentSummary ?? '',
+          weatherCode: typeof typed.currentWeatherCode === 'number' ? typed.currentWeatherCode : null,
+          windSpeedKmh: typeof typed.currentWindSpeedKmh === 'number' ? typed.currentWindSpeedKmh : null,
           fetchedAt: Date.now(),
         })
       } catch (err) {
@@ -104,6 +108,8 @@ export function useAmbientWeather(
       temperatureC: taggedSnapshot.temperatureC,
       conditionLabel: taggedSnapshot.conditionLabel,
       fullSummary: taggedSnapshot.fullSummary,
+      weatherCode: taggedSnapshot.weatherCode,
+      windSpeedKmh: taggedSnapshot.windSpeedKmh,
       fetchedAt: taggedSnapshot.fetchedAt,
     }
   }, [enabled, trimmedLocation, taggedSnapshot])

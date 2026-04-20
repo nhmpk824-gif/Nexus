@@ -117,6 +117,7 @@ export interface WeatherLookupResponse {
   currentTemperature?: number | null
   currentWeatherCode?: number | null
   currentConditionLabel?: string
+  currentWindSpeedKmh?: number | null
 }
 
 export interface ExternalLinkRequest {
