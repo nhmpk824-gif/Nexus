@@ -1757,4 +1757,12 @@ export const zhCNMessages: TranslationDictionary = {
   'reminder.schedule.once': '一次性提醒',
   'reminder.schedule.every_minutes': '每 {minutes} 分钟',
   'settings.language_menu.aria_label': '切换界面语言',
+  'settings.window.pet_scene_label': '桌宠背景场景',
+  'settings.window.pet_scene_hint': '桌宠身后的静态贴图。选中后会叠加实时天气动画（第二层）和按时间变化的阳光色调（第三层，14 段）。',
+  'settings.window.pet_scene.off': '不显示',
+  'settings.window.pet_scene.city': '城市',
+  'settings.window.pet_scene.countryside': '乡村',
+  'settings.window.pet_scene.seaside': '海边',
+  'settings.window.pet_scene.fields': '田野',
+  'settings.window.pet_scene.mountain': '山间林间',
 }

@@ -1757,4 +1757,12 @@ export const zhTWMessages: TranslationDictionary = {
   'reminder.schedule.once': '單次提醒',
   'reminder.schedule.every_minutes': '每 {minutes} 分鐘',
   'settings.language_menu.aria_label': '切換介面語言',
+  'settings.window.pet_scene_label': '桌寵背景場景',
+  'settings.window.pet_scene_hint': '桌寵身後的靜態貼圖。選中後會疊加即時天氣動畫（第二層）和依時段變化的陽光色調（第三層，14 段）。',
+  'settings.window.pet_scene.off': '不顯示',
+  'settings.window.pet_scene.city': '城市',
+  'settings.window.pet_scene.countryside': '鄉村',
+  'settings.window.pet_scene.seaside': '海邊',
+  'settings.window.pet_scene.fields': '田野',
+  'settings.window.pet_scene.mountain': '山間林間',
 }

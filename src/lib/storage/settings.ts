@@ -10,7 +10,7 @@ import {
   resolveSpeechInputModel,
 } from '../audioProviders.ts'
 import { inferApiProviderId } from '../apiProviders.ts'
-import { normalizePanelSceneMode } from '../../features/panelScene/resolver.ts'
+import { normalizePanelSceneMode, normalizePetSceneLocation } from '../../features/panelScene/resolver.ts'
 import { clampPresenceIntervalMinutes } from '../settings.ts'
 import {
   CURRENT_SETTINGS_SCHEMA_VERSION,
@@ -50,6 +50,7 @@ const defaultSettings: AppSettings = {
   themeId: 'nexus-default',
   panelSceneMode: 'auto',
   ambientWeatherEnabled: false,
+  petSceneLocation: 'off',
   apiProviderId: 'openai',
   companionName: '星绘',
   userName: '主人',
@@ -370,6 +371,7 @@ export function loadSettings(): AppSettings {
     themeId: resolveThemeId(stored.themeId),
     panelSceneMode: normalizePanelSceneMode(stored.panelSceneMode),
     ambientWeatherEnabled: stored.ambientWeatherEnabled === true,
+    petSceneLocation: normalizePetSceneLocation(stored.petSceneLocation),
     apiProviderId: inferredProviderId,
     speechInputProviderId: effectiveSpeechInputProviderId,
     speechInputApiBaseUrl,

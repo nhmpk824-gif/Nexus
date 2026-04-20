@@ -5426,3 +5426,246 @@
     display: none;
   }
 }
+
+/* ============================================================
+   3-layer pet-stage backdrop
+   (1) SceneBackdrop — static SVG silhouette per location
+   (2) WeatherAmbient — animated weather particles (already above)
+   (3) SunlightTint — 14 time-of-day palettes + subtle wash
+   All three sit inside .pet-window__stage-shell, behind .orbit
+   rings and the Live2D character.
+   ============================================================ */
+
+.scene-sunlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* Default palette — replaced per .scene-sunlight--<state> below. */
+  --scene-sky-top: #1a2040;
+  --scene-sky-mid: #27345b;
+  --scene-sky-bottom: #394b74;
+  --scene-silhouette-far: rgba(45, 50, 85, 0.8);
+  --scene-silhouette-mid: rgba(30, 35, 65, 0.9);
+  --scene-silhouette-near: rgba(18, 22, 40, 0.98);
+  --scene-accent: #f8d88a;
+  --sunlight-wash: transparent;
+  --sunlight-wash-opacity: 0;
+  transition:
+    --scene-sky-top 2s ease,
+    --scene-sky-mid 2s ease,
+    --scene-sky-bottom 2s ease,
+    --scene-silhouette-far 2s ease,
+    --scene-silhouette-mid 2s ease,
+    --scene-silhouette-near 2s ease,
+    --scene-accent 2s ease;
+}
+
+.scene-sunlight__wash {
+  position: absolute;
+  inset: 0;
+  background: var(--sunlight-wash);
+  opacity: var(--sunlight-wash-opacity);
+  mix-blend-mode: overlay;
+  transition: opacity 2s ease, background 2s ease;
+  pointer-events: none;
+}
+
+/* Scene backdrop shell — full-fill the stage. */
+.scene-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.scene-backdrop__art {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── 14 sunlight states ─────────────────────────────────────
+   Each state sets a full palette. The scene's SVG gradients /
+   fills consume these vars, so all five scenes retune in sync
+   with the clock.
+   Color choices biased for anime-style gradients: sharper hue
+   shifts at the dramatic moments (sunrise / sunset), softer
+   transitions during midday and midnight.
+   ──────────────────────────────────────────────────────────── */
+
+.scene-sunlight--deep_night {
+  --scene-sky-top: #07091a;
+  --scene-sky-mid: #0d1331;
+  --scene-sky-bottom: #181f45;
+  --scene-silhouette-far: #1b2145;
+  --scene-silhouette-mid: #11152f;
+  --scene-silhouette-near: #060812;
+  --scene-accent: #c9d6ff;
+  --sunlight-wash: radial-gradient(circle at 50% 0%, rgba(120, 150, 220, 0.22), transparent 70%);
+  --sunlight-wash-opacity: 0.45;
+}
+
+.scene-sunlight--late_night {
+  --scene-sky-top: #0a1030;
+  --scene-sky-mid: #141a44;
+  --scene-sky-bottom: #1f2860;
+  --scene-silhouette-far: #1e2552;
+  --scene-silhouette-mid: #141a3a;
+  --scene-silhouette-near: #070a18;
+  --scene-accent: #dbe4ff;
+  --sunlight-wash: radial-gradient(circle at 50% 0%, rgba(130, 160, 230, 0.2), transparent 70%);
+  --sunlight-wash-opacity: 0.35;
+}
+
+.scene-sunlight--predawn {
+  --scene-sky-top: #1a1d40;
+  --scene-sky-mid: #2a2a55;
+  --scene-sky-bottom: #45395a;
+  --scene-silhouette-far: #2e2b4d;
+  --scene-silhouette-mid: #1c1a38;
+  --scene-silhouette-near: #0b0d1c;
+  --scene-accent: #ffc8a6;
+  --sunlight-wash: linear-gradient(180deg, rgba(40, 40, 90, 0.15) 0%, rgba(160, 100, 120, 0.1) 100%);
+  --sunlight-wash-opacity: 0.4;
+}
+
+.scene-sunlight--dawn {
+  --scene-sky-top: #3e2f5c;
+  --scene-sky-mid: #7a4a6a;
+  --scene-sky-bottom: #d89b84;
+  --scene-silhouette-far: #4a3a64;
+  --scene-silhouette-mid: #2c2342;
+  --scene-silhouette-near: #130f1f;
+  --scene-accent: #ffd4a0;
+  --sunlight-wash: linear-gradient(180deg, rgba(80, 60, 120, 0.1) 0%, rgba(240, 150, 120, 0.18) 100%);
+  --sunlight-wash-opacity: 0.5;
+}
+
+.scene-sunlight--sunrise {
+  --scene-sky-top: #6a4a7e;
+  --scene-sky-mid: #e27a6e;
+  --scene-sky-bottom: #fcc89a;
+  --scene-silhouette-far: #6b4062;
+  --scene-silhouette-mid: #3c2638;
+  --scene-silhouette-near: #1a1021;
+  --scene-accent: #ffeec5;
+  --sunlight-wash: linear-gradient(180deg, rgba(200, 120, 150, 0.08) 0%, rgba(255, 180, 130, 0.2) 100%);
+  --sunlight-wash-opacity: 0.55;
+}
+
+.scene-sunlight--morning {
+  --scene-sky-top: #7ab5da;
+  --scene-sky-mid: #b6d7ec;
+  --scene-sky-bottom: #f4ecc7;
+  --scene-silhouette-far: #7689a6;
+  --scene-silhouette-mid: #53607e;
+  --scene-silhouette-near: #2f374d;
+  --scene-accent: #fff8d4;
+  --sunlight-wash: linear-gradient(180deg, rgba(255, 240, 200, 0.14), rgba(255, 230, 170, 0.08));
+  --sunlight-wash-opacity: 0.45;
+}
+
+.scene-sunlight--late_morning {
+  --scene-sky-top: #8cc3e3;
+  --scene-sky-mid: #c6e0ef;
+  --scene-sky-bottom: #eef2ef;
+  --scene-silhouette-far: #7e92ae;
+  --scene-silhouette-mid: #5c6986;
+  --scene-silhouette-near: #333b52;
+  --scene-accent: #ffffff;
+  --sunlight-wash: linear-gradient(180deg, rgba(255, 255, 230, 0.12), transparent);
+  --sunlight-wash-opacity: 0.35;
+}
+
+.scene-sunlight--noon {
+  --scene-sky-top: #7dc5e8;
+  --scene-sky-mid: #b3dbef;
+  --scene-sky-bottom: #e8edea;
+  --scene-silhouette-far: #8092ac;
+  --scene-silhouette-mid: #606d8a;
+  --scene-silhouette-near: #394258;
+  --scene-accent: #ffffff;
+  --sunlight-wash: radial-gradient(circle at 50% 0%, rgba(255, 255, 240, 0.15), transparent 60%);
+  --sunlight-wash-opacity: 0.35;
+}
+
+.scene-sunlight--afternoon {
+  --scene-sky-top: #99c8e0;
+  --scene-sky-mid: #d6d0b8;
+  --scene-sky-bottom: #eabf95;
+  --scene-silhouette-far: #7e7a8f;
+  --scene-silhouette-mid: #5c596e;
+  --scene-silhouette-near: #322f40;
+  --scene-accent: #fff1c5;
+  --sunlight-wash: linear-gradient(180deg, rgba(255, 220, 160, 0.12), rgba(255, 200, 140, 0.08));
+  --sunlight-wash-opacity: 0.4;
+}
+
+.scene-sunlight--golden_hour {
+  --scene-sky-top: #b49ac8;
+  --scene-sky-mid: #e8a07a;
+  --scene-sky-bottom: #f4c88a;
+  --scene-silhouette-far: #6b5670;
+  --scene-silhouette-mid: #463850;
+  --scene-silhouette-near: #221a2a;
+  --scene-accent: #ffe6a0;
+  --sunlight-wash: linear-gradient(180deg, rgba(255, 180, 110, 0.1) 0%, rgba(255, 210, 130, 0.22) 100%);
+  --sunlight-wash-opacity: 0.55;
+}
+
+.scene-sunlight--sunset {
+  --scene-sky-top: #5d3a6e;
+  --scene-sky-mid: #d55d6c;
+  --scene-sky-bottom: #f0a268;
+  --scene-silhouette-far: #4a2b5a;
+  --scene-silhouette-mid: #2b1838;
+  --scene-silhouette-near: #14091c;
+  --scene-accent: #ffd5b0;
+  --sunlight-wash: linear-gradient(180deg, rgba(210, 90, 110, 0.1) 0%, rgba(240, 150, 100, 0.22) 100%);
+  --sunlight-wash-opacity: 0.55;
+}
+
+.scene-sunlight--dusk {
+  --scene-sky-top: #2a2450;
+  --scene-sky-mid: #5c3a70;
+  --scene-sky-bottom: #9a557a;
+  --scene-silhouette-far: #35294e;
+  --scene-silhouette-mid: #1b1432;
+  --scene-silhouette-near: #080616;
+  --scene-accent: #f9b98f;
+  --sunlight-wash: linear-gradient(180deg, rgba(60, 40, 100, 0.14) 0%, rgba(180, 90, 120, 0.12) 100%);
+  --sunlight-wash-opacity: 0.5;
+}
+
+.scene-sunlight--early_night {
+  --scene-sky-top: #0e1434;
+  --scene-sky-mid: #1a2050;
+  --scene-sky-bottom: #2f2e63;
+  --scene-silhouette-far: #1e2348;
+  --scene-silhouette-mid: #121636;
+  --scene-silhouette-near: #060816;
+  --scene-accent: #c9d6ff;
+  --sunlight-wash: radial-gradient(circle at 50% 0%, rgba(120, 150, 220, 0.22), transparent 70%);
+  --sunlight-wash-opacity: 0.4;
+}
+
+.scene-sunlight--night {
+  --scene-sky-top: #0a0f28;
+  --scene-sky-mid: #141a40;
+  --scene-sky-bottom: #1f2656;
+  --scene-silhouette-far: #1b2144;
+  --scene-silhouette-mid: #0f132c;
+  --scene-silhouette-near: #060810;
+  --scene-accent: #e2ecff;
+  --sunlight-wash: radial-gradient(circle at 50% 0%, rgba(140, 170, 230, 0.22), transparent 70%);
+  --sunlight-wash-opacity: 0.4;
+}
+
+/* Reduced motion: disable transition smoothing on palette — still
+   shows the correct state, just snaps between them. */
+@media (prefers-reduced-motion: reduce) {
+  .scene-sunlight,
+  .scene-sunlight__wash {
+    transition: none !important;
+  }
+}

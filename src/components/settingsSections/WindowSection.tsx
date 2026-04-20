@@ -2,7 +2,13 @@ import { memo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { PanelSceneMode } from '../../features/panelScene'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
-import type { AppSettings, PetWindowState, TranslationKey, UiLanguage } from '../../types'
+import type {
+  AppSettings,
+  PetSceneLocation,
+  PetWindowState,
+  TranslationKey,
+  UiLanguage,
+} from '../../types'
 
 // Panel scene mode options resolved to i18n keys at render time so the
 // dropdown labels actually change when the user switches UI language.
@@ -14,6 +20,15 @@ const PANEL_SCENE_OPTIONS: Array<{ id: PanelSceneMode; labelKey: TranslationKey 
   { id: 'afternoon', labelKey: 'settings.window.panel_scene.afternoon' },
   { id: 'dusk', labelKey: 'settings.window.panel_scene.dusk' },
   { id: 'night', labelKey: 'settings.window.panel_scene.night' },
+]
+
+const PET_SCENE_LOCATION_OPTIONS: Array<{ id: PetSceneLocation; labelKey: TranslationKey }> = [
+  { id: 'off', labelKey: 'settings.window.pet_scene.off' },
+  { id: 'city', labelKey: 'settings.window.pet_scene.city' },
+  { id: 'countryside', labelKey: 'settings.window.pet_scene.countryside' },
+  { id: 'seaside', labelKey: 'settings.window.pet_scene.seaside' },
+  { id: 'fields', labelKey: 'settings.window.pet_scene.fields' },
+  { id: 'mountain', labelKey: 'settings.window.pet_scene.mountain' },
 ]
 
 type WindowSectionProps = {
@@ -109,6 +124,27 @@ export const WindowSection = memo(function WindowSection({
       </label>
 
       <p className="settings-drawer__hint">{ti('settings.window.panel_scene_hint')}</p>
+
+      <label>
+        <span>{ti('settings.window.pet_scene_label')}</span>
+        <select
+          value={draft.petSceneLocation}
+          onChange={(event) =>
+            setDraft((prev) => ({
+              ...prev,
+              petSceneLocation: event.target.value as PetSceneLocation,
+            }))
+          }
+        >
+          {PET_SCENE_LOCATION_OPTIONS.map((option) => (
+            <option key={option.id} value={option.id}>
+              {ti(option.labelKey)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <p className="settings-drawer__hint">{ti('settings.window.pet_scene_hint')}</p>
 
       <label className="settings-toggle">
         <span>{ti('settings.window.ambient_weather_toggle')}</span>

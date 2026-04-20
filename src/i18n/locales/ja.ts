@@ -1757,4 +1757,12 @@ export const jaMessages: TranslationDictionary = {
   'reminder.schedule.once': '1回きりのリマインダー',
   'reminder.schedule.every_minutes': '{minutes} 分ごと',
   'settings.language_menu.aria_label': '表示言語を切り替える',
+  'settings.window.pet_scene_label': 'ペット背景シーン',
+  'settings.window.pet_scene_hint': 'ペットの後ろに表示する静止画。選択すると、リアルタイム天気レイヤー（アニメ）と時間帯による陽光 14 段レイヤーが上に重なります。',
+  'settings.window.pet_scene.off': '表示しない',
+  'settings.window.pet_scene.city': '都会',
+  'settings.window.pet_scene.countryside': '田舎',
+  'settings.window.pet_scene.seaside': '海辺',
+  'settings.window.pet_scene.fields': '平原',
+  'settings.window.pet_scene.mountain': '山間の森',
 }

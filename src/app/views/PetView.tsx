@@ -12,7 +12,12 @@ import {
 import { getVoiceStateLabel, pickHoverReaction } from '../appSupport'
 import { MusicPopupCard, PetControlIcon, PetDialogBubble, PetThoughtBubble } from '../../components'
 import { resolveCharacterPreset } from '../../features/character/presets'
-import { classifyWeatherCondition, WeatherAmbient } from '../../features/panelScene'
+import {
+  classifyWeatherCondition,
+  SceneBackdrop,
+  SunlightTint,
+  WeatherAmbient,
+} from '../../features/panelScene'
 import { useAmbientWeather } from '../../hooks/useAmbientWeather'
 import { clamp } from '../../lib'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
@@ -291,7 +296,10 @@ export function PetView({
         >
           <div className="pet-window__stage-shell">
             <div className="pet-window__stage-backdrop" aria-hidden="true" />
-            <WeatherAmbient condition={weatherCondition} />
+            <SunlightTint>
+              <SceneBackdrop location={settings.petSceneLocation} />
+              <WeatherAmbient condition={weatherCondition} />
+            </SunlightTint>
             <div className="pet-window__stage-orbit pet-window__stage-orbit--large" aria-hidden="true" />
             <div className="pet-window__stage-orbit pet-window__stage-orbit--small" aria-hidden="true" />
 

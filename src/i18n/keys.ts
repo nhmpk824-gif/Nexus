@@ -1754,4 +1754,12 @@ export const translationKeys: TranslationKey[] = [
   'reminder.schedule.once',
   'reminder.schedule.every_minutes',
   'settings.language_menu.aria_label',
+  'settings.window.pet_scene_label',
+  'settings.window.pet_scene_hint',
+  'settings.window.pet_scene.off',
+  'settings.window.pet_scene.city',
+  'settings.window.pet_scene.countryside',
+  'settings.window.pet_scene.seaside',
+  'settings.window.pet_scene.fields',
+  'settings.window.pet_scene.mountain',
 ]

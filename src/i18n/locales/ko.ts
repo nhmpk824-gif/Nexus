@@ -1757,4 +1757,12 @@ export const koMessages: TranslationDictionary = {
   'reminder.schedule.once': '1회성 알림',
   'reminder.schedule.every_minutes': '{minutes} 분마다',
   'settings.language_menu.aria_label': 'UI 언어 변경',
+  'settings.window.pet_scene_label': '펫 배경 장면',
+  'settings.window.pet_scene_hint': '펫 뒤에 배치되는 정지 이미지입니다. 선택하면 실시간 날씨 레이어(애니메이션)와 시간대별 햇살 14단계 레이어가 그 위에 합쳐집니다.',
+  'settings.window.pet_scene.off': '표시 안 함',
+  'settings.window.pet_scene.city': '도시',
+  'settings.window.pet_scene.countryside': '시골',
+  'settings.window.pet_scene.seaside': '해변',
+  'settings.window.pet_scene.fields': '들판',
+  'settings.window.pet_scene.mountain': '산속 숲',
 }

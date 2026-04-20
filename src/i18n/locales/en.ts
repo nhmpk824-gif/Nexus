@@ -1757,4 +1757,12 @@ export const enMessages: TranslationDictionary = {
   'reminder.schedule.once': 'One-time reminder',
   'reminder.schedule.every_minutes': 'Every {minutes} min',
   'settings.language_menu.aria_label': 'Change UI language',
+  'settings.window.pet_scene_label': 'Pet backdrop scene',
+  'settings.window.pet_scene_hint': 'Static scenery behind the pet. When set, the live weather layer (animated) and the 14-state time-of-day sunlight layer compose on top.',
+  'settings.window.pet_scene.off': 'Off',
+  'settings.window.pet_scene.city': 'City',
+  'settings.window.pet_scene.countryside': 'Countryside',
+  'settings.window.pet_scene.seaside': 'Seaside',
+  'settings.window.pet_scene.fields': 'Fields',
+  'settings.window.pet_scene.mountain': 'Mountain / forest',
 }

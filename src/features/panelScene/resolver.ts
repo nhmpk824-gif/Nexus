@@ -68,3 +68,16 @@ export function normalizePanelSceneMode(raw: unknown): PanelSceneMode {
   }
   return 'auto'
 }
+
+import type { PetSceneLocation } from '../../types'
+
+export const PET_SCENE_LOCATIONS: readonly PetSceneLocation[] = [
+  'off', 'city', 'countryside', 'seaside', 'fields', 'mountain',
+] as const
+
+export function normalizePetSceneLocation(raw: unknown): PetSceneLocation {
+  if (typeof raw === 'string' && (PET_SCENE_LOCATIONS as readonly string[]).includes(raw)) {
+    return raw as PetSceneLocation
+  }
+  return 'off'
+}

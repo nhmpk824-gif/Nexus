@@ -85,7 +85,23 @@ export interface AppearanceSettings {
    * in `toolWeatherDefaultLocation` (shared with the weather tool).
    */
   ambientWeatherEnabled: boolean
+  /**
+   * Static scenery backdrop behind the Live2D character — bottom layer of
+   * the 3-layer pet stage. 'off' = transparent (default, pet sits on the
+   * desktop). Other values pick a hand-drawn SVG silhouette scene. Static,
+   * no animation — the weather layer (animated) and sunlight tint layer
+   * (14 time-of-day states, animated transitions) sit on top of it.
+   */
+  petSceneLocation: PetSceneLocation
 }
+
+export type PetSceneLocation =
+  | 'off'
+  | 'city'
+  | 'countryside'
+  | 'seaside'
+  | 'fields'
+  | 'mountain'
 
 export interface TextProviderSettings {
   apiProviderId: string
