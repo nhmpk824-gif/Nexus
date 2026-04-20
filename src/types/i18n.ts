@@ -1741,6 +1741,20 @@ export type TranslationKey =
   | 'voice.mic.readiness_failed_generic'
   | 'voice.smoke.output_text'
   | 'voice.smoke.companion_fallback'
+  | 'chat.slash.note.empty'
+  | 'chat.slash.note.usage'
+  | 'chat.slash.note.saved'
+  | 'chat.slash.search.usage'
+  | 'chat.slash.search.no_hits'
+  | 'voice.stt.error.permission_denied'
+  | 'voice.stt.error.no_microphone'
+  | 'voice.stt.error.network'
+  | 'voice.stt.error.no_speech'
+  | 'voice.stt.error.aborted'
+  | 'voice.stt.error.generic'
+  | 'file.picker.canceled'
+  | 'file.picker.read_success'
+  | 'file.picker.read_failed'
 
 export type TranslationPrimitive = string | number | boolean | null | undefined
 

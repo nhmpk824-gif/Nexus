@@ -161,16 +161,16 @@ export function speakText({
 export function mapSpeechError(error: string) {
   switch (error) {
     case 'not-allowed':
-      return '没有拿到麦克风权限，请在系统里允许应用访问麦克风。'
+      return t('voice.stt.error.permission_denied')
     case 'audio-capture':
-      return '没有检测到可用麦克风。'
+      return t('voice.stt.error.no_microphone')
     case 'network':
-      return '语音识别暂时不可用，请稍后再试。'
+      return t('voice.stt.error.network')
     case 'no-speech':
-      return '这次没有听到你的声音，可以再说一遍。'
+      return t('voice.stt.error.no_speech')
     case 'aborted':
-      return '语音识别已停止。'
+      return t('voice.stt.error.aborted')
     default:
-      return '语音识别失败，请稍后再试。'
+      return t('voice.stt.error.generic')
   }
 }

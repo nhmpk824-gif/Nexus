@@ -59,12 +59,12 @@ async function runNote(content: string): Promise<string> {
     const entries = await runtime.memoryBackend.list('conversation', CONVERSATION_ID)
     return entries.length
       ? entries.map((e) => `• ${e.key}: ${e.value}`).join('\n')
-      : '本会话暂无笔记。'
+      : t('chat.slash.note.empty')
   }
 
   const text = content.slice('/note'.length).trim()
   if (!text) {
-    return '用法：/note <内容> 保存一条笔记；/notes 查看全部。'
+    return t('chat.slash.note.usage')
   }
 
   const key = `note-${Date.now()}`
@@ -74,18 +74,18 @@ async function runNote(content: string): Promise<string> {
     key,
     value: text,
   })
-  return `已记下笔记 ${entry.key}`
+  return t('chat.slash.note.saved', { key: entry.key })
 }
 
 function runSearch(content: string): string {
   const query = content.slice('/search'.length).trim()
   if (!query) {
-    return '用法：/search 关键词 — 在本地聊天历史中做全文检索。'
+    return t('chat.slash.search.usage')
   }
 
   const hits = getCoreRuntime().sessionStore.search(query, { limit: 5 })
   if (hits.length === 0) {
-    return `没有在本地聊天历史中找到与「${query}」相关的片段。`
+    return t('chat.slash.search.no_hits', { query })
   }
 
   return hits

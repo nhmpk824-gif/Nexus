@@ -116,7 +116,7 @@ async function openTextFileWithPicker(payload: TextFileOpenRequest): Promise<Tex
     if (!handle) {
       return {
         canceled: true,
-        message: '已取消打开。',
+        message: t('file.picker.canceled'),
       }
     }
 
@@ -127,7 +127,7 @@ async function openTextFileWithPicker(payload: TextFileOpenRequest): Promise<Tex
       canceled: false,
       filePath: file.name,
       content,
-      message: `已读取 ${file.name}`,
+      message: t('file.picker.read_success', { fileName: file.name }),
     }
   } catch (error) {
     if (
@@ -136,7 +136,7 @@ async function openTextFileWithPicker(payload: TextFileOpenRequest): Promise<Tex
     ) {
       return {
         canceled: true,
-        message: '已取消打开。',
+        message: t('file.picker.canceled'),
       }
     }
 
@@ -190,7 +190,7 @@ async function openTextFileWithInput(payload: TextFileOpenRequest): Promise<Text
       if (!file) {
         finish({
           canceled: true,
-          message: '已取消打开。',
+          message: t('file.picker.canceled'),
         })
         return
       }
@@ -201,17 +201,17 @@ async function openTextFileWithInput(payload: TextFileOpenRequest): Promise<Text
           canceled: false,
           filePath: file.name,
           content,
-          message: `已读取 ${file.name}`,
+          message: t('file.picker.read_success', { fileName: file.name }),
         })
       } catch (error) {
-        fail(new Error(error instanceof Error ? error.message : '读取文件失败，请稍后再试。'))
+        fail(new Error(error instanceof Error ? error.message : t('file.picker.read_failed')))
       }
     }
 
     function handleInputCancel() {
       finish({
         canceled: true,
-        message: '已取消打开。',
+        message: t('file.picker.canceled'),
       })
     }
 
@@ -220,7 +220,7 @@ async function openTextFileWithInput(payload: TextFileOpenRequest): Promise<Text
         if (!settled && !input.files?.length) {
           finish({
             canceled: true,
-            message: '已取消打开。',
+            message: t('file.picker.canceled'),
           })
         }
       }, 250)
