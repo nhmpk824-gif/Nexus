@@ -1782,4 +1782,10 @@ export const enMessages: TranslationDictionary = {
   'settings.window.pet_weather.fog': 'Force: fog',
   'settings.window.pet_weather.breeze': 'Force: breeze',
   'settings.window.pet_weather.gale': 'Force: gale',
+  'settings.window.pet_time_label': 'Time-of-day preview (layer 3)',
+  'settings.window.pet_time_hint': '"Follow real time" auto-switches day/dusk/night scene art based on the system clock. Other options lock to that band for testing.',
+  'settings.window.pet_time.auto': 'Follow real time',
+  'settings.window.pet_time.day': 'Force: day',
+  'settings.window.pet_time.dusk': 'Force: dusk',
+  'settings.window.pet_time.night': 'Force: night',
 }

@@ -1783,6 +1783,12 @@ export type TranslationKey =
   | 'settings.window.pet_weather.fog'
   | 'settings.window.pet_weather.breeze'
   | 'settings.window.pet_weather.gale'
+  | 'settings.window.pet_time_label'
+  | 'settings.window.pet_time_hint'
+  | 'settings.window.pet_time.auto'
+  | 'settings.window.pet_time.day'
+  | 'settings.window.pet_time.dusk'
+  | 'settings.window.pet_time.night'
 
 export type TranslationPrimitive = string | number | boolean | null | undefined
 

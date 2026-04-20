@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
+import type { PetTimePreview } from '../../types'
 import { resolveSunlightTone, resolveSunlightState, type SunlightState, type SunlightTone } from './sunlightState.ts'
 
 type SunlightTintProps = {
@@ -8,6 +9,24 @@ type SunlightTintProps = {
    * smooth across the day without hammering state. The CSS transition
    * on `filter` absorbs the step between readings so no abrupt jumps. */
   refreshIntervalMs?: number
+  /** When set to a specific band, lock the filter to that time of day
+   * (canonical hour of the band). 'auto' uses the real clock. */
+  timePreview?: PetTimePreview
+}
+
+/** Canonical hours used when timePreview pins a band. Matches the
+ * midpoint of each SunlightTone keyframe band so the preview looks
+ * like the typical feel of that time. */
+const PREVIEW_HOUR: Record<Exclude<PetTimePreview, 'auto'>, number> = {
+  day: 12,
+  dusk: 18.5,
+  night: 22,
+}
+
+function dateAtHour(hoursDecimal: number): Date {
+  const d = new Date()
+  d.setHours(Math.floor(hoursDecimal), Math.round((hoursDecimal % 1) * 60), 0, 0)
+  return d
 }
 
 /**
@@ -22,20 +41,32 @@ type SunlightTintProps = {
 export function SunlightTint({
   children,
   refreshIntervalMs = 60 * 1000,
+  timePreview = 'auto',
 }: SunlightTintProps) {
-  const [snapshot, setSnapshot] = useState<{ tone: SunlightTone; state: SunlightState }>(() => ({
+  const [autoSnapshot, setAutoSnapshot] = useState<{ tone: SunlightTone; state: SunlightState }>(() => ({
     tone: resolveSunlightTone(),
     state: resolveSunlightState(),
   }))
 
   useEffect(() => {
-    const update = () => setSnapshot({
+    if (timePreview !== 'auto') return undefined
+    const update = () => setAutoSnapshot({
       tone: resolveSunlightTone(),
       state: resolveSunlightState(),
     })
     const intervalId = window.setInterval(update, refreshIntervalMs)
     return () => window.clearInterval(intervalId)
-  }, [refreshIntervalMs])
+  }, [refreshIntervalMs, timePreview])
+
+  const snapshot = timePreview !== 'auto'
+    ? (() => {
+      const simulatedDate = dateAtHour(PREVIEW_HOUR[timePreview])
+      return {
+        tone: resolveSunlightTone(simulatedDate),
+        state: resolveSunlightState(simulatedDate),
+      }
+    })()
+    : autoSnapshot
 
   const { tone, state } = snapshot
   const inlineStyle: CSSProperties = {

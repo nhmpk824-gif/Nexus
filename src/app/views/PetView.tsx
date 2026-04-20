@@ -78,12 +78,13 @@ export function PetView({
     },
     [ambientWeather, settings.petWeatherPreview],
   )
-  const [timeBand, setTimeBand] = useState(() => getTimeOfDayBand())
+  const [autoTimeBand, setAutoTimeBand] = useState(() => getTimeOfDayBand())
   useEffect(() => {
-    const update = () => setTimeBand(getTimeOfDayBand())
+    const update = () => setAutoTimeBand(getTimeOfDayBand())
     const intervalId = window.setInterval(update, 5 * 60 * 1000)
     return () => window.clearInterval(intervalId)
   }, [])
+  const timeBand = settings.petTimePreview !== 'auto' ? settings.petTimePreview : autoTimeBand
   const voiceStateLabel = getVoiceStateLabel(voice.voiceState, ti)
   const petSignalLabel = voice.voiceState !== 'idle'
     ? voiceStateLabel
@@ -303,7 +304,7 @@ export function PetView({
         >
           <div className="pet-window__stage-shell">
             <div className="pet-window__stage-backdrop" aria-hidden="true" />
-            <SunlightTint>
+            <SunlightTint timePreview={settings.petTimePreview}>
               <SceneBackdrop location={settings.petSceneLocation} timeBand={timeBand} />
               <WeatherAmbient condition={weatherCondition} />
             </SunlightTint>

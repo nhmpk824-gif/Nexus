@@ -13,6 +13,7 @@ import { inferApiProviderId } from '../apiProviders.ts'
 import {
   normalizePanelSceneMode,
   normalizePetSceneLocation,
+  normalizePetTimePreview,
   normalizePetWeatherPreview,
 } from '../../features/panelScene/resolver.ts'
 import { clampPresenceIntervalMinutes } from '../settings.ts'
@@ -56,6 +57,7 @@ const defaultSettings: AppSettings = {
   ambientWeatherEnabled: false,
   petSceneLocation: 'off',
   petWeatherPreview: 'auto',
+  petTimePreview: 'auto',
   apiProviderId: 'openai',
   companionName: '星绘',
   userName: '主人',
@@ -378,6 +380,7 @@ export function loadSettings(): AppSettings {
     ambientWeatherEnabled: stored.ambientWeatherEnabled === true,
     petSceneLocation: normalizePetSceneLocation(stored.petSceneLocation),
     petWeatherPreview: normalizePetWeatherPreview(stored.petWeatherPreview),
+    petTimePreview: normalizePetTimePreview(stored.petTimePreview),
     apiProviderId: inferredProviderId,
     speechInputProviderId: effectiveSpeechInputProviderId,
     speechInputApiBaseUrl,

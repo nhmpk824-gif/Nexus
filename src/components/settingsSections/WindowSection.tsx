@@ -5,6 +5,7 @@ import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type {
   AppSettings,
   PetSceneLocation,
+  PetTimePreview,
   PetWeatherPreview,
   PetWindowState,
   TranslationKey,
@@ -30,6 +31,13 @@ const PET_SCENE_LOCATION_OPTIONS: Array<{ id: PetSceneLocation; labelKey: Transl
   { id: 'seaside', labelKey: 'settings.window.pet_scene.seaside' },
   { id: 'fields', labelKey: 'settings.window.pet_scene.fields' },
   { id: 'mountain', labelKey: 'settings.window.pet_scene.mountain' },
+]
+
+const PET_TIME_PREVIEW_OPTIONS: Array<{ id: PetTimePreview; labelKey: TranslationKey }> = [
+  { id: 'auto', labelKey: 'settings.window.pet_time.auto' },
+  { id: 'day', labelKey: 'settings.window.pet_time.day' },
+  { id: 'dusk', labelKey: 'settings.window.pet_time.dusk' },
+  { id: 'night', labelKey: 'settings.window.pet_time.night' },
 ]
 
 const PET_WEATHER_PREVIEW_OPTIONS: Array<{ id: PetWeatherPreview; labelKey: TranslationKey }> = [
@@ -185,6 +193,27 @@ export const WindowSection = memo(function WindowSection({
       </label>
 
       <p className="settings-drawer__hint">{ti('settings.window.pet_weather_hint')}</p>
+
+      <label>
+        <span>{ti('settings.window.pet_time_label')}</span>
+        <select
+          value={draft.petTimePreview}
+          onChange={(event) =>
+            setDraft((prev) => ({
+              ...prev,
+              petTimePreview: event.target.value as PetTimePreview,
+            }))
+          }
+        >
+          {PET_TIME_PREVIEW_OPTIONS.map((option) => (
+            <option key={option.id} value={option.id}>
+              {ti(option.labelKey)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <p className="settings-drawer__hint">{ti('settings.window.pet_time_hint')}</p>
 
       <label className="settings-toggle">
         <span>{ti('settings.window.ambient_weather_toggle')}</span>

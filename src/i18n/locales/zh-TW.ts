@@ -1782,4 +1782,10 @@ export const zhTWMessages: TranslationDictionary = {
   'settings.window.pet_weather.fog': '固定：霧',
   'settings.window.pet_weather.breeze': '固定：微風',
   'settings.window.pet_weather.gale': '固定：大風',
+  'settings.window.pet_time_label': '時段預覽（第三層）',
+  'settings.window.pet_time_hint': '「跟隨即時時間」依系統時鐘自動切換白天/黃昏/夜晚貼圖。其他選項鎖定到對應時段方便測試。',
+  'settings.window.pet_time.auto': '跟隨即時時間',
+  'settings.window.pet_time.day': '固定：白天',
+  'settings.window.pet_time.dusk': '固定：黃昏',
+  'settings.window.pet_time.night': '固定：夜晚',
 }

@@ -102,6 +102,14 @@ export interface AppearanceSettings {
    * waiting for real weather to change.
    */
   petWeatherPreview: PetWeatherPreview
+  /**
+   * Force a specific time-of-day for the pet backdrop. 'auto' uses the
+   * system clock; other values lock the scene to a canonical hour of
+   * that band — day = noon, dusk = 18:00, night = 22:00. Useful for
+   * previewing the 3 variant images without waiting / changing the OS
+   * clock.
+   */
+  petTimePreview: PetTimePreview
 }
 
 export type PetSceneLocation =
@@ -111,6 +119,8 @@ export type PetSceneLocation =
   | 'seaside'
   | 'fields'
   | 'mountain'
+
+export type PetTimePreview = 'auto' | 'day' | 'dusk' | 'night'
 
 export type PetWeatherPreview =
   | 'auto'

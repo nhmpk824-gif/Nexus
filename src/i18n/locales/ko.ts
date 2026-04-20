@@ -1782,4 +1782,10 @@ export const koMessages: TranslationDictionary = {
   'settings.window.pet_weather.fog': '고정: 안개',
   'settings.window.pet_weather.breeze': '고정: 산들바람',
   'settings.window.pet_weather.gale': '고정: 강풍',
+  'settings.window.pet_time_label': '시간대 미리보기 (3층)',
+  'settings.window.pet_time_hint': '"실시간 따르기"는 시스템 시계에 따라 낮/황혼/밤 이미지를 자동 전환합니다. 다른 옵션은 해당 시간대로 고정해서 확인할 수 있어요.',
+  'settings.window.pet_time.auto': '실시간 따르기',
+  'settings.window.pet_time.day': '고정: 낮',
+  'settings.window.pet_time.dusk': '고정: 황혼',
+  'settings.window.pet_time.night': '고정: 밤',
 }

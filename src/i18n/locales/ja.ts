@@ -1782,4 +1782,10 @@ export const jaMessages: TranslationDictionary = {
   'settings.window.pet_weather.fog': '固定：霧',
   'settings.window.pet_weather.breeze': '固定：そよ風',
   'settings.window.pet_weather.gale': '固定：強風',
+  'settings.window.pet_time_label': '時間帯プレビュー（第3層）',
+  'settings.window.pet_time_hint': '「実時間に従う」はシステム時計に合わせて昼/夕方/夜の画像を自動切替。他は該当の時間帯に固定してテストできます。',
+  'settings.window.pet_time.auto': '実時間に従う',
+  'settings.window.pet_time.day': '固定：昼',
+  'settings.window.pet_time.dusk': '固定：夕方',
+  'settings.window.pet_time.night': '固定：夜',
 }
