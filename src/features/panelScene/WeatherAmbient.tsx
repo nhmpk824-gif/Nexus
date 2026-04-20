@@ -95,31 +95,19 @@ export function WeatherAmbient({ condition }: WeatherAmbientProps) {
       <div className="weather-ambient__tint" />
 
       {condition === 'clear' ? (
-        <>
-          <div className="weather-ambient__sun-disc" />
-          <div className="weather-ambient__sun-glow" />
-          <div className="weather-ambient__sun-rays" />
-          <div className="weather-ambient__godray weather-ambient__godray--1" />
-          <div className="weather-ambient__godray weather-ambient__godray--2" />
-          <div className="weather-ambient__godray weather-ambient__godray--3" />
-          <div className="weather-ambient__dust">
-            {dustMotes.map((i) => (
-              <span key={i} className="weather-ambient__dust-mote" style={makeDustStyle(i)} />
-            ))}
-          </div>
-        </>
+        <div className="weather-ambient__dust">
+          {dustMotes.map((i) => (
+            <span key={i} className="weather-ambient__dust-mote" style={makeDustStyle(i)} />
+          ))}
+        </div>
       ) : null}
 
       {condition === 'partly_cloudy' ? (
-        <>
-          <div className="weather-ambient__sun-disc weather-ambient__sun-disc--partial" />
-          <div className="weather-ambient__sun-glow" />
-          <div className="weather-ambient__clouds">
-            {cloudBlobs.map((i) => (
-              <span key={i} className={`weather-ambient__cloud weather-ambient__cloud--${i + 1}`} />
-            ))}
-          </div>
-        </>
+        <div className="weather-ambient__clouds">
+          {cloudBlobs.map((i) => (
+            <span key={i} className={`weather-ambient__cloud weather-ambient__cloud--${i + 1}`} />
+          ))}
+        </div>
       ) : null}
 
       {condition === 'overcast' ? (

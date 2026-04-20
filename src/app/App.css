@@ -5163,143 +5163,27 @@
   );
 }
 
-/* ═══ Clear / Sunny ════════════════════════════════════════════ */
+/* ═══ Clear / Sunny ════════════════════════════════════════════
+   Full-scene warm golden wash via `screen` blend — lifts the whole
+   image into "golden-hour sunny" territory rather than dropping a
+   literal sun icon on top. Dust motes are the only particle layer.
+   ═══════════════════════════════════════════════════════════════ */
 .weather-ambient--clear {
-  --weather-sky-tint: radial-gradient(
-    circle at 78% 14%,
-    rgba(255, 230, 170, 0.55) 0%,
-    rgba(255, 215, 140, 0.22) 30%,
-    transparent 60%
+  --weather-sky-tint: linear-gradient(
+    180deg,
+    rgba(255, 225, 160, 0.55) 0%,
+    rgba(255, 210, 140, 0.4) 50%,
+    rgba(255, 200, 130, 0.28) 100%
   );
   --weather-sky-blend: screen;
 }
 .weather-ambient--clear.weather-ambient--night {
-  --weather-sky-tint: radial-gradient(
-    circle at 78% 14%,
-    rgba(180, 210, 255, 0.35) 0%,
-    rgba(120, 160, 230, 0.15) 30%,
-    transparent 60%
+  --weather-sky-tint: linear-gradient(
+    180deg,
+    rgba(150, 180, 230, 0.45) 0%,
+    rgba(130, 160, 220, 0.32) 50%,
+    rgba(110, 140, 200, 0.22) 100%
   );
-}
-
-.weather-ambient--clear .weather-ambient__sun-disc {
-  position: absolute;
-  top: 10%;
-  right: 14%;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff8d4 0%, #ffd47a 55%, rgba(255, 170, 80, 0) 100%);
-  box-shadow:
-    0 0 32px rgba(255, 220, 150, 0.55),
-    0 0 70px rgba(255, 200, 120, 0.35);
-  opacity: 0.95;
-  animation: weather-sun-pulse 6s ease-in-out infinite;
-}
-.weather-ambient--clear.weather-ambient--night .weather-ambient__sun-disc {
-  background: radial-gradient(circle, #e6edff 0%, #b0c4e8 55%, rgba(150, 175, 230, 0) 100%);
-  box-shadow:
-    0 0 32px rgba(180, 210, 255, 0.5),
-    0 0 70px rgba(140, 170, 230, 0.32);
-}
-
-.weather-ambient--clear .weather-ambient__sun-glow {
-  /* Subtle halo centered on the sun-disc; kept tight so it reads as
-     "bright spot in corner" not "giant transparent circle". */
-  position: absolute;
-  top: calc(10% - 50px);
-  right: calc(14% - 50px);
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    var(--weather-glow-color) 0%,
-    transparent 70%
-  );
-  opacity: 0.5;
-  animation: weather-sun-pulse 6s ease-in-out infinite;
-}
-
-.weather-ambient--clear .weather-ambient__sun-rays {
-  position: absolute;
-  top: calc(10% - 90px);
-  right: calc(14% - 90px);
-  width: 260px;
-  height: 260px;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    var(--weather-glow-color) 10deg,
-    transparent 22deg,
-    transparent 60deg,
-    var(--weather-glow-color) 72deg,
-    transparent 84deg,
-    transparent 120deg,
-    var(--weather-glow-color) 132deg,
-    transparent 144deg,
-    transparent 240deg,
-    var(--weather-glow-color) 252deg,
-    transparent 264deg,
-    transparent 300deg,
-    var(--weather-glow-color) 312deg,
-    transparent 324deg
-  );
-  opacity: 0.38;
-  mix-blend-mode: screen;
-  animation: weather-sun-rays-rotate 60s linear infinite;
-}
-
-.weather-ambient--clear.weather-ambient--night .weather-ambient__sun-rays {
-  opacity: 0.22;
-}
-
-.weather-ambient--clear .weather-ambient__godray {
-  position: absolute;
-  top: 0;
-  bottom: 40%;
-  width: 70px;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    var(--weather-glow-color) 30%,
-    transparent 100%
-  );
-  transform-origin: top center;
-  mix-blend-mode: screen;
-  filter: blur(10px);
-  animation: weather-godray-shift 14s ease-in-out infinite alternate;
-}
-.weather-ambient--clear .weather-ambient__godray--1 {
-  right: 24%;
-  transform: rotate(12deg);
-  opacity: 0.3;
-  animation-delay: 0s;
-}
-.weather-ambient--clear .weather-ambient__godray--2 {
-  right: 38%;
-  transform: rotate(6deg);
-  opacity: 0.22;
-  animation-delay: -4s;
-  animation-duration: 18s;
-}
-.weather-ambient--clear .weather-ambient__godray--3 {
-  display: none;
-}
-
-@keyframes weather-godray-shift {
-  from { opacity: 0.25; transform: rotate(var(--godray-tilt, 10deg)) translateX(-20px); }
-  to   { opacity: 0.55; transform: rotate(var(--godray-tilt, 10deg)) translateX(20px); }
-}
-
-@keyframes weather-sun-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.9; }
-  50%      { transform: scale(1.05); opacity: 1; }
-}
-
-@keyframes weather-sun-rays-rotate {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
 }
 
 .weather-ambient--clear .weather-ambient__dust {
@@ -5432,27 +5316,6 @@
     rgba(80, 95, 130, 0.18) 60%,
     transparent 100%
   );
-}
-
-.weather-ambient--partly_cloudy .weather-ambient__sun-disc--partial {
-  position: absolute;
-  top: 12%;
-  right: 16%;
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff8d4 0%, #ffd47a 55%, rgba(255, 170, 80, 0) 100%);
-  box-shadow:
-    0 0 24px rgba(255, 220, 150, 0.45),
-    0 0 60px rgba(255, 200, 120, 0.25);
-  opacity: 0.9;
-  animation: weather-sun-pulse 6s ease-in-out infinite;
-}
-.weather-ambient--partly_cloudy.weather-ambient--night .weather-ambient__sun-disc--partial {
-  background: radial-gradient(circle, #e6edff 0%, #b0c4e8 55%, rgba(150, 175, 230, 0) 100%);
-  box-shadow:
-    0 0 36px rgba(180, 210, 255, 0.45),
-    0 0 90px rgba(140, 170, 230, 0.35);
 }
 
 .weather-ambient--partly_cloudy .weather-ambient__clouds {
