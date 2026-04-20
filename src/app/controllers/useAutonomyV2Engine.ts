@@ -283,7 +283,7 @@ export function useAutonomyV2Engine(opts: UseAutonomyV2EngineOptions) {
         decisionConfig: cfg.decisionConfig,
         chat,
         strictness: cfg.strictness,
-        hints: { subagentAvailability },
+        hints: { subagentAvailability, uiLanguage: settings.uiLanguage },
         onError: (error, origin) => {
           opts.onDebugEvent?.({
             source: 'autonomy',

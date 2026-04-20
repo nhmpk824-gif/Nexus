@@ -8,7 +8,8 @@
  * proven path instead of improvising.
  */
 
-import type { DailyMemoryEntry } from '../../types'
+import type { DailyMemoryEntry, UiLanguage } from '../../types'
+import { normalizeUiLanguage } from '../../lib/uiLanguage.ts'
 
 const DISTILLATION_SYSTEM_PROMPT = `You are a skill extraction module. Your job is to analyze conversation history and identify multi-step patterns the user has performed repeatedly or is likely to need again.
 
@@ -87,7 +88,31 @@ export function parseSkillDistillationResponse(content: string): DistilledSkill[
   }
 }
 
-export function formatSkillAsMemory(skill: DistilledSkill): string {
-  const toolsPart = skill.tools.length ? ` [工具: ${skill.tools.join(', ')}]` : ''
-  return `【技能】${skill.name} — 触发：${skill.trigger} — 步骤：${skill.steps}${toolsPart}`
+/**
+ * Narrative labels around the `【技能】` marker. The marker itself is a
+ * HOLDOUT — `useMemoryDream.ts` filters existing skill memories by
+ * `content.startsWith('【技能】')`, so we MUST emit that exact prefix in
+ * every locale. Only the "trigger / steps / tools" labels are localized.
+ */
+type SkillLabels = {
+  trigger: string
+  steps: string
+  tools: string
+}
+
+const SKILL_LABELS: Record<UiLanguage, SkillLabels> = {
+  'zh-CN': { trigger: '触发', steps: '步骤', tools: '工具' },
+  'zh-TW': { trigger: '觸發', steps: '步驟', tools: '工具' },
+  'en-US': { trigger: 'trigger', steps: 'steps', tools: 'tools' },
+  ja: { trigger: 'トリガー', steps: '手順', tools: 'ツール' },
+  ko: { trigger: '트리거', steps: '단계', tools: '도구' },
+}
+
+export function formatSkillAsMemory(
+  skill: DistilledSkill,
+  uiLanguage?: UiLanguage,
+): string {
+  const labels = SKILL_LABELS[normalizeUiLanguage(uiLanguage)]
+  const toolsPart = skill.tools.length ? ` [${labels.tools}: ${skill.tools.join(', ')}]` : ''
+  return `【技能】${skill.name} — ${labels.trigger}：${skill.trigger} — ${labels.steps}：${skill.steps}${toolsPart}`
 }

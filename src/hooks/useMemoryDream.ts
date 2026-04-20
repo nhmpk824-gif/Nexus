@@ -143,7 +143,9 @@ export function useMemoryDream({
             recordUsage('skill_distillation', `${skillPrompt.system}\n${skillPrompt.user}`, skillResponse.content, { modelId: settings.model })
             const skills = parseSkillDistillationResponse(skillResponse.content)
             if (skills.length) {
-              distilledSkills = skills.map((skill) => ({ content: formatSkillAsMemory(skill) }))
+              distilledSkills = skills.map((skill) => ({
+                content: formatSkillAsMemory(skill, settings.uiLanguage),
+              }))
               distilledSkillCount = skills.length
             }
           }

@@ -15,8 +15,13 @@
  * tick than let free-form reasoning leak into the user's Live2D bubble.
  */
 
+import type { UiLanguage } from '../../../types'
 import type { AutonomyContextV2 } from './contextGatherer.ts'
 import type { LoadedPersona } from './personaTypes.ts'
+import {
+  type DecisionPromptStrings,
+  getDecisionPromptStrings,
+} from './prompts/index.ts'
 
 export interface DecisionPromptHints {
   /**
@@ -60,6 +65,12 @@ export interface DecisionPromptHints {
     /** null means "no daily budget configured" (treat as unlimited). */
     dailyBudgetRemainingUsd: number | null
   }
+  /**
+   * Active UI language — selects which per-locale decision-prompt strings
+   * to render. Defaults to zh-CN when omitted (matches the historical
+   * behaviour before this prompt was localized).
+   */
+  uiLanguage?: UiLanguage
 }
 
 export interface ChatMessage {
@@ -69,89 +80,51 @@ export interface ChatMessage {
 
 // ── System prompt: persona + behavioural contract ─────────────────────────
 
-const RESPONSE_CONTRACT_BASE = `# Response contract
-
-Always reply with a single JSON object and nothing else. No markdown fence,
-no reasoning text before or after, no explanation — just the JSON.
-
-Valid shapes:
-
-  {"action": "silent"}
-
-    Use this when you don't have a natural thing to say given the context.
-    Being silent is always acceptable and is the preferred default when
-    unsure. Don't say something just to fill air.
-
-  {"action": "speak", "text": "..."}
-
-    Use this when you *would* naturally say something to the user right
-    now. The text field is exactly the words you say — no role labels,
-    no markdown, no stage directions. Keep it short (1-3 sentences).`
-
-const RESPONSE_CONTRACT_SPAWN = `  {"action": "spawn", "task": "...", "purpose": "...", "announcement": "..."}
-
-    Use this when the user would genuinely benefit from you doing
-    something behind the scenes — looking a fact up, checking a site,
-    summarising a doc they mentioned. A background helper agent runs
-    the task and returns a summary to the chat when done.
-
-    - task: a clear natural-language instruction for the helper. Be
-      specific ("查今晚北京天气，含温度和降水概率"), not vague ("帮我查东西").
-    - purpose: one short sentence the user sees, explaining why you're
-      doing this now. Stay in character.
-    - announcement: OPTIONAL. If you want to verbally acknowledge it
-      ("让我查查" / "等我一下"), put it here — it will be spoken in your
-      voice. Omit when silent dispatch feels more natural. Keep it short.
-
-    Only spawn when the task clearly helps. Don't spawn to fill air, don't
-    spawn when you can just answer from context, don't spawn for things the
-    user can answer faster themselves.`
-
-const RESPONSE_CONTRACT_TAIL = `Anything else in the response — reasoning, apology, self-narration, multi-
-line commentary — will be discarded and treated as silent. So don't.`
-
 function buildResponseContract(
+  strings: DecisionPromptStrings,
   subagentAvailability: DecisionPromptHints['subagentAvailability'],
 ): string {
   const canSpawn = Boolean(subagentAvailability?.enabled)
-  const parts = [RESPONSE_CONTRACT_BASE]
-  if (canSpawn) parts.push(RESPONSE_CONTRACT_SPAWN)
-  parts.push(RESPONSE_CONTRACT_TAIL)
+  const parts = [strings.responseContractBase]
+  if (canSpawn) parts.push(strings.responseContractSpawn)
+  parts.push(strings.responseContractTail)
   return parts.join('\n\n')
 }
 
-function formatPersonaSystemPrompt(persona: LoadedPersona): string {
+function formatPersonaSystemPrompt(
+  persona: LoadedPersona,
+  strings: DecisionPromptStrings,
+): string {
   const sections: string[] = []
 
   if (persona.soul.trim()) {
     sections.push(persona.soul.trim())
   } else {
-    sections.push('# Identity\n\nYou are a desktop companion. Stay in character and be concise.')
+    sections.push(strings.identityFallback)
   }
 
   if (persona.style.signaturePhrases?.length) {
     sections.push(
-      `# Signature phrases\n\nPhrases you're known to say — use naturally, don't force:\n`
+      strings.signaturePhrasesHeader
       + persona.style.signaturePhrases.map((p) => `- ${p}`).join('\n'),
     )
   }
 
   if (persona.style.forbiddenPhrases?.length) {
     sections.push(
-      `# Never say\n\nThe following phrasings break character. Do NOT use them:\n`
+      strings.forbiddenPhrasesHeader
       + persona.style.forbiddenPhrases.map((p) => `- ${p}`).join('\n'),
     )
   }
 
   if (persona.style.toneTags?.length) {
     sections.push(
-      `# Tone\n\nTargets for emotional register: `
-      + persona.style.toneTags.join(', '),
+      strings.toneHeader + persona.style.toneTags.join(', '),
     )
   }
 
   if (persona.memory.trim()) {
-    sections.push(`# Persona memory\n\n${persona.memory.trim()}`)
+    sections.push(strings.personaMemoryHeader(persona.memory.trim()))
   }
 
   return sections.join('\n\n')
@@ -159,30 +132,17 @@ function formatPersonaSystemPrompt(persona: LoadedPersona): string {
 
 // ── Context → text ─────────────────────────────────────────────────────────
 
-function formatActivityWindow(window: string): string {
-  if (window === 'high') return '活跃时段（用户常在此时互动）'
-  if (window === 'medium') return '中等活跃时段'
-  return '低活跃时段（用户通常不在此时互动）'
-}
-
-function formatRelationshipLevel(level: string): string {
-  const map: Record<string, string> = {
-    stranger: '初识（stranger）',
-    acquaintance: '认识（acquaintance）',
-    friend: '朋友（friend）',
-    close_friend: '挚友（close_friend）— 可以更亲近 / 玩笑',
-    intimate: '至亲（intimate）— 可以深度依赖 / 撒娇',
-  }
-  return map[level] ?? level
-}
-
 function formatEmotion(emotion: AutonomyContextV2['emotion']): string {
   const { energy, warmth, curiosity, concern } = emotion
   const fmt = (v: number) => v.toFixed(2)
   return `energy=${fmt(energy)} warmth=${fmt(warmth)} curiosity=${fmt(curiosity)} concern=${fmt(concern)}`
 }
 
-function formatContextSections(context: AutonomyContextV2, hints: DecisionPromptHints): string {
+function formatContextSections(
+  context: AutonomyContextV2,
+  hints: DecisionPromptHints,
+  strings: DecisionPromptStrings,
+): string {
   const maxRecent = hints.maxRecentMessages ?? Number.POSITIVE_INFINITY
   const maxMemories = hints.maxMemories ?? Number.POSITIVE_INFINITY
 
@@ -190,37 +150,50 @@ function formatContextSections(context: AutonomyContextV2, hints: DecisionPrompt
 
   // ── When ──
   const date = new Date(context.timestamp)
-  const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
   sections.push(
-    `## 现在\n`
-    + `时间：${date.toISOString().replace('T', ' ').slice(0, 16)} (${dayNames[context.dayOfWeek]}, ${context.hour}点)\n`
-    + `rhythm 活跃档：${formatActivityWindow(context.activityWindow)}`,
+    strings.sectionNow({
+      datetime: date.toISOString().replace('T', ' ').slice(0, 16),
+      dayName: strings.dayNames[context.dayOfWeek] ?? String(context.dayOfWeek),
+      hour: context.hour,
+      activityWindow: strings.activityWindow(context.activityWindow),
+    }),
   )
 
   // ── User focus ──
   sections.push(
-    `## 用户状态\n`
-    + `focusState=${context.focusState}, idle=${context.idleSeconds}s, 连续空闲 ${context.consecutiveIdleTicks} tick\n`
-    + `前台 app：${context.activeWindowTitle ?? '(未检测到)'} → 分类 ${context.activityClass}\n`
-    + (context.userDeepFocused
-        ? '**启发式判断：用户当前在专注状态，应倾向 silent。**'
-        : '用户当前不在深度专注状态。'),
+    strings.sectionUserFocus({
+      focusState: context.focusState,
+      idleSeconds: context.idleSeconds,
+      idleTicks: context.consecutiveIdleTicks,
+      appTitle: context.activeWindowTitle,
+      activityClass: context.activityClass,
+      deepFocused: context.userDeepFocused,
+    }),
   )
 
   // ── Engine self-state ──
   sections.push(
-    `## 你的自身状态\n`
-    + `tick phase: ${context.phase}\n`
-    + `情绪: ${formatEmotion(context.emotion)}\n`
-    + `关系: ${formatRelationshipLevel(context.relationshipLevel)} (score ${context.relationshipScore}/100, 连 ${context.streak} 天互动, 累计 ${context.daysInteracted} 天)`,
+    strings.sectionEngineSelf({
+      phase: context.phase,
+      emotionLine: formatEmotion(context.emotion),
+      relLine: strings.relationshipLevel(context.relationshipLevel),
+      relScore: context.relationshipScore,
+      streak: context.streak,
+      daysInteracted: context.daysInteracted,
+    }),
   )
 
   // ── Recent chat ──
   if (context.recentMessages.length) {
     const trimmed = context.recentMessages.slice(-maxRecent)
     sections.push(
-      `## 最近对话（最老在前）\n`
-      + trimmed.map((m) => `${m.role === 'user' ? '主人' : '你'}: ${m.content}`).join('\n'),
+      `${strings.sectionRecentChatHeader}\n`
+      + trimmed
+        .map(
+          (m) =>
+            `${m.role === 'user' ? strings.recentChatUserLabel : strings.recentChatAssistantLabel}: ${m.content}`,
+        )
+        .join('\n'),
     )
   }
 
@@ -228,7 +201,7 @@ function formatContextSections(context: AutonomyContextV2, hints: DecisionPrompt
   if (context.topMemories.length) {
     const trimmed = context.topMemories.slice(0, maxMemories)
     sections.push(
-      `## 关于主人的记忆（按重要性排）\n`
+      `${strings.sectionMemoriesHeader}\n`
       + trimmed.map((m) => `- [${m.category}] ${m.content}`).join('\n'),
     )
   }
@@ -236,44 +209,46 @@ function formatContextSections(context: AutonomyContextV2, hints: DecisionPrompt
   // ── Reminders + goals ──
   if (context.nearReminders.length) {
     sections.push(
-      `## 一小时内将要触发的提醒\n`
-      + context.nearReminders.map((r) => `- ${r.title}${r.nextRunAt ? ` (at ${r.nextRunAt})` : ''}`).join('\n'),
+      `${strings.sectionRemindersHeader}\n`
+      + context.nearReminders
+        .map((r) => `- ${r.title}${r.nextRunAt ? ` (at ${r.nextRunAt})` : ''}`)
+        .join('\n'),
     )
   }
   if (context.activeGoals.length) {
     sections.push(
-      `## 主人在进行的目标\n`
-      + context.activeGoals.map((g) => {
-        const deadline = g.deadline ? ` (ddl ${g.deadline})` : ''
-        return `- ${g.title}${deadline} — 进度 ${g.progress}%`
-      }).join('\n'),
+      `${strings.sectionGoalsHeader}\n`
+      + context.activeGoals
+        .map((g) => {
+          const deadline = g.deadline ? ` (ddl ${g.deadline})` : ''
+          return `- ${g.title}${deadline} — ${strings.goalProgressLabel} ${g.progress}%`
+        })
+        .join('\n'),
     )
   }
 
   // ── Last proactive utterance ──
   if (context.lastProactiveUtterance) {
     sections.push(
-      `## 你上次主动说话\n`
+      `${strings.sectionLastUtteranceHeader}\n`
       + `at ${context.lastProactiveUtterance.at}\n`
       + `content: ${context.lastProactiveUtterance.text}\n`
-      + `不要立刻重复同类话题 — 主人可能还没消化。`,
+      + strings.sectionLastUtteranceTail,
     )
   }
 
   // ── Subagent capacity ──
   if (hints.subagentAvailability?.enabled) {
     const a = hints.subagentAvailability
-    const capacityLine = `后台子代理占用：${a.activeCount}/${a.maxConcurrent}`
-    const budgetLine = a.dailyBudgetRemainingUsd !== null
-      ? `今日剩余预算：$${a.dailyBudgetRemainingUsd.toFixed(2)}`
-      : '今日预算：未设置上限'
+    const capacityLine = strings.subagentCapacityLine(a.activeCount, a.maxConcurrent)
+    const budgetLine = strings.subagentBudgetLine(a.dailyBudgetRemainingUsd)
     const nearCapacity = a.activeCount >= a.maxConcurrent - 1
     const lowBudget = a.dailyBudgetRemainingUsd !== null && a.dailyBudgetRemainingUsd < 0.05
     const cautions: string[] = []
-    if (nearCapacity) cautions.push('接近并发上限，只在明确受益时才 spawn。')
-    if (lowBudget) cautions.push('预算吃紧，除非高价值任务否则别 spawn。')
+    if (nearCapacity) cautions.push(strings.subagentCautionNearCapacity)
+    if (lowBudget) cautions.push(strings.subagentCautionLowBudget)
     sections.push(
-      `## 后台任务状态\n`
+      `${strings.sectionSubagentHeader}\n`
       + capacityLine + '\n'
       + budgetLine
       + (cautions.length ? '\n' + cautions.join(' ') : ''),
@@ -310,15 +285,14 @@ export function buildDecisionPrompt(
   persona: LoadedPersona,
   hints: DecisionPromptHints = {},
 ): ChatMessage[] {
+  const strings = getDecisionPromptStrings(hints.uiLanguage)
+
   const systemParts: string[] = [
-    formatPersonaSystemPrompt(persona),
-    buildResponseContract(hints.subagentAvailability),
+    formatPersonaSystemPrompt(persona, strings),
+    buildResponseContract(strings, hints.subagentAvailability),
   ]
   if (hints.forceSilent) {
-    systemParts.push(
-      '# Override\n\n'
-      + '当前 tick 被上游强制静默。无论你怎么想都必须返回 {"action": "silent"}。',
-    )
+    systemParts.push(strings.forceSilentOverride)
   }
 
   const messages: ChatMessage[] = [
@@ -333,22 +307,27 @@ export function buildDecisionPrompt(
 
   // The actual decision turn.
   const parts: string[] = [
-    formatContextSections(context, hints),
+    formatContextSections(context, hints, strings),
   ]
 
   if (hints.previousFailure) {
     parts.push('')
     parts.push('---')
     parts.push('')
-    parts.push('## 重试提示')
-    parts.push(`你上一次尝试的回复「${hints.previousFailure.rejectedText}」被人格守门过滤拦下，原因：${hints.previousFailure.reason}。`)
-    parts.push('这次要么返回 silent，要么换一种表达，注意避开上一次的失误。')
+    parts.push(strings.retryHeader)
+    parts.push(
+      strings.retryLine({
+        rejectedText: hints.previousFailure.rejectedText,
+        reason: hints.previousFailure.reason,
+      }),
+    )
+    parts.push(strings.retryTail)
   }
 
   parts.push('')
   parts.push('---')
   parts.push('')
-  parts.push('基于以上状态，你现在要说话吗？按 response contract 输出 JSON。')
+  parts.push(strings.finalQuestion)
 
   messages.push({ role: 'user', content: parts.join('\n') })
 

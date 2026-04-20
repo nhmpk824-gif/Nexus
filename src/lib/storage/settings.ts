@@ -12,7 +12,11 @@ import {
 import { inferApiProviderId } from '../apiProviders.ts'
 import { normalizePanelSceneMode } from '../../features/panelScene/resolver.ts'
 import { clampPresenceIntervalMinutes } from '../settings.ts'
-import { CURRENT_SETTINGS_SCHEMA_VERSION, migrateSettings } from '../settingsMigrations.ts'
+import {
+  CURRENT_SETTINGS_SCHEMA_VERSION,
+  getDefaultSystemPrompt,
+  migrateSettings,
+} from '../settingsMigrations.ts'
 import {
   readStoredSpeechInputProviderProfiles,
   readStoredSpeechOutputProviderProfiles,
@@ -359,6 +363,9 @@ export function loadSettings(): AppSettings {
     ...stored,
     companionName: stored.companionName ?? getDefaultCompanionName(resolvedUiLanguage),
     userName: stored.userName ?? getDefaultUserName(resolvedUiLanguage),
+    systemPrompt:
+      stored.systemPrompt
+      ?? (isFreshInstall ? getDefaultSystemPrompt(resolvedUiLanguage) : defaultSettings.systemPrompt),
     settingsSchemaVersion: CURRENT_SETTINGS_SCHEMA_VERSION,
     uiLanguage: resolvedUiLanguage,
     themeId: resolveThemeId(stored.themeId),

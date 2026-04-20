@@ -5,6 +5,7 @@ import type {
   MemoryDreamResult,
   MemoryItem,
 } from '../../types'
+import { getDefaultCompanionName } from '../../lib/uiLanguage.ts'
 
 // ── Gate: should we dream now? ────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ export function buildDreamPrompt(
   existingMemories: MemoryItem[],
   settings: AppSettings,
 ): { system: string; user: string } {
-  const companionName = settings.companionName || '星绘'
+  const companionName = settings.companionName || getDefaultCompanionName(settings.uiLanguage)
 
   const existingSection = existingMemories.length > 0
     ? `\n## Existing long-term memories\n${existingMemories.map((m) => `- [${m.category}] ${m.content}`).join('\n')}\n`

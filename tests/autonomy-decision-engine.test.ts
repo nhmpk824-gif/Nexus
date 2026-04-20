@@ -116,8 +116,17 @@ test('buildDecisionPrompt forceSilent disables few-shot + injects override line'
 })
 
 test('buildDecisionPrompt with empty persona falls back to default identity line', () => {
+  // Default locale is zh-CN — fallback identity is Chinese.
   const msgs = buildDecisionPrompt(makeContext(), createEmptyLoadedPersona('empty', '/x'))
-  assert.ok(msgs[0].content.includes('desktop companion'))
+  assert.ok(msgs[0].content.includes('桌面陪伴体'))
+
+  // Passing uiLanguage=en-US switches to the English fallback.
+  const enMsgs = buildDecisionPrompt(
+    makeContext(),
+    createEmptyLoadedPersona('empty', '/x'),
+    { uiLanguage: 'en-US' },
+  )
+  assert.ok(enMsgs[0].content.includes('desktop companion'))
 })
 
 // ── Response parser ─────────────────────────────────────────────────────

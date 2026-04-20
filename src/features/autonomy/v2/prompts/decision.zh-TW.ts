@@ -1,0 +1,128 @@
+/**
+ * Autonomy V2 decision-engine prompt strings — zh-TW locale.
+ */
+
+import type { DecisionPromptStrings } from './index.ts'
+
+export const zhTWDecisionPrompts: DecisionPromptStrings = {
+  responseContractBase: `# Response contract
+
+Always reply with a single JSON object and nothing else. No markdown fence,
+no reasoning text before or after, no explanation — just the JSON.
+
+Valid shapes:
+
+  {"action": "silent"}
+
+    Use this when you don't have a natural thing to say given the context.
+    Being silent is always acceptable and is the preferred default when
+    unsure. Don't say something just to fill air.
+
+  {"action": "speak", "text": "..."}
+
+    Use this when you *would* naturally say something to the user right
+    now. The text field is exactly the words you say — no role labels,
+    no markdown, no stage directions. Keep it short (1-3 sentences).`,
+
+  responseContractSpawn: `  {"action": "spawn", "task": "...", "purpose": "...", "announcement": "..."}
+
+    Use this when the user would genuinely benefit from you doing
+    something behind the scenes — looking a fact up, checking a site,
+    summarising a doc they mentioned. A background helper agent runs
+    the task and returns a summary to the chat when done.
+
+    - task: a clear natural-language instruction for the helper. Be
+      specific ("查今晚台北的天氣，含溫度和降水機率"), not vague ("幫我查東西").
+    - purpose: one short sentence the user sees, explaining why you're
+      doing this now. Stay in character.
+    - announcement: OPTIONAL. If you want to verbally acknowledge it
+      ("讓我查查" / "等我一下"), put it here — it will be spoken in your
+      voice. Omit when silent dispatch feels more natural. Keep it short.
+
+    Only spawn when the task clearly helps. Don't spawn to fill air, don't
+    spawn when you can just answer from context, don't spawn for things the
+    user can answer faster themselves.`,
+
+  responseContractTail: `Anything else in the response — reasoning, apology, self-narration, multi-
+line commentary — will be discarded and treated as silent. So don't.`,
+
+  identityFallback: '# Identity\n\n你是桌面陪伴體。保持人設，回答要簡潔。',
+
+  signaturePhrasesHeader: '# 招牌用語\n\n你常說的話 —— 自然使用，不要硬塞：\n',
+
+  forbiddenPhrasesHeader: '# 禁止表達\n\n以下表達會破壞人設，絕對不要使用：\n',
+
+  toneHeader: '# 語氣\n\n情感色彩目標：',
+
+  personaMemoryHeader: (memory) => `# 人格記憶\n\n${memory}`,
+
+  activityWindow: (level) => {
+    if (level === 'high') return '活躍時段（使用者常在此時互動）'
+    if (level === 'medium') return '中等活躍時段'
+    return '低活躍時段（使用者通常不在此時互動）'
+  },
+
+  relationshipLevel: (level) => {
+    const map: Record<string, string> = {
+      stranger: '初識（stranger）',
+      acquaintance: '認識（acquaintance）',
+      friend: '朋友（friend）',
+      close_friend: '摯友（close_friend）— 可以更親近 / 開玩笑',
+      intimate: '至親（intimate）— 可以深度依賴 / 撒嬌',
+    }
+    return map[level] ?? level
+  },
+
+  dayNames: ['週日', '週一', '週二', '週三', '週四', '週五', '週六'],
+
+  sectionNow: ({ datetime, dayName, hour, activityWindow }) =>
+    `## 現在\n時間：${datetime} (${dayName}, ${hour}點)\nrhythm 活躍檔：${activityWindow}`,
+
+  sectionUserFocus: ({ focusState, idleSeconds, idleTicks, appTitle, activityClass, deepFocused }) => {
+    const appLabel = appTitle ?? '(未偵測到)'
+    const focusTail = deepFocused
+      ? '**啟發式判斷：使用者目前處於專注狀態，應傾向 silent。**'
+      : '使用者目前不在深度專注狀態。'
+    return (
+      `## 使用者狀態\n`
+      + `focusState=${focusState}, idle=${idleSeconds}s, 連續閒置 ${idleTicks} tick\n`
+      + `前景 app：${appLabel} → 分類 ${activityClass}\n`
+      + focusTail
+    )
+  },
+
+  sectionEngineSelf: ({ phase, emotionLine, relLine, relScore, streak, daysInteracted }) =>
+    `## 你的自身狀態\n`
+    + `tick phase: ${phase}\n`
+    + `情緒: ${emotionLine}\n`
+    + `關係: ${relLine} (score ${relScore}/100, 連 ${streak} 天互動, 累計 ${daysInteracted} 天)`,
+
+  sectionRecentChatHeader: '## 最近對話（最舊在前）',
+  recentChatUserLabel: '主人',
+  recentChatAssistantLabel: '你',
+
+  sectionMemoriesHeader: '## 關於主人的記憶（依重要性排序）',
+  sectionRemindersHeader: '## 一小時內將觸發的提醒',
+  sectionGoalsHeader: '## 主人正在進行的目標',
+  goalProgressLabel: '進度',
+
+  sectionLastUtteranceHeader: '## 你上次主動說話',
+  sectionLastUtteranceTail: '不要立刻重複同類話題 — 主人可能還沒消化。',
+
+  sectionSubagentHeader: '## 後台任務狀態',
+  subagentCapacityLine: (active, max) => `後台子代理占用：${active}/${max}`,
+  subagentBudgetLine: (remaining) =>
+    remaining !== null ? `今日剩餘預算：$${remaining.toFixed(2)}` : '今日預算：未設定上限',
+  subagentCautionNearCapacity: '接近並發上限，只在明確受益時才 spawn。',
+  subagentCautionLowBudget: '預算吃緊，除非高價值任務否則別 spawn。',
+
+  forceSilentOverride:
+    '# Override\n\n當前 tick 被上游強制靜默。無論你怎麼想都必須回傳 {"action": "silent"}。',
+
+  retryHeader: '## 重試提示',
+  retryLine: ({ rejectedText, reason }) =>
+    `你上一次嘗試的回覆「${rejectedText}」被人格守門過濾攔下，原因：${reason}。`,
+  retryTail: '這次要麼回傳 silent，要麼換一種表達，注意避開上次的失誤。',
+
+  finalQuestion: '基於以上狀態，你現在要說話嗎？按 response contract 輸出 JSON。',
+}
