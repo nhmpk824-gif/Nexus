@@ -6,7 +6,7 @@ import {
   type BrowserSpeechRecognition,
   type BrowserSpeechRecognitionEvent,
 } from '../../lib/voice'
-import type { PetMood, VoicePipelineState, VoiceState } from '../../types'
+import type { PetMood, TranslationKey, TranslationParams, VoicePipelineState, VoiceState } from '../../types'
 import type { VoiceConversationOptions } from './types'
 
 type ShowPetStatus = (
@@ -14,6 +14,8 @@ type ShowPetStatus = (
   duration?: number,
   dedupeWindowMs?: number,
 ) => void
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 export type StartBrowserRecognitionConversationOptions = {
   options?: VoiceConversationOptions
@@ -44,6 +46,7 @@ export type StartBrowserRecognitionConversationOptions = {
   handleVoiceListeningFailure: (message: string, errorCode?: string) => void
   shouldAutoRestartVoice: () => boolean
   scheduleVoiceRestart: (statusText?: string, delay?: number) => void
+  ti: Translator
 }
 
 export function startBrowserRecognitionConversation(
@@ -52,7 +55,7 @@ export function startBrowserRecognitionConversation(
   const SpeechRecognitionCtor = getSpeechRecognitionCtor()
   if (!SpeechRecognitionCtor) {
     params.setContinuousVoiceSession(false)
-    params.setError('当前环境不支持浏览器语音识别。')
+    params.setError(params.ti('voice.provider.browser.unsupported'))
     return false
   }
 
@@ -63,7 +66,7 @@ export function startBrowserRecognitionConversation(
 
   if (params.voiceStateRef.current === 'speaking') {
     if (!params.canInterruptSpeech()) {
-      params.showPetStatus('当前关闭了语音打断，请等我说完。', 2_800, 3_200)
+      params.showPetStatus(params.ti('voice.interruption_disabled'), 2_800, 3_200)
       return false
     }
 
@@ -94,14 +97,14 @@ export function startBrowserRecognitionConversation(
     params.setLiveTranscript('')
     params.updateVoicePipeline(
       'listening',
-      params.shouldAutoRestartVoice() ? '连续语音已启动，正在听你说话' : '正在听你说话',
+      params.shouldAutoRestartVoice() ? params.ti('voice.pipeline.recording_continuous') : params.ti('voice.pipeline.recording_listening'),
     )
 
     if (!passive) {
       params.showPetStatus(
         params.shouldAutoRestartVoice()
-          ? '连续语音已开启，我在听，你可以继续说。'
-          : '我在听，你可以直接说。',
+          ? params.ti('voice.status.continuous_recording_start')
+          : params.ti('voice.status.recording_listening'),
         4_200,
         3_600,
       )
@@ -132,7 +135,7 @@ export function startBrowserRecognitionConversation(
 
     params.setLiveTranscript(interimTranscript || finalTranscript)
     if (interimTranscript || finalTranscript) {
-      params.updateVoicePipeline('listening', '正在识别语音内容', interimTranscript || finalTranscript)
+      params.updateVoicePipeline('listening', params.ti('voice.pipeline.browser_recognizing'), interimTranscript || finalTranscript)
     }
 
     if (finalTranscript) {
@@ -157,7 +160,7 @@ export function startBrowserRecognitionConversation(
       params.setMood('idle')
 
       if (params.shouldAutoRestartVoice()) {
-        params.scheduleVoiceRestart('我继续收音，你可以接着说。', 520)
+        params.scheduleVoiceRestart(params.ti('voice.status.resume_listening'), 520)
       }
     }
   }
@@ -168,12 +171,13 @@ export function startBrowserRecognitionConversation(
   } catch {
     params.recognitionRef.current = null
     params.setContinuousVoiceSession(false)
+    const startFailedMsg = params.ti('voice.provider.api.start_failed')
     params.dispatchVoiceSessionAndSync({
       type: 'error',
-      message: '语音识别启动失败，请稍后再试。',
+      message: startFailedMsg,
     })
     params.setMood('idle')
-    params.setError('语音识别启动失败，请稍后再试。')
+    params.setError(startFailedMsg)
     return false
   }
 }

@@ -18,6 +18,8 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   AppSettings,
+  TranslationKey,
+  TranslationParams,
   VoicePipelineState,
   VoiceState,
   VoiceTraceEntry,
@@ -116,6 +118,7 @@ export type VoiceHookCallbacks = {
   clearPendingVoiceRestart: () => void
   ensureSupportedSpeechInputSettings: (announce?: boolean) => AppSettings
   busEmit: (event: VoiceBusEvent) => void
+  ti: (key: TranslationKey, params?: TranslationParams) => string
 }
 
 // ── Factory output groups ───────────────────────────────────────────────────

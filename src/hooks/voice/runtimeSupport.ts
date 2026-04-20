@@ -16,7 +16,9 @@ import { clamp } from '../../lib/common'
 import { stopSpeaking as stopBrowserSpeaking } from '../../lib/voice'
 import { createId } from '../../lib'
 import type { VoiceBusEvent } from '../../features/voice/busEvents'
-import type { VoiceState } from '../../types'
+import type { TranslationKey, TranslationParams, VoiceState } from '../../types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 import { cleanupApiRecordingSession } from './recordingSession'
 import type { ParaformerConversationState } from './paraformerConversation'
 import type { SenseVoiceConversationState } from './sensevoiceConversation'
@@ -84,6 +86,7 @@ type InterruptSpeakingForVoiceInputRuntimeOptions = {
   showPetStatus: ShowPetStatus
   stopActiveSpeechOutput: () => void
   dispatchVoiceSessionAndSync: (event: VoiceSessionEvent) => VoiceSessionState
+  ti: Translator
 }
 
 type StopApiRecordingRuntimeOptions = {
@@ -272,7 +275,7 @@ export function interruptSpeakingForVoiceInputRuntime(
   }
 
   if (!options.canInterruptSpeech()) {
-    options.showPetStatus('当前关闭了语音打断，请等我说完。', 2_800, 3_200)
+    options.showPetStatus(options.ti('voice.interruption_disabled'), 2_800, 3_200)
     return false
   }
 

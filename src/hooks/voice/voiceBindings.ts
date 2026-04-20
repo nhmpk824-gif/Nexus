@@ -59,7 +59,7 @@ import type { VoiceBindings, VoiceRuntimeBag } from './voiceRuntimeBag'
 
 export function createVoiceBindings(bag: VoiceRuntimeBag): VoiceBindings {
   const { ctx, refs, setters, hookCallbacks, lifecycleHolder, tunables, voiceBus } = bag
-  const { showPetStatus, clearPendingVoiceRestart, appendVoiceTrace } = hookCallbacks
+  const { showPetStatus, clearPendingVoiceRestart, appendVoiceTrace, ti } = hookCallbacks
 
   // ── Session dispatch ────────────────────────────────────────────────────
   function dispatchVoiceSession(event: VoiceSessionEvent) {
@@ -130,6 +130,7 @@ export function createVoiceBindings(bag: VoiceRuntimeBag): VoiceBindings {
       showPetStatus,
       stopActiveSpeechOutput,
       dispatchVoiceSessionAndSync,
+      ti,
     })
   }
 
@@ -239,6 +240,7 @@ export function createVoiceBindings(bag: VoiceRuntimeBag): VoiceBindings {
       telemetry: {
         busEmit: (event) => voiceBus.emit(event),
       },
+      ti,
     })
   }
 
@@ -326,6 +328,7 @@ export function createVoiceBindings(bag: VoiceRuntimeBag): VoiceBindings {
       scheduleVoiceRestart: (statusText, delay, force) => {
         lifecycleHolder.current?.scheduleVoiceRestart(statusText, delay, force)
       },
+      ti,
     })
   }
 
@@ -344,7 +347,7 @@ export function createVoiceBindings(bag: VoiceRuntimeBag): VoiceBindings {
   }
 
   function testSpeechInputReadiness(draftSettings: AppSettings) {
-    return testSpeechInputReadinessRuntime({ draftSettings })
+    return testSpeechInputReadinessRuntime({ draftSettings, ti })
   }
 
   // ── Composer / dedup helpers ────────────────────────────────────────────
@@ -409,6 +412,7 @@ export function createVoiceBindings(bag: VoiceRuntimeBag): VoiceBindings {
       shouldIgnoreRepeatedVoiceContent,
       rememberSubmittedVoiceContent,
       sendMessage: (content, sendOptions) => ctx.sendMessageRef.current(content, sendOptions),
+      ti,
     })
   }
 
@@ -436,6 +440,7 @@ export function createVoiceBindings(bag: VoiceRuntimeBag): VoiceBindings {
       getNoSpeechRestartDelay,
       setContinuousVoiceSession,
       resetNoSpeechRestartCount,
+      ti,
     })
   }
 

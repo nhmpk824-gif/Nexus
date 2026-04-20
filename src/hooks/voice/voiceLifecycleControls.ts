@@ -27,6 +27,7 @@ export function createVoiceLifecycleControls(bag: VoiceRuntimeBag): VoiceLifecyc
     bindingsHolder,
     enginesHolder,
   } = bag
+  const { ti } = hookCallbacks
 
   const bindings = expectHolderValue(
     bindingsHolder,
@@ -39,7 +40,7 @@ export function createVoiceLifecycleControls(bag: VoiceRuntimeBag): VoiceLifecyc
 
   // ── scheduleVoiceRestart (calls startVoiceConversation, hoisted below) ──
   function scheduleVoiceRestart(
-    statusText = '我继续收音，你可以接着说。',
+    statusText = ti('voice.status.resume_listening'),
     delay = 520,
     force?: boolean,
   ) {
@@ -55,6 +56,7 @@ export function createVoiceLifecycleControls(bag: VoiceRuntimeBag): VoiceLifecyc
       statusText,
       delay,
       force,
+      ti,
     })
   }
 
@@ -119,7 +121,7 @@ export function createVoiceLifecycleControls(bag: VoiceRuntimeBag): VoiceLifecyc
 
     if (refs.voiceStateRef.current === 'speaking') {
       if (!bindings.canInterruptSpeech()) {
-        hookCallbacks.showPetStatus('当前关闭了语音打断，请等我说完。', 2_800, 3_200)
+        hookCallbacks.showPetStatus(ti('voice.interruption_disabled'), 2_800, 3_200)
         return
       }
 
@@ -127,7 +129,7 @@ export function createVoiceLifecycleControls(bag: VoiceRuntimeBag): VoiceLifecyc
         return
       }
       ctx.setMood('happy')
-      hookCallbacks.showPetStatus('先停下播报，你继续说。', 2_400, 3_200)
+      hookCallbacks.showPetStatus(ti('voice.pause_before_continue'), 2_400, 3_200)
     }
 
     startVoiceConversation()
@@ -171,10 +173,11 @@ export function createVoiceLifecycleControls(bag: VoiceRuntimeBag): VoiceLifecyc
         startTencentAsrConversation: engines.startTencentAsrConversation,
         startVadVoiceConversation: engines.startVadVoiceConversation,
         startApiVoiceConversation: engines.startApiVoiceConversation,
+        ti,
       })
     } catch (err) {
       console.error('[Voice] startVoiceConversation failed:', err)
-      ctx.setError(err instanceof Error ? err.message : '语音启动失败，请重试。')
+      ctx.setError(err instanceof Error ? err.message : ti('voice.start_failed'))
       setters.setVoiceState('idle')
     }
   }
@@ -203,6 +206,7 @@ export function createVoiceLifecycleControls(bag: VoiceRuntimeBag): VoiceLifecyc
       setMood: ctx.setMood,
       updateVoicePipeline: hookCallbacks.updateVoicePipeline,
       showPetStatus: hookCallbacks.showPetStatus,
+      ti,
     })
   }
 

@@ -15,6 +15,8 @@ import { mapSpeechError } from '../../lib/voice'
 import type {
   AppSettings,
   PetMood,
+  TranslationKey,
+  TranslationParams,
   VoicePipelineState,
   VoiceState,
 } from '../../types'
@@ -32,6 +34,8 @@ type ShowPetStatus = (
   duration?: number,
   dedupeWindowMs?: number,
 ) => void
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 export type SenseVoiceConversationState = {
   noSpeechTimer: number | null
@@ -76,6 +80,7 @@ export type StartSenseVoiceConversationOptions = {
     errorCode?: string,
   ) => void
   shouldAutoRestartVoice: () => boolean
+  ti: Translator
 }
 
 export async function startSenseVoiceConversation(
@@ -91,7 +96,7 @@ export async function startSenseVoiceConversation(
     || !window.desktopPet.sensevoiceAbort
   ) {
     params.setContinuousVoiceSession(false)
-    params.setError('当前环境未连接桌面客户端，无法使用 SenseVoice 离线识别。')
+    params.setError(params.ti('voice.provider.sensevoice.connect_required'))
     return
   }
 
@@ -99,7 +104,7 @@ export async function startSenseVoiceConversation(
 
   if (params.voiceStateRef.current === 'speaking') {
     if (!params.canInterruptSpeech()) {
-      params.showPetStatus('当前关闭了语音打断，请等我说完。', 2_800, 3_200)
+      params.showPetStatus(params.ti('voice.interruption_disabled'), 2_800, 3_200)
       return
     }
 
@@ -146,7 +151,7 @@ export async function startSenseVoiceConversation(
           return
         }
 
-        void finalizeSenseVoiceTranscript('长时间未继续说话，正在收尾')
+        void finalizeSenseVoiceTranscript(params.ti('voice.pipeline.long_idle_wrap_up'))
       }, SHERPA_STREAM_MAX_IDLE_MS)
     }
 
@@ -180,7 +185,7 @@ export async function startSenseVoiceConversation(
       } catch (error) {
         params.sensevoiceSessionRef.current = null
         params.handleVoiceListeningFailure(
-          error instanceof Error ? error.message : 'SenseVoice 离线识别失败，请稍后再试。',
+          error instanceof Error ? error.message : params.ti('voice.provider.sensevoice.failed_retry'),
         )
       }
     }
@@ -189,13 +194,13 @@ export async function startSenseVoiceConversation(
     params.setMood('happy')
     params.setError(null)
     params.setLiveTranscript('')
-    params.updateVoicePipeline('listening', 'SenseVoice 离线识别已启动，说完后快速转写。')
+    params.updateVoicePipeline('listening', params.ti('voice.pipeline.sensevoice_started'))
 
     if (!passive) {
       params.showPetStatus(
         params.shouldAutoRestartVoice()
-          ? 'SenseVoice 识别已开启，说完后会快速转写。'
-          : '我在听，说完后会快速识别。',
+          ? params.ti('voice.status.continuous_sensevoice_start')
+          : params.ti('voice.status.sensevoice_listening'),
         4_200,
         3_600,
       )
@@ -216,7 +221,7 @@ export async function startSenseVoiceConversation(
             speechDetected = true
             params.dispatchVoiceSession({ type: 'speech_detected' })
             params.resetNoSpeechRestartCount()
-            params.updateVoicePipeline('listening', '已检测到说话，正在录音')
+            params.updateVoicePipeline('listening', params.ti('voice.pipeline.sensevoice_detected'))
           }
 
           armNoSpeechTimer()
@@ -228,7 +233,7 @@ export async function startSenseVoiceConversation(
           speechDetected
           && performance.now() - lastSpeechAt >= SHERPA_STREAM_SILENCE_FINISH_MS
         ) {
-          void finalizeSenseVoiceTranscript('检测到你已经停下，正在快速识别')
+          void finalizeSenseVoiceTranscript(params.ti('voice.pipeline.sensevoice_silence_finalize'))
         }
       },
       onError: (message) => {
@@ -239,7 +244,7 @@ export async function startSenseVoiceConversation(
         params.sensevoiceSessionRef.current = null
         params.handleVoiceListeningFailure(message)
       },
-    })
+    }, params.ti)
 
     params.sensevoiceSessionRef.current = session
     params.sensevoiceConversationRef.current = {
@@ -260,7 +265,7 @@ export async function startSenseVoiceConversation(
         return
       }
 
-      void finalizeSenseVoiceTranscript('录音时间到，正在快速识别')
+      void finalizeSenseVoiceTranscript(params.ti('voice.pipeline.sensevoice_max_duration'))
     }, API_RECORDING_MAX_DURATION_MS)
   } catch (error) {
     params.clearSenseVoiceConversationState()
@@ -272,7 +277,7 @@ export async function startSenseVoiceConversation(
 
     const message = error instanceof Error
       ? error.message
-      : 'SenseVoice 识别启动失败，请检查模型和配置。'
+      : params.ti('voice.provider.sensevoice.start_failed')
 
     params.updateVoicePipeline('idle', message)
     params.setError(message)

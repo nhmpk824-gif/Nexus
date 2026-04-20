@@ -59,6 +59,7 @@ export function createVoiceConversationStarters(bag: VoiceRuntimeBag): VoiceEngi
       startFallbackConversation: startApiVoiceConversation,
       shouldAutoRestartVoice: bindings.shouldAutoRestartVoice,
       busEmit: (event) => voiceBus.emit(event),
+      ti: hookCallbacks.ti,
     })
   }
 
@@ -93,6 +94,7 @@ export function createVoiceConversationStarters(bag: VoiceRuntimeBag): VoiceEngi
       handleRecognizedVoiceTranscript: bindings.handleRecognizedVoiceTranscript,
       handleVoiceListeningFailure: bindings.handleVoiceListeningFailure,
       shouldAutoRestartVoice: bindings.shouldAutoRestartVoice,
+      ti: hookCallbacks.ti,
     })
   }
 
@@ -127,6 +129,7 @@ export function createVoiceConversationStarters(bag: VoiceRuntimeBag): VoiceEngi
       handleRecognizedVoiceTranscript: bindings.handleRecognizedVoiceTranscript,
       handleVoiceListeningFailure: bindings.handleVoiceListeningFailure,
       shouldAutoRestartVoice: bindings.shouldAutoRestartVoice,
+      ti: hookCallbacks.ti,
     })
   }
 
@@ -161,6 +164,7 @@ export function createVoiceConversationStarters(bag: VoiceRuntimeBag): VoiceEngi
       handleRecognizedVoiceTranscript: bindings.handleRecognizedVoiceTranscript,
       handleVoiceListeningFailure: bindings.handleVoiceListeningFailure,
       shouldAutoRestartVoice: bindings.shouldAutoRestartVoice,
+      ti: hookCallbacks.ti,
     })
   }
 
@@ -192,6 +196,7 @@ export function createVoiceConversationStarters(bag: VoiceRuntimeBag): VoiceEngi
       handleRecognizedVoiceTranscript: bindings.handleRecognizedVoiceTranscript,
       handleVoiceListeningFailure: bindings.handleVoiceListeningFailure,
       shouldAutoRestartVoice: bindings.shouldAutoRestartVoice,
+      ti: hookCallbacks.ti,
     })
   }
 

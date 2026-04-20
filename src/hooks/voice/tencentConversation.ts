@@ -17,6 +17,8 @@ import { mapSpeechError } from '../../lib/voice'
 import type {
   AppSettings,
   PetMood,
+  TranslationKey,
+  TranslationParams,
   VoicePipelineState,
   VoiceState,
 } from '../../types'
@@ -34,6 +36,8 @@ type ShowPetStatus = (
   duration?: number,
   dedupeWindowMs?: number,
 ) => void
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 export type TencentConversationState = {
   noSpeechTimer: number | null
@@ -79,6 +83,7 @@ export type StartTencentConversationOptions = {
     errorCode?: string,
   ) => void
   shouldAutoRestartVoice: () => boolean
+  ti: Translator
 }
 
 export async function startTencentConversation(
@@ -94,7 +99,7 @@ export async function startTencentConversation(
     || !window.desktopPet.tencentAsrAbort
   ) {
     params.setContinuousVoiceSession(false)
-    params.setError('当前环境未连接桌面客户端，无法使用腾讯云语音识别。')
+    params.setError(params.ti('voice.provider.tencent.connect_required'))
     return
   }
 
@@ -104,8 +109,8 @@ export async function startTencentConversation(
   )
   if (!credentials) {
     params.setContinuousVoiceSession(false)
-    params.setError('腾讯云语音识别凭证格式不正确。请在 API Key 栏填写 APPID:SecretId:SecretKey。')
-    params.showPetStatus('请先配置腾讯云语音识别凭证。', 4_800, 4_500)
+    params.setError(params.ti('voice.provider.tencent.credentials_invalid'))
+    params.showPetStatus(params.ti('voice.provider.tencent.configure_credentials'), 4_800, 4_500)
     return
   }
 
@@ -117,7 +122,7 @@ export async function startTencentConversation(
 
   if (params.voiceStateRef.current === 'speaking') {
     if (!params.canInterruptSpeech()) {
-      params.showPetStatus('当前关闭了语音打断，请等我说完。', 2_800, 3_200)
+      params.showPetStatus(params.ti('voice.interruption_disabled'), 2_800, 3_200)
       return
     }
 
@@ -165,7 +170,7 @@ export async function startTencentConversation(
           return
         }
 
-        void finalizeTranscript('长时间未继续说话，正在收尾', latestText, ' (silent finalize)')
+        void finalizeTranscript(params.ti('voice.pipeline.long_idle_wrap_up'), latestText, ' (silent finalize)')
       }, SHERPA_STREAM_MAX_IDLE_MS)
     }
 
@@ -211,7 +216,7 @@ export async function startTencentConversation(
       } catch (error) {
         params.tencentAsrSessionRef.current = null
         params.handleVoiceListeningFailure(
-          error instanceof Error ? error.message : '腾讯云语音识别失败，请稍后再试。',
+          error instanceof Error ? error.message : params.ti('voice.provider.tencent.failed_retry'),
         )
       }
     }
@@ -220,13 +225,13 @@ export async function startTencentConversation(
     params.setMood('happy')
     params.setError(null)
     params.setLiveTranscript('')
-    params.updateVoicePipeline('listening', '腾讯云实时语音识别已启动，边说边出字。')
+    params.updateVoicePipeline('listening', params.ti('voice.pipeline.tencent_started'))
 
     if (!passive) {
       params.showPetStatus(
         params.shouldAutoRestartVoice()
-          ? '腾讯云实时识别已开启，开始说话吧。'
-          : '我在听，腾讯云正在实时识别你说的话。',
+          ? params.ti('voice.status.continuous_tencent_start')
+          : params.ti('voice.status.tencent_listening'),
         4_200,
         3_600,
       )
@@ -246,7 +251,7 @@ export async function startTencentConversation(
           armInactivityTimer()
 
           if (!latestText) {
-            params.updateVoicePipeline('listening', '已检测到说话，腾讯云正在实时识别')
+            params.updateVoicePipeline('listening', params.ti('voice.pipeline.tencent_detected'))
           }
           return
         }
@@ -256,7 +261,7 @@ export async function startTencentConversation(
           && performance.now() - lastSpeechAt >= SHERPA_STREAM_SILENCE_FINISH_MS
         ) {
           void finalizeTranscript(
-            '检测到你已经停下，正在整理识别文本',
+            params.ti('voice.pipeline.silence_detected_wrap_up'),
             latestText,
             ' (silence finalize)',
           )
@@ -279,7 +284,7 @@ export async function startTencentConversation(
           text: normalizedText,
         })
         params.setLiveTranscript(sessionState.transcript)
-        params.updateVoicePipeline('listening', '正在实时识别', normalizedText)
+        params.updateVoicePipeline('listening', params.ti('voice.pipeline.tencent_partial'), normalizedText)
         armInactivityTimer()
       },
       onFinal: (text) => {
@@ -296,7 +301,7 @@ export async function startTencentConversation(
           text: normalizedText,
         })
         params.setLiveTranscript(sessionState.transcript)
-        params.updateVoicePipeline('listening', '已获得识别结果', normalizedText)
+        params.updateVoicePipeline('listening', params.ti('voice.pipeline.tencent_final'), normalizedText)
         armInactivityTimer()
       },
       onError: (message) => {
@@ -307,7 +312,7 @@ export async function startTencentConversation(
         params.tencentAsrSessionRef.current = null
         params.handleVoiceListeningFailure(message)
       },
-    })
+    }, params.ti)
 
     params.tencentAsrSessionRef.current = session
     params.tencentConversationRef.current = {
@@ -329,7 +334,7 @@ export async function startTencentConversation(
         return
       }
 
-      void finalizeTranscript('录音时间到，正在收尾', latestText, ' (max duration reached)')
+      void finalizeTranscript(params.ti('voice.pipeline.max_duration_wrap_up'), latestText, ' (max duration reached)')
     }, API_RECORDING_MAX_DURATION_MS)
   } catch (error) {
     params.clearTencentConversationState()
@@ -341,7 +346,7 @@ export async function startTencentConversation(
 
     const message = error instanceof Error
       ? error.message
-      : '腾讯云语音识别启动失败，请检查凭证和网络。'
+      : params.ti('voice.provider.tencent.start_failed')
 
     params.updateVoicePipeline('idle', message)
     params.setError(message)

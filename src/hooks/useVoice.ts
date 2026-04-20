@@ -25,6 +25,8 @@ import {
 } from '../lib'
 import { clearPendingVoiceRestart as clearPendingVoiceRestartTimer } from './voice/continuousVoice'
 import { ensureSupportedSpeechInputSettingsRuntime } from './voice/providerFallbacks'
+import { pickTranslatedUiText } from '../lib/uiLanguage'
+import type { TranslationKey, TranslationParams } from '../types/i18n'
 import type { ParaformerConversationState } from './voice/paraformerConversation'
 import type { TencentConversationState } from './voice/tencentConversation'
 import type { SenseVoiceConversationState } from './voice/sensevoiceConversation'
@@ -192,7 +194,7 @@ export function useVoice(ctx: UseVoiceContext) {
       if (!guard.ok) {
         if (retryCount >= RESTART_RETRY_LIMIT) {
           console.warn('[VoiceBus] restart gave up after', retryCount, 'retries — blocker:', guard.blocker)
-          showPetStatus('语音重启超时，请手动点击麦克风。', 4_000, 3_000)
+          showPetStatus(ti('voice.restart_timeout'), 4_000, 3_000)
           return
         }
         voiceDebug('VoiceBus', 'restart blocked (retry', retryCount + 1, '), blocker:', guard.blocker)
@@ -205,7 +207,7 @@ export function useVoice(ctx: UseVoiceContext) {
         lifecycleHolder.current?.startVoiceConversation({ restart: true, passive: true })
       } catch (err) {
         console.warn('[VoiceBus] restart failed:', err)
-        showPetStatus('语音重启失败，请手动重试。', 4_000, 3_000)
+        showPetStatus(ti('voice.restart_failed'), 4_000, 3_000)
       }
     }, delay)
   }
@@ -361,13 +363,21 @@ export function useVoice(ctx: UseVoiceContext) {
     clearPendingVoiceRestartTimer(restartVoiceTimerRef)
   }, [])
 
+  const ti = useCallback(
+    (key: TranslationKey, params?: TranslationParams) => (
+      pickTranslatedUiText(ctx.settingsRef.current.uiLanguage, key, params)
+    ),
+    [ctx.settingsRef],
+  )
+
   const ensureSupportedSpeechInputSettings = useCallback((announce = false) => {
     return ensureSupportedSpeechInputSettingsRuntime({
       announce,
       settingsRef: ctx.settingsRef,
       showPetStatus,
+      ti,
     })
-  }, [ctx, showPetStatus])
+  }, [ctx, showPetStatus, ti])
 
   // ── Build the runtime bag and call factories in order ──────────────────
   // Bindings → Engines → Lifecycle → TestEntries.  Each populates its
@@ -420,6 +430,7 @@ export function useVoice(ctx: UseVoiceContext) {
       clearPendingVoiceRestart,
       ensureSupportedSpeechInputSettings,
       busEmit,
+      ti,
     },
     hearingRuntime,
     voiceBus,
@@ -451,8 +462,9 @@ export function useVoice(ctx: UseVoiceContext) {
       startVoiceConversation: (options) => {
         startVoiceConversationRef.current(options)
       },
+      ti,
     })
-  }, [showPetStatus, updateVoicePipeline])
+  }, [showPetStatus, updateVoicePipeline, ti])
 
   // ── Wakeword runtime binding ───────────────────────────────────────────────
 
@@ -467,8 +479,9 @@ export function useVoice(ctx: UseVoiceContext) {
       appendVoiceTrace,
       showPetStatus,
       busEmit: (event) => voiceBus.emit(event),
+      ti,
     })
-  }, [appendVoiceTrace, showPetStatus, voiceBus])
+  }, [appendVoiceTrace, showPetStatus, voiceBus, ti])
 
   const handleWakewordKeywordDetected = useCallback((keyword: string) => {
     handleWakewordKeywordDetectedRuntime({
@@ -507,8 +520,9 @@ export function useVoice(ctx: UseVoiceContext) {
       wakewordRuntimeStateChangeRef,
       wakewordKeywordDetectedRef,
       setWakewordState,
+      ti,
     })
-  }, [settings.wakewordAlwaysOn])
+  }, [settings.wakewordAlwaysOn, ti])
 
   // Keep refs current — intentionally no deps to capture latest closures.
   // Use a layout-time assignment instead of useEffect to avoid extra render cycles.
@@ -584,10 +598,10 @@ export function useVoice(ctx: UseVoiceContext) {
     const suspended = voiceState !== 'idle'
     const suspendReason = suspended
       ? voiceState === 'listening'
-        ? '正在收音'
+        ? ti('voice.suspend_reason.listening')
         : voiceState === 'processing'
-          ? '正在处理语音'
-          : '正在播报回复'
+          ? ti('voice.suspend_reason.processing')
+          : ti('voice.suspend_reason.speaking')
       : ''
 
     void runtime.update({
@@ -601,6 +615,7 @@ export function useVoice(ctx: UseVoiceContext) {
     settings.wakeWord,
     view,
     voiceState,
+    ti,
   ])
 
   // Cleanup on unmount

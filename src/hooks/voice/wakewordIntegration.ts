@@ -6,11 +6,15 @@ import {
 import type { VoiceBusEvent } from '../../features/voice/busEvents'
 import { VoiceReasonCodes } from '../../features/voice/voiceReasonCodes'
 import type {
+  TranslationKey,
+  TranslationParams,
   VoicePipelineState,
   VoiceState,
   VoiceTraceEntry,
   WakewordRuntimeState,
 } from '../../types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 import type { BrowserSpeechRecognition } from '../../lib/voice'
 import type { ParaformerStreamSession } from '../../features/hearing/localParaformer.ts'
 import type { SenseVoiceStreamSession } from '../../features/hearing/localSenseVoice.ts'
@@ -35,6 +39,7 @@ export type AcknowledgeWakewordAndStartListeningRuntimeOptions = {
     transcript?: string,
   ) => void
   startVoiceConversation: (options?: VoiceConversationOptions) => void
+  ti: Translator
 }
 
 export type HandleWakewordRuntimeStateChangeRuntimeOptions = {
@@ -48,6 +53,7 @@ export type HandleWakewordRuntimeStateChangeRuntimeOptions = {
   ) => void
   showPetStatus: ShowPetStatus
   busEmit?: BusEmit
+  ti: Translator
 }
 
 export type HandleWakewordKeywordDetectedRuntimeOptions = {
@@ -82,19 +88,20 @@ export type CreateWakewordRuntimeBindingOptions = {
   ) => void>
   wakewordKeywordDetectedRef: MutableRefObject<(keyword: string) => void>
   setWakewordState: (state: WakewordRuntimeState) => void
+  ti: Translator
 }
 
-const WAKEWORD_ACK_STATUS_PHRASES = [
-  '我在。',
-  '在的～',
-  '我在听。',
-  '你说～',
-  '嗯？',
-  '来了来了～',
-  '我在呢。',
-  '诶？什么事～',
-  '好的，说吧。',
-  '随时待命。',
+const WAKEWORD_ACK_STATUS_KEYS: TranslationKey[] = [
+  'voice.wakeword.ack.1',
+  'voice.wakeword.ack.2',
+  'voice.wakeword.ack.3',
+  'voice.wakeword.ack.4',
+  'voice.wakeword.ack.5',
+  'voice.wakeword.ack.6',
+  'voice.wakeword.ack.7',
+  'voice.wakeword.ack.8',
+  'voice.wakeword.ack.9',
+  'voice.wakeword.ack.10',
 ]
 
 // Grace window between wake-word detection and VAD subscription start.
@@ -112,10 +119,11 @@ const WAKEWORD_ACK_STATUS_PHRASES = [
 // word twice quickly.
 const WAKEWORD_ACK_DELAY_MS = 30
 
-function pickAckStatus() {
-  return WAKEWORD_ACK_STATUS_PHRASES[
-    Math.floor(Math.random() * WAKEWORD_ACK_STATUS_PHRASES.length)
+function pickAckStatus(ti: Translator) {
+  const key = WAKEWORD_ACK_STATUS_KEYS[
+    Math.floor(Math.random() * WAKEWORD_ACK_STATUS_KEYS.length)
   ]
+  return ti(key)
 }
 
 export function acknowledgeWakewordAndStartListeningRuntime(
@@ -127,8 +135,8 @@ export function acknowledgeWakewordAndStartListeningRuntime(
 
   options.wakewordAcknowledgingRef.current = true
 
-  options.showPetStatus(pickAckStatus(), 1_600, 1_000)
-  options.updateVoicePipeline('recognized', `检测到唤醒词”${options.keyword}”，正在进入收音`)
+  options.showPetStatus(pickAckStatus(options.ti), 1_600, 1_000)
+  options.updateVoicePipeline('recognized', options.ti('voice.pipeline.wake_word_detected', { keyword: options.keyword }))
 
   window.setTimeout(() => {
     options.wakewordAcknowledgingRef.current = false
@@ -193,7 +201,7 @@ export function handleWakewordRuntimeStateChangeRuntime(
       `wake word "${options.nextState.wakeWord || '(unset)'}" unavailable: ${options.nextState.reason}`,
       'error',
     )
-    options.showPetStatus(`唤醒词不可用：${options.nextState.reason}`, 4_200, 4_500)
+    options.showPetStatus(options.ti('voice.wakeword.unavailable_with_reason', { reason: options.nextState.reason }), 4_200, 4_500)
     options.busEmit?.({
       type: 'wake:error',
       message: options.nextState.reason,
@@ -209,7 +217,7 @@ export function handleWakewordRuntimeStateChangeRuntime(
   ) {
     console.warn('[Voice] Wake word listener error:', options.nextState.error)
     options.appendVoiceTrace('Wake word listener error', options.nextState.error, 'error')
-    options.showPetStatus(`唤醒词监听异常：${options.nextState.error}`, 4_200, 4_500)
+    options.showPetStatus(options.ti('voice.wakeword.listener_error_with_reason', { error: options.nextState.error }), 4_200, 4_500)
     options.busEmit?.({
       type: 'wake:error',
       message: options.nextState.error,
@@ -294,6 +302,7 @@ export function createWakewordRuntimeBinding(
     onKeywordDetected: (keyword) => {
       options.wakewordKeywordDetectedRef.current(keyword)
     },
+    ti: options.ti,
   })
 
   options.wakewordRuntimeRef.current = runtime

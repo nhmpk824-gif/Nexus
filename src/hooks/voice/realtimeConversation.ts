@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { StreamAudioPlayer } from '../../features/voice/streamAudioPlayer'
 import { logVoiceEvent } from '../../features/voice/shared'
+import { useTranslation } from '../../i18n'
 import type { AppSettings, PetDialogBubbleState } from '../../types'
 
 type RealtimeConversationDeps = {
@@ -19,6 +20,7 @@ const MIC_SAMPLE_RATE = 16000
 const FEED_INTERVAL_MS = 100
 
 export function useRealtimeConversation(deps: RealtimeConversationDeps) {
+  const { t } = useTranslation()
   const activeRef = useRef(false)
   const playerRef = useRef<StreamAudioPlayer | null>(null)
   const unsubRef = useRef<(() => void) | null>(null)
@@ -151,7 +153,7 @@ export function useRealtimeConversation(deps: RealtimeConversationDeps) {
 
         case 'error':
           logVoiceEvent('realtime error', { message: event.message })
-          deps.updatePetStatus(`实时语音出错：${event.message}`, 4000)
+          deps.updatePetStatus(t('voice.realtime.error_prefix', { message: event.message }), 4000)
           break
 
         case 'state':
@@ -208,14 +210,14 @@ export function useRealtimeConversation(deps: RealtimeConversationDeps) {
       })
 
       deps.setVoiceState('listening')
-      deps.updatePetStatus('实时语音已连接', 2000)
+      deps.updatePetStatus(t('voice.realtime.connected'), 2000)
       logVoiceEvent('realtime session started')
     } catch (err) {
       activeRef.current = false
       cleanup()
       throw err
     }
-  }, [cleanup, stopRealtimeSession, deps])
+  }, [cleanup, stopRealtimeSession, deps, t])
 
   return {
     startRealtimeSession,

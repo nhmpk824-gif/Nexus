@@ -12,6 +12,8 @@ import type {
   AppSettings,
   AudioTranscriptionRequest,
   PetMood,
+  TranslationKey,
+  TranslationParams,
   VoicePipelineState,
   VoiceState,
 } from '../../types'
@@ -32,6 +34,8 @@ type ShowPetStatus = (
   duration?: number,
   dedupeWindowMs?: number,
 ) => void
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 type BaseRecordingConversationOptions = {
   options?: VoiceConversationOptions
@@ -68,6 +72,7 @@ type BaseRecordingConversationOptions = {
     errorCode?: string,
   ) => void
   shouldAutoRestartVoice: () => boolean
+  ti: Translator
 }
 
 export type StartApiRecordingConversationOptions = BaseRecordingConversationOptions
@@ -82,7 +87,7 @@ function prepareRecordingConversation(
 
   if (params.voiceStateRef.current === 'speaking') {
     if (!params.canInterruptSpeech()) {
-      params.showPetStatus('当前关闭了语音打断，请等我说完。', 2_800, 3_200)
+      params.showPetStatus(params.ti('voice.interruption_disabled'), 2_800, 3_200)
       return { allowed: false, passive }
     }
 
@@ -106,7 +111,7 @@ export async function startApiRecordingConversation(
 ) {
   if (!window.desktopPet?.transcribeAudio) {
     params.setContinuousVoiceSession(false)
-    params.setError('当前环境未连接桌面客户端，无法使用内置语音识别。')
+    params.setError(params.ti('voice.provider.api.connect_required'))
     return
   }
 
@@ -114,7 +119,7 @@ export async function startApiRecordingConversation(
 
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
     params.setContinuousVoiceSession(false)
-    params.setError('当前环境不支持内置录音识别，请换用浏览器识别或检查麦克风权限。')
+    params.setError(params.ti('voice.provider.api.device_unsupported'))
     return
   }
 
@@ -138,14 +143,14 @@ export async function startApiRecordingConversation(
         params.setLiveTranscript('')
         params.updateVoicePipeline(
           'listening',
-          params.shouldAutoRestartVoice() ? '连续语音已启动，正在听你说话' : '正在听你说话',
+          params.shouldAutoRestartVoice() ? params.ti('voice.pipeline.recording_continuous') : params.ti('voice.pipeline.recording_listening'),
         )
 
         if (!prepared.passive) {
           params.showPetStatus(
             params.shouldAutoRestartVoice()
-              ? '连续语音已开启，我在听，你可以继续说。'
-              : '我在听，你可以直接说。',
+              ? params.ti('voice.status.continuous_recording_start')
+              : params.ti('voice.status.recording_listening'),
             4_200,
             3_600,
           )
@@ -156,11 +161,11 @@ export async function startApiRecordingConversation(
         // real recognized text, not "recording in progress" status messages.
       },
       onRecorderError: () => {
-        params.handleVoiceListeningFailure('录音失败，请检查麦克风是否可用。')
+        params.handleVoiceListeningFailure(params.ti('voice.provider.api.recorder_failed'))
       },
       onStop: async ({ audioBlob, session }) => {
         if (session.cancelled) {
-          params.handleVoiceListeningFailure('语音识别已停止。', 'aborted')
+          params.handleVoiceListeningFailure(params.ti('voice.provider.api.stopped'), 'aborted')
           return
         }
 
@@ -172,7 +177,7 @@ export async function startApiRecordingConversation(
         try {
           params.dispatchVoiceSessionAndSync({ type: 'stt_finalizing' })
           params.setMood('thinking')
-          params.updateVoicePipeline('transcribing', '录音结束，正在转写语音。')
+          params.updateVoicePipeline('transcribing', params.ti('voice.pipeline.recording_transcribing'))
           const traceId = createId('voice')
           const traceLabel = formatTraceLabel(traceId)
           params.appendVoiceTrace('Start transcription', `#${traceLabel} requesting speech recognition service`)
@@ -206,7 +211,7 @@ export async function startApiRecordingConversation(
           await params.handleRecognizedVoiceTranscript(transcript, { traceId })
         } catch (error) {
           params.handleVoiceListeningFailure(
-            error instanceof Error ? error.message : '语音识别失败，请稍后再试。',
+            error instanceof Error ? error.message : params.ti('voice.provider.api.failed_retry'),
           )
         }
       },
@@ -218,7 +223,7 @@ export async function startApiRecordingConversation(
     params.setError(
       error instanceof Error
         ? error.message
-        : '没有拿到麦克风权限，请在系统里允许应用访问麦克风。',
+        : params.ti('voice.provider.api.permission_denied'),
     )
   }
 }

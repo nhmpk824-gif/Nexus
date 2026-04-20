@@ -7,13 +7,15 @@ import {
   switchSpeechOutputProvider,
   syncSpeechProviderProfiles,
 } from '../../lib/speechProviderProfiles'
-import type { AppSettings } from '../../types'
+import type { AppSettings, TranslationKey, TranslationParams } from '../../types'
 
 type ShowPetStatus = (
   message: string,
   duration?: number,
   dedupeWindowMs?: number,
 ) => void
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 type SettingsRef = {
   current: AppSettings
@@ -23,6 +25,7 @@ export type EnsureSupportedSpeechInputSettingsRuntimeOptions = {
   announce?: boolean
   settingsRef: SettingsRef
   showPetStatus: ShowPetStatus
+  ti: Translator
 }
 
 export type ApplySpeechInputProviderFallbackRuntimeOptions = {
@@ -73,7 +76,7 @@ export function ensureSupportedSpeechInputSettingsRuntime(
   options.settingsRef.current = nextSettings
 
   if (options.announce && shouldNormalizeLegacyLocalProvider) {
-    options.showPetStatus('当前环境不支持浏览器原生语音识别，已切换到 SenseVoice。', 3_600, 4_500)
+    options.showPetStatus(options.ti('voice.provider.browser.fallback_to_sensevoice'), 3_600, 4_500)
   }
 
   return nextSettings

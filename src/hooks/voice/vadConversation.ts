@@ -19,6 +19,8 @@ import { mapSpeechError } from '../../lib/voice'
 import type {
   AppSettings,
   PetMood,
+  TranslationKey,
+  TranslationParams,
   VoicePipelineState,
   VoiceState,
 } from '../../types'
@@ -36,6 +38,8 @@ type ShowPetStatus = (
   duration?: number,
   dedupeWindowMs?: number,
 ) => void
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 export type StartVadConversationOptions = {
   transcribeMode: 'api' | 'local'
@@ -80,6 +84,7 @@ export type StartVadConversationOptions = {
   ) => Promise<void>
   shouldAutoRestartVoice: () => boolean
   busEmit?: (event: VoiceBusEvent) => void
+  ti: Translator
 }
 
 export async function startVadConversation(
@@ -90,13 +95,13 @@ export async function startVadConversation(
 
   if (params.transcribeMode === 'api' && !window.desktopPet?.transcribeAudio) {
     params.setContinuousVoiceSession(false)
-    params.setError('当前环境未连接桌面客户端，无法使用内置语音识别。')
+    params.setError(params.ti('voice.provider.api.connect_required'))
     return
   }
 
   if (!navigator.mediaDevices?.getUserMedia) {
     params.setContinuousVoiceSession(false)
-    params.setError('当前环境不支持麦克风输入，请检查系统录音权限。')
+    params.setError(params.ti('voice.provider.vad.no_mic_input'))
     return
   }
 
@@ -104,7 +109,7 @@ export async function startVadConversation(
 
   if (params.voiceStateRef.current === 'speaking') {
     if (!params.canInterruptSpeech()) {
-      params.showPetStatus('当前关闭了语音打断，请等我说完。', 2_800, 3_200)
+      params.showPetStatus(params.ti('voice.interruption_disabled'), 2_800, 3_200)
       return
     }
 
@@ -146,7 +151,7 @@ export async function startVadConversation(
       type: 'vad:speech_start',
       reason: VoiceReasonCodes.VAD_SPEECH_START,
     })
-    params.updateVoicePipeline('listening', '已检测到说话，继续收音中')
+    params.updateVoicePipeline('listening', params.ti('voice.pipeline.vad_detected'))
   }
 
   const handleSpeechRealStart = () => {
@@ -203,7 +208,7 @@ export async function startVadConversation(
       )
       params.updateVoicePipeline(
         'transcribing',
-        '录音结束，正在用 VAD 转写语音',
+        params.ti('voice.pipeline.vad_end_transcribing'),
       )
 
       const audioBlob = encodeVadAudioToWavBlob(audio)
@@ -248,7 +253,7 @@ export async function startVadConversation(
       params.handleVoiceListeningFailure(
         error instanceof Error
           ? error.message
-          : '语音识别失败，请稍后再试。',
+          : params.ti('voice.provider.api.failed_retry'),
       )
     }
   }
@@ -321,21 +326,21 @@ export async function startVadConversation(
       params.transcribeMode === 'local'
         ? (
             params.shouldAutoRestartVoice()
-              ? '本地 VAD 连续语音已启动，正在听你说话'
-              : '正在用本地 VAD 监听你的语音'
+              ? params.ti('voice.pipeline.vad_local_continuous')
+              : params.ti('voice.pipeline.vad_local_listening')
           )
         : (
             params.shouldAutoRestartVoice()
-              ? 'VAD 连续语音已启动，正在听你说话'
-              : '正在用 VAD 监听你的语音'
+              ? params.ti('voice.pipeline.vad_api_continuous')
+              : params.ti('voice.pipeline.vad_api_listening')
           ),
     )
 
     if (!passive) {
       params.showPetStatus(
         params.shouldAutoRestartVoice()
-          ? '连续语音已开启，我会在你停下时自动送去识别。'
-          : '我在听，你停下时我会自动识别。',
+          ? params.ti('voice.status.continuous_vad_start')
+          : params.ti('voice.status.vad_listening'),
         4_200,
         3_600,
       )
@@ -385,14 +390,14 @@ export async function startVadConversation(
     const originalMessage = (
       error instanceof Error
         ? error.message
-        : 'VAD 语音检测启动失败，请检查麦克风权限或本地运行环境。'
+        : params.ti('voice.provider.vad.start_failed')
     )
-    const fallbackMessage = 'Silero VAD 启动失败，已自动切换到兼容录音模式。'
+    const fallbackMessage = params.ti('voice.provider.vad.silero_fallback')
 
     console.warn('[Voice] Silero VAD unavailable, falling back to legacy recording', error)
     params.updateVoicePipeline('idle', fallbackMessage)
     params.showPetStatus(fallbackMessage, 4_800, 4_500)
-    params.setError(`${fallbackMessage} 原始错误：${originalMessage}`)
+    params.setError(params.ti('voice.provider.vad.silero_fallback_detail', { fallback: fallbackMessage, original: originalMessage }))
 
     await params.startFallbackConversation(params.options)
   }

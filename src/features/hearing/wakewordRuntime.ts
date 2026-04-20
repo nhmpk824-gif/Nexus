@@ -1,4 +1,6 @@
 import type {
+  TranslationKey,
+  TranslationParams,
   WakewordModelKind,
   WakewordRuntimeState,
 } from '../../types'
@@ -9,6 +11,8 @@ import {
   type WakewordListenerCallbacks,
   type WakewordListenerOptions,
 } from './wakewordListener.ts'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>
 
@@ -49,6 +53,7 @@ type WakewordRuntimeOptions = {
   retryBaseMs?: number
   retryMaxMs?: number
   retryMaxAttempts?: number
+  ti?: Translator
 }
 
 // Lowered from 1500 ms: the 1.5 s cooldown was long enough that a user
@@ -174,6 +179,7 @@ export function createWakewordRuntime(
   const retryBaseMs = options.retryBaseMs ?? DEFAULT_RETRY_BASE_MS
   const retryMaxMs = options.retryMaxMs ?? DEFAULT_RETRY_MAX_MS
   const retryMaxAttempts = options.retryMaxAttempts ?? DEFAULT_RETRY_MAX_ATTEMPTS
+  const ti: Translator = options.ti ?? ((key) => String(key))
 
   let state = createInitialWakewordRuntimeState()
   let config = normalizeWakewordRuntimeConfig({
@@ -239,7 +245,7 @@ export function createWakewordRuntime(
       phase: 'error',
       active: false,
       available: true,
-      reason: `唤醒词监听异常，将在 ${Math.round(delayMs / 100) / 10} 秒后重试`,
+      reason: ti('voice.wakeword.retry_in_seconds', { seconds: Math.round(delayMs / 100) / 10 }),
       retryCount: state.retryCount + 1,
     })
   }
@@ -265,8 +271,8 @@ export function createWakewordRuntime(
         available: false,
         modelKind,
         reason: isPermanentWakewordError(message)
-          ? `唤醒词监听不可用：${message}`
-          : `唤醒词监听重试 ${retryMaxAttempts} 次后仍失败：${message}`,
+          ? ti('voice.wakeword.unavailable_with_detail', { message })
+          : ti('voice.wakeword.retry_max_attempts_failed', { max: retryMaxAttempts, message }),
         error: message,
         retryCount: 0,
         cooldownUntil: '',
@@ -319,7 +325,7 @@ export function createWakewordRuntime(
       phase: 'listening',
       active: true,
       available: true,
-      reason: '唤醒词已命中，正在切入收音',
+      reason: ti('voice.wakeword.hit_triggered'),
       error: '',
       retryCount: 0,
       lastKeyword: normalizedKeyword,
@@ -373,7 +379,7 @@ export function createWakewordRuntime(
           ...basePatch,
           phase: 'paused',
           active: false,
-          reason: currentConfig.suspendReason || '唤醒词监听已暂停',
+          reason: currentConfig.suspendReason || ti('voice.wakeword.paused_default'),
           error: '',
         })
         return
@@ -384,7 +390,7 @@ export function createWakewordRuntime(
         ...basePatch,
         phase: 'paused',
         active: false,
-        reason: currentConfig.suspendReason || '唤醒词监听已暂停',
+        reason: currentConfig.suspendReason || ti('voice.wakeword.paused_default'),
         error: '',
       })
       return
@@ -405,7 +411,7 @@ export function createWakewordRuntime(
           phase: 'cooldown',
           active: false,
           available: true,
-          reason: '唤醒词命中冷却中',
+          reason: ti('voice.wakeword.cooldown'),
           error: '',
         })
         return
@@ -440,7 +446,7 @@ export function createWakewordRuntime(
       phase: 'checking',
       active: false,
       available: false,
-      reason: '正在检查唤醒词模型',
+      reason: ti('voice.wakeword.checking_model'),
       error: '',
       modelKind: null,
       cooldownUntil: '',
@@ -452,7 +458,7 @@ export function createWakewordRuntime(
     } catch (error) {
       if (disposed || nextGeneration !== generation) return
       handleRecoverableError(
-        normalizeRuntimeError(error, '唤醒词状态检查失败'),
+        normalizeRuntimeError(error, ti('voice.wakeword.status_check_failed')),
         null,
       )
       return
@@ -468,7 +474,7 @@ export function createWakewordRuntime(
         active: false,
         available: false,
         modelKind: availability.modelKind ?? null,
-        reason: availability.reason?.trim() || '唤醒词模型当前不可用',
+        reason: availability.reason?.trim() || ti('voice.wakeword.model_unavailable'),
         error: '',
         retryCount: 0,
         cooldownUntil: '',
@@ -482,7 +488,7 @@ export function createWakewordRuntime(
       active: false,
       available: true,
       modelKind: availability.modelKind ?? null,
-      reason: '正在启动唤醒词监听',
+      reason: ti('voice.wakeword.starting'),
       error: '',
     })
 
@@ -500,6 +506,7 @@ export function createWakewordRuntime(
         },
       }, {
         wakeWord: currentConfig.wakeWord,
+        ti: options.ti,
       })
 
       if (disposed || nextGeneration !== generation) {
@@ -524,7 +531,7 @@ export function createWakewordRuntime(
     } catch (error) {
       if (disposed || nextGeneration !== generation) return
       handleRecoverableError(
-        normalizeRuntimeError(error, '唤醒词监听启动失败'),
+        normalizeRuntimeError(error, ti('voice.wakeword.listener_start_failed')),
         availability.modelKind ?? null,
       )
     }

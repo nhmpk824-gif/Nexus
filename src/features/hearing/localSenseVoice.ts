@@ -9,6 +9,9 @@
  */
 
 import { requestVoiceInputStream } from '../voice/runtimeSupport.ts'
+import type { TranslationKey, TranslationParams } from '../../types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 const SAMPLE_RATE = 16000
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 1024
@@ -41,6 +44,7 @@ function createInputAudioContext(sampleRate?: number) {
 
 export async function startSenseVoiceStream(
   callbacks: SenseVoiceStreamCallbacks,
+  ti?: Translator,
 ): Promise<SenseVoiceStreamSession> {
   const desktopPet = window.desktopPet
   if (
@@ -49,7 +53,7 @@ export async function startSenseVoiceStream(
     || !desktopPet.sensevoiceFinish
     || !desktopPet.sensevoiceAbort
   ) {
-    throw new Error('当前环境未连接桌面客户端，无法使用 SenseVoice 离线识别。')
+    throw new Error(ti?.('voice.provider.sensevoice.connect_required') ?? 'SenseVoice offline recognition is not available.')
   }
   const api = desktopPet
 
@@ -123,7 +127,7 @@ export async function startSenseVoiceStream(
       try {
         await api.sensevoiceFeed({ samples: buffered })
       } catch (error) {
-        fail(error instanceof Error ? error.message : 'SenseVoice 出错。')
+        fail(error instanceof Error ? error.message : (ti?.('voice.provider.sensevoice.generic_error') ?? 'SenseVoice error.'))
       }
     })
   }
@@ -179,7 +183,7 @@ export async function startSenseVoiceStream(
       try {
         await api.sensevoiceFeed({ samples })
       } catch (error) {
-        fail(error instanceof Error ? error.message : 'SenseVoice 出错。')
+        fail(error instanceof Error ? error.message : (ti?.('voice.provider.sensevoice.generic_error') ?? 'SenseVoice error.'))
       }
     })
   }

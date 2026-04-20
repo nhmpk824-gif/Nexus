@@ -6,6 +6,9 @@
  */
 
 import { requestVoiceInputStream } from '../voice/runtimeSupport.ts'
+import type { TranslationKey, TranslationParams } from '../../types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 const SAMPLE_RATE = 16000
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 1024
@@ -59,6 +62,7 @@ export function parseTencentCredentials(apiKey: string): TencentAsrConnectOption
 export async function startTencentAsrStream(
   credentials: TencentAsrConnectOptions,
   callbacks: TencentAsrCallbacks,
+  ti?: Translator,
 ): Promise<TencentAsrStreamSession> {
   const desktopPet = window.desktopPet
   if (
@@ -68,7 +72,7 @@ export async function startTencentAsrStream(
     || !desktopPet.tencentAsrAbort
     || !desktopPet.subscribeTencentAsrResult
   ) {
-    throw new Error('当前环境未连接桌面客户端，无法使用腾讯云语音识别。')
+    throw new Error(ti?.('voice.provider.tencent.connect_required') ?? 'Tencent Cloud ASR is not available.')
   }
   const api = desktopPet
 
@@ -186,7 +190,7 @@ export async function startTencentAsrStream(
           sampleRate: audioContext.sampleRate,
         })
       } catch (error) {
-        fail(error instanceof Error ? error.message : '腾讯云语音识别音频传输出错。')
+        fail(error instanceof Error ? error.message : (ti?.('voice.provider.tencent.audio_error') ?? 'Tencent Cloud ASR audio transmission error.'))
       }
     })
   }

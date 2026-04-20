@@ -5,7 +5,9 @@ import { prepareTextForTts } from '../../features/voice/text'
 import { VoiceReasonCodes } from '../../features/voice/voiceReasonCodes'
 import { createId } from '../../lib'
 import { recordTtsUsage } from '../../features/metering/speechCost'
-import type { AppSettings } from '../../types'
+import type { AppSettings, TranslationKey, TranslationParams } from '../../types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 import {
   getMaxRequestCharsForProvider,
   splitLongTextAtSentences,
@@ -20,6 +22,7 @@ export type StreamingSpeechOutputOptions = {
   busEmit?: (event: VoiceBusEvent) => void
   /** speechGeneration from the caller so events can correlate with tts:started/completed. */
   speechGeneration?: number
+  ti?: Translator
 }
 
 export type StreamingSpeechOutputRuntime = {
@@ -239,7 +242,7 @@ export function createStreamingSpeechOutputController(
         firstAudioWatchdog = setTimeout(() => {
           firstAudioWatchdog = null
           if (firstAudioEmitted || settled || aborted) return
-          fail(new Error('流式 TTS 超过 6 秒仍未产出音频。'))
+          fail(new Error(options?.ti?.('voice.streaming_tts.first_audio_timeout') ?? 'Streaming TTS did not produce audio within 6 seconds.'))
         }, FIRST_AUDIO_TIMEOUT_MS)
       }
     })

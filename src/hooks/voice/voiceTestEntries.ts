@@ -12,7 +12,8 @@ import type { AppSettings } from '../../types'
 import { expectHolderValue, type VoiceRuntimeBag, type VoiceTestEntries } from './voiceRuntimeBag'
 
 export function createVoiceTestEntries(bag: VoiceRuntimeBag): VoiceTestEntries {
-  const { bindingsHolder } = bag
+  const { bindingsHolder, hookCallbacks } = bag
+  const { ti } = hookCallbacks
 
   const bindings = expectHolderValue(
     bindingsHolder,
@@ -23,6 +24,7 @@ export function createVoiceTestEntries(bag: VoiceRuntimeBag): VoiceTestEntries {
     return testSpeechInputConnectionRuntime({
       draftSettings,
       testSpeechInputReadiness: bindings.testSpeechInputReadiness,
+      ti,
     })
   }
 
@@ -35,6 +37,7 @@ export function createVoiceTestEntries(bag: VoiceRuntimeBag): VoiceTestEntries {
       text,
       stopActiveSpeechOutput: bindings.stopActiveSpeechOutput,
       startSpeechOutput: bindings.startSpeechOutput,
+      ti,
     })
   }
 
@@ -49,6 +52,7 @@ export function createVoiceTestEntries(bag: VoiceRuntimeBag): VoiceTestEntries {
       draftSettings,
       options,
       probeSpeechOutputPlaybackStart,
+      ti,
     })
   }
 
@@ -57,6 +61,7 @@ export function createVoiceTestEntries(bag: VoiceRuntimeBag): VoiceTestEntries {
       draftSettings,
       testSpeechInputConnection,
       testSpeechOutputReadiness,
+      ti,
     })
   }
 

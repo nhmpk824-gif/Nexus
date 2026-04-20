@@ -8,6 +8,9 @@
  */
 
 import { requestVoiceInputStream } from '../voice/runtimeSupport.ts'
+import type { TranslationKey, TranslationParams } from '../../types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 const SAMPLE_RATE = 16000
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 1024
@@ -40,6 +43,7 @@ function createInputAudioContext(sampleRate?: number) {
 
 export async function startParaformerStream(
   callbacks: ParaformerStreamCallbacks,
+  ti?: Translator,
 ): Promise<ParaformerStreamSession> {
   const desktopPet = window.desktopPet
   if (
@@ -48,7 +52,7 @@ export async function startParaformerStream(
     || !desktopPet.paraformerFinish
     || !desktopPet.paraformerAbort
   ) {
-    throw new Error('当前环境未连接桌面客户端，无法使用 Paraformer 流式识别。')
+    throw new Error(ti?.('voice.provider.paraformer.connect_required') ?? 'Paraformer streaming recognition is not available.')
   }
   const api = desktopPet
 
@@ -130,7 +134,7 @@ export async function startParaformerStream(
         callbacks.onEndpoint?.(result.text)
       }
     } catch (error) {
-      fail(error instanceof Error ? error.message : 'Paraformer 出错。')
+      fail(error instanceof Error ? error.message : (ti?.('voice.provider.paraformer.generic_error') ?? 'Paraformer error.'))
     }
   }
 

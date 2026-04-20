@@ -7,6 +7,9 @@
  */
 
 import { requestVoiceInputStream } from '../voice/runtimeSupport.ts'
+import type { TranslationKey, TranslationParams } from '../../types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 const KWS_SAMPLE_RATE = 16000
 const KWS_BUFFER_SIZE = 2048
@@ -19,6 +22,7 @@ export type WakewordListenerCallbacks = {
 
 export type WakewordListenerOptions = {
   wakeWord?: string
+  ti?: Translator
 }
 
 export type WakewordFrameSubscriber = (samples: Float32Array, sampleRate: number) => void
@@ -38,7 +42,7 @@ export async function startWakewordListener(
 ): Promise<WakewordListener> {
   const api = window.desktopPet
   if (!api?.kwsStart || !api.kwsFeed || !api.kwsStop) {
-    throw new Error('当前环境不支持唤醒词检测。')
+    throw new Error(options.ti?.('voice.wakeword.not_supported') ?? 'The current environment does not support wake-word detection.')
   }
   const wakewordApi = api
 
@@ -96,7 +100,7 @@ export async function startWakewordListener(
         }
       } catch (error) {
         if (!destroyed) {
-          callbacks.onError?.(error instanceof Error ? error.message : '唤醒词检测出错。')
+          callbacks.onError?.(error instanceof Error ? error.message : (options.ti?.('voice.wakeword.detection_error') ?? 'Wake-word detection error.'))
         }
       } finally {
         feedInflight = false

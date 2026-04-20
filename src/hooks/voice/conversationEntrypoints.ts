@@ -14,6 +14,8 @@ import type {
 import type {
   AppSettings,
   PetMood,
+  TranslationKey,
+  TranslationParams,
   VoicePipelineState,
   VoiceState,
 } from '../../types'
@@ -31,6 +33,8 @@ type ShowPetStatus = (
   duration?: number,
   dedupeWindowMs?: number,
 ) => void
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 type ActiveVoiceConversationOptions = {
   restart?: boolean
@@ -83,6 +87,7 @@ export type StartVoiceConversationEntrypointOptions = {
     options?: VoiceConversationOptions,
   ) => Promise<void>
   startApiVoiceConversation: (options?: VoiceConversationOptions) => Promise<void>
+  ti: Translator
 }
 
 export type StopVoiceConversationEntrypointOptions = {
@@ -110,6 +115,7 @@ export type StopVoiceConversationEntrypointOptions = {
     transcript?: string,
   ) => void
   showPetStatus: ShowPetStatus
+  ti: Translator
 }
 
 export function startVoiceConversationEntrypoint(
@@ -129,7 +135,7 @@ export function startVoiceConversationEntrypoint(
         return
       }
       if (!status.installed || !status.modelFound) {
-        const msg = 'Paraformer 模型缺失，请运行 node scripts/download-models.mjs 下载。'
+        const msg = params.ti('voice.provider.paraformer.model_missing')
         params.setError(msg)
         params.showPetStatus(msg, 5_000)
         console.warn('[Voice] Paraformer unavailable:', status)
@@ -140,7 +146,7 @@ export function startVoiceConversationEntrypoint(
       }
       void params.startParaformerConversation(params.options)
     }).catch(() => {
-      params.setError('Paraformer 不可用，请检查安装。')
+      params.setError(params.ti('voice.provider.paraformer.unavailable'))
     })
     return
   }
@@ -153,8 +159,8 @@ export function startVoiceConversationEntrypoint(
 
       if (!status.installed || !status.modelFound) {
         const msg = !status.installed
-          ? 'sherpa-onnx-node 未安装，请运行 npm install 后重试。'
-          : 'SenseVoice 模型缺失，请运行 node scripts/download-models.mjs 下载。'
+          ? params.ti('voice.provider.sensevoice.node_missing')
+          : params.ti('voice.provider.sensevoice.model_missing')
         params.setError(msg)
         params.showPetStatus(msg, 5_000)
         console.warn('[Voice] SenseVoice unavailable:', status)
@@ -165,7 +171,7 @@ export function startVoiceConversationEntrypoint(
       }
       void params.startSenseVoiceConversation(params.options)
     }).catch(() => {
-      params.setError('SenseVoice 不可用，请检查安装。')
+      params.setError(params.ti('voice.provider.sensevoice.unavailable'))
     })
     return
   }
@@ -184,7 +190,7 @@ export function startVoiceConversationEntrypoint(
   const wakewordTriggered = params.options?.wakewordTriggered ?? false
   if (!currentSettings.speechInputEnabled && !wakewordTriggered) {
     params.setContinuousVoiceSession(false)
-    const msg = '请先在设置中启用语音输入。'
+    const msg = params.ti('voice.provider.vad.input_not_enabled')
     params.setError(msg)
     params.showPetStatus(msg, 4_000)
     return
@@ -244,10 +250,10 @@ export function stopVoiceConversationEntrypoint(
   params.setLiveTranscript('')
   params.updateVoicePipeline(
     'idle',
-    wasContinuousVoiceActive ? '连续语音已停止' : '语音已停止',
+    wasContinuousVoiceActive ? params.ti('voice.pipeline.continuous_stopped') : params.ti('voice.pipeline.session_stopped'),
   )
   params.showPetStatus(
-    wasContinuousVoiceActive ? '连续语音已停止。' : '语音已停止。',
+    wasContinuousVoiceActive ? params.ti('voice.status.continuous_stopped') : params.ti('voice.status.session_stopped'),
     2_600,
     2_800,
   )

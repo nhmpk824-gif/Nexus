@@ -3,9 +3,11 @@ import type { StreamAudioPlayer } from '../../features/voice/streamAudioPlayer'
 import { prepareTextForTts } from '../../features/voice/text'
 import { shorten } from '../../lib/common'
 import { executeWithFailover, type FailoverCandidate } from '../../features/failover/orchestrator.ts'
-import type { AppSettings, VoiceTraceEntry } from '../../types'
+import type { AppSettings, TranslationKey, TranslationParams, VoiceTraceEntry } from '../../types'
 import { createStreamingSpeechOutputController } from './streamingSpeechOutput'
 import type { StreamingSpeechOutputController } from './types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 type SpeechOutputCallbacks = {
   onStart?: () => void
@@ -38,6 +40,7 @@ export type StartSpeechOutputRuntimeOptions = {
     tone?: VoiceTraceEntry['tone'],
   ) => void
   telemetry?: TelemetryHooks
+  ti: Translator
 }
 
 export async function playSpeechOutputWithSettingsRuntime(
@@ -46,19 +49,20 @@ export async function playSpeechOutputWithSettingsRuntime(
   runtime: SpeechOutputPlaybackRuntime,
   callbacks?: SpeechOutputCallbacks,
   telemetry?: TelemetryHooks,
+  ti?: Translator,
 ) {
   const content = prepareTextForTts(text)
 
   if (!speechSettings.speechOutputEnabled) {
-    throw new Error('请先开启语音播报。')
+    throw new Error(ti?.('voice.diagnostics.output_not_enabled') ?? 'Please enable speech output first.')
   }
 
   if (!content) {
-    throw new Error('没有可播报的文本内容。')
+    throw new Error(ti?.('voice.output.no_text') ?? 'No text content to speak.')
   }
 
   if (!window.desktopPet?.ttsStreamStart) {
-    throw new Error('当前环境未连接桌面客户端，无法使用内置语音播报。')
+    throw new Error(ti?.('voice.output.no_desktop_client') ?? 'The desktop client is not connected.')
   }
 
   // Trace which provider+voice is actually dispatching the turn. Timbre drift
@@ -89,6 +93,7 @@ export async function playSpeechOutputWithSettingsRuntime(
       ...callbacks,
       busEmit: telemetry?.busEmit,
       speechGeneration: telemetry?.speechGeneration,
+      ti,
     },
   )
 
@@ -124,6 +129,7 @@ export async function startSpeechOutputRuntime(
         options.runtime,
         options.callbacks,
         options.telemetry,
+        options.ti,
       )
     },
     onEvent: (event) => {

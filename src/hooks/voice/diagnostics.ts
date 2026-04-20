@@ -9,7 +9,9 @@ import {
   isSenseVoiceSpeechInputProvider,
 } from '../../lib/audioProviders'
 import { checkSenseVoiceAvailability } from '../../features/hearing/localSenseVoice.ts'
-import type { AppSettings } from '../../types'
+import type { AppSettings, TranslationKey, TranslationParams } from '../../types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 export type VoiceDiagnosticResult = {
   ok: boolean
@@ -18,11 +20,13 @@ export type VoiceDiagnosticResult = {
 
 export type TestSpeechInputReadinessRuntimeOptions = {
   draftSettings: AppSettings
+  ti: Translator
 }
 
 export type TestSpeechInputConnectionRuntimeOptions = {
   draftSettings: AppSettings
   testSpeechInputReadiness: (draftSettings: AppSettings) => Promise<VoiceDiagnosticResult>
+  ti: Translator
 }
 
 export type ProbeSpeechOutputPlaybackStartRuntimeOptions = {
@@ -38,6 +42,7 @@ export type ProbeSpeechOutputPlaybackStartRuntimeOptions = {
       onError?: (message: string) => void
     },
   ) => Promise<void>
+  ti: Translator
 }
 
 export type TestSpeechOutputReadinessRuntimeOptions = {
@@ -50,6 +55,7 @@ export type TestSpeechOutputReadinessRuntimeOptions = {
     draftSettings: AppSettings,
     text: string,
   ) => Promise<void>
+  ti: Translator
 }
 
 export type RunAudioSmokeTestRuntimeOptions = {
@@ -62,6 +68,7 @@ export type RunAudioSmokeTestRuntimeOptions = {
       sampleText?: string
     },
   ) => Promise<VoiceDiagnosticResult>
+  ti: Translator
 }
 
 export async function testSpeechInputReadinessRuntime(
@@ -72,14 +79,14 @@ export async function testSpeechInputReadinessRuntime(
   if (!navigator.mediaDevices?.getUserMedia) {
     return {
       ok: false,
-      message: '当前环境没有暴露麦克风录音能力，无法启动语音输入。',
+      message: options.ti('voice.diagnostics.no_mic_api'),
     }
   }
 
   if (typeof MediaRecorder === 'undefined') {
     return {
       ok: false,
-      message: '当前环境不支持 MediaRecorder，无法完成语音输入录音。',
+      message: options.ti('voice.diagnostics.no_media_recorder'),
     }
   }
 
@@ -92,7 +99,7 @@ export async function testSpeechInputReadinessRuntime(
     if (!audioTracks.length) {
       return {
         ok: false,
-        message: '已经拿到录音流，但没有发现可用的音频轨道。',
+        message: options.ti('voice.diagnostics.no_audio_tracks'),
       }
     }
 
@@ -108,20 +115,20 @@ export async function testSpeechInputReadinessRuntime(
       if (!status.installed) {
         return {
           ok: false,
-          message: 'sherpa-onnx-node 未安装，请先运行 npm install sherpa-onnx-node。',
+          message: options.ti('voice.provider.sensevoice.node_missing_detail'),
         }
       }
       if (!status.modelFound) {
         return {
           ok: false,
-          message: `未找到 SenseVoice 模型，请将 sherpa-onnx-sense-voice-zh-en-2024-07-17 目录放到 ${status.modelsDir} 下。`,
+          message: options.ti('voice.provider.sensevoice.model_location_hint', { modelsDir: status.modelsDir }),
         }
       }
     }
 
     const message = isSenseVoiceSpeechInputProvider(providerId)
-      ? '麦克风权限已就绪，SenseVoice 离线识别引擎和模型都正常。'
-      : '麦克风权限已就绪，本地录音链路正常。'
+      ? options.ti('voice.diagnostics.sensevoice_ready')
+      : options.ti('voice.diagnostics.generic_ready')
 
     return { ok: true, message }
   } catch (caught) {
@@ -152,7 +159,7 @@ export async function testSpeechInputConnectionRuntime(
   if (!window.desktopPet?.testServiceConnection) {
     return {
       ok: false,
-      message: '当前环境不支持语音输入连接测试。',
+      message: options.ti('voice.diagnostics.input_no_connection_test'),
     }
   }
 
@@ -184,7 +191,7 @@ export async function probeSpeechOutputPlaybackStartRuntime(
     let timeoutId: number | null = window.setTimeout(() => {
       finish(() => {
         options.stopActiveSpeechOutput()
-        reject(new Error('语音服务已经返回结果，但播放在限定时间内没有真正开始，请检查系统输出设备、自动播放权限或音频解码能力。'))
+        reject(new Error(options.ti('voice.diagnostics.playback_timeout')))
       })
     }, AUDIO_SMOKE_PLAYBACK_TIMEOUT_MS)
     let stopTimerId: number | null = null
@@ -245,14 +252,14 @@ export async function testSpeechOutputReadinessRuntime(
   if (!options.draftSettings.speechOutputEnabled) {
     return {
       ok: false,
-      message: '请先开启语音播报。',
+      message: options.ti('voice.diagnostics.output_not_enabled'),
     }
   }
 
   if (!window.desktopPet?.testServiceConnection) {
     return {
       ok: false,
-      message: '当前环境不支持语音输出连接测试。',
+      message: options.ti('voice.diagnostics.output_no_connection_test'),
     }
   }
 
@@ -278,7 +285,7 @@ export async function testSpeechOutputReadinessRuntime(
 
     return {
       ok: true,
-      message: `${remoteSpeechCheck.message} 已确认本机可以启动语音播放。`,
+      message: options.ti('voice.diagnostics.playback_confirmed_suffix', { message: remoteSpeechCheck.message }),
     }
   }
 
@@ -291,7 +298,7 @@ export async function runAudioSmokeTestRuntime(
   if (!options.draftSettings.speechInputEnabled && !options.draftSettings.speechOutputEnabled) {
     return {
       ok: false,
-      message: '请先至少开启语音输入或语音播报中的一项。',
+      message: options.ti('voice.diagnostics.both_disabled'),
     }
   }
 
@@ -302,13 +309,13 @@ export async function runAudioSmokeTestRuntime(
     if (!inputCheck.ok) {
       return {
         ok: false,
-        message: `语音输入：${inputCheck.message}`,
+        message: options.ti('voice.diagnostics.input_prefix', { message: inputCheck.message }),
       }
     }
 
-    messages.push(`语音输入：${inputCheck.message}`)
+    messages.push(options.ti('voice.diagnostics.input_prefix', { message: inputCheck.message }))
   } else {
-    messages.push('语音输入：当前已关闭，已跳过。')
+    messages.push(options.ti('voice.diagnostics.input_skipped'))
   }
 
   if (options.draftSettings.speechOutputEnabled) {
@@ -319,13 +326,13 @@ export async function runAudioSmokeTestRuntime(
     if (!outputCheck.ok) {
       return {
         ok: false,
-        message: [...messages, `语音输出：${outputCheck.message}`].join('\n'),
+        message: [...messages, options.ti('voice.diagnostics.output_prefix', { message: outputCheck.message })].join('\n'),
       }
     }
 
-    messages.push(`语音输出：${outputCheck.message}`)
+    messages.push(options.ti('voice.diagnostics.output_prefix', { message: outputCheck.message }))
   } else {
-    messages.push('语音输出：当前已关闭，已跳过。')
+    messages.push(options.ti('voice.diagnostics.output_skipped'))
   }
 
   return {

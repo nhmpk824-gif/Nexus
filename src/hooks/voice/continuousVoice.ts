@@ -12,7 +12,9 @@ import { calculateAudioRms, requestVoiceInputStream } from '../../features/voice
 import { voiceDebug } from '../../features/voice/voiceDebugLog'
 import type { WakewordRuntimeController } from '../../features/hearing/wakewordRuntime.ts'
 import type { BrowserSpeechRecognition } from '../../lib/voice'
-import type { AppSettings, PetMood, VoiceState } from '../../types'
+import type { AppSettings, PetMood, TranslationKey, TranslationParams, VoiceState } from '../../types'
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 import {
   SPEECH_INTERRUPT_ANALYSER_FFT_SIZE,
   SPEECH_INTERRUPT_GRACE_MS,
@@ -56,6 +58,7 @@ type ScheduleVoiceRestartOptions = {
   force?: boolean
   /** Internal: tracks how many times the restart has been rescheduled. */
   _retryCount?: number
+  ti: Translator
 }
 
 type PauseContinuousVoiceOptions = {
@@ -98,6 +101,7 @@ type StartSpeechInterruptMonitorOptions = {
   setMood: (mood: PetMood) => void
   showPetStatus: ShowPetStatus
   scheduleVoiceRestart: (statusText?: string, delay?: number, force?: boolean) => void
+  ti: Translator
 }
 
 function destroySpeechInterruptMonitor(
@@ -246,7 +250,7 @@ export function pauseContinuousVoice(options: PauseContinuousVoiceOptions) {
  * callers have been migrated to the VoiceBus event path.
  */
 export function scheduleVoiceRestart(options: ScheduleVoiceRestartOptions) {
-  const statusText = options.statusText || '我继续收音，你可以接着说。'
+  const statusText = options.statusText || options.ti('voice.status.resume_listening')
   const delay = getRestartDelay('initial', { requested: options.delay })
   const force = options.force ?? false
   const retryCount = options._retryCount ?? 0
@@ -278,7 +282,7 @@ export function scheduleVoiceRestart(options: ScheduleVoiceRestartOptions) {
     if (!guard.ok) {
       if (retryCount >= RESTART_RETRY_LIMIT) {
         console.warn('[ContinuousVoice] restart gave up after', retryCount, 'retries — blocker:', guard.blocker)
-        options.showPetStatus('语音重启超时，请手动点击麦克风。', 4_000, 3_000)
+        options.showPetStatus(options.ti('voice.restart_timeout'), 4_000, 3_000)
         return
       }
       voiceDebug('ContinuousVoice', 'timer — blocked (retry', retryCount + 1, '), blocker:', guard.blocker)
@@ -300,7 +304,7 @@ export function scheduleVoiceRestart(options: ScheduleVoiceRestartOptions) {
       options.startVoiceConversation({ restart: true, passive: true })
     } catch (err) {
       console.warn('[ContinuousVoice] restart failed:', err)
-      options.showPetStatus('语音重启失败，请手动重试。', 4_000, 3_000)
+      options.showPetStatus(options.ti('voice.restart_failed'), 4_000, 3_000)
     }
   }, delay)
 }
@@ -474,7 +478,7 @@ export async function startSpeechInterruptMonitor(
         options.stopActiveSpeechOutput()
         options.onInterrupted()
         options.setMood('happy')
-        options.showPetStatus('先停下播报，你继续说。', 2_400, 3_200)
+        options.showPetStatus(options.ti('voice.pause_before_continue'), 2_400, 3_200)
 
         // Post-barge-in restart policy:
         // - Wake-word modes (voiceTriggerMode === 'wake_word' OR
@@ -493,7 +497,7 @@ export async function startSpeechInterruptMonitor(
           && !settings.wakewordAlwaysOn
         )
         if (canForceBargeInRestart) {
-          options.scheduleVoiceRestart('我继续收音，你可以接着说。', 60, true)
+          options.scheduleVoiceRestart(options.ti('voice.status.resume_listening'), 60, true)
         }
         return
       }

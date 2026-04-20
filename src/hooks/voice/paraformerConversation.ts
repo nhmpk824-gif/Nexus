@@ -19,6 +19,8 @@ import { mapSpeechError } from '../../lib/voice'
 import type {
   AppSettings,
   PetMood,
+  TranslationKey,
+  TranslationParams,
   VoicePipelineState,
   VoiceState,
 } from '../../types'
@@ -33,6 +35,8 @@ type ShowPetStatus = (
   duration?: number,
   dedupeWindowMs?: number,
 ) => void
+
+type Translator = (key: TranslationKey, params?: TranslationParams) => string
 
 export type ParaformerConversationState = {
   noSpeechTimer: number | null
@@ -78,6 +82,7 @@ export type StartParaformerConversationOptions = {
     errorCode?: string,
   ) => void
   shouldAutoRestartVoice: () => boolean
+  ti: Translator
 }
 
 export async function startParaformerConversation(
@@ -93,7 +98,7 @@ export async function startParaformerConversation(
     || !window.desktopPet.paraformerAbort
   ) {
     params.setContinuousVoiceSession(false)
-    params.setError('当前环境未连接桌面客户端，无法使用 Paraformer 流式识别。')
+    params.setError(params.ti('voice.provider.paraformer.connect_required'))
     return
   }
 
@@ -101,7 +106,7 @@ export async function startParaformerConversation(
 
   if (params.voiceStateRef.current === 'speaking') {
     if (!params.canInterruptSpeech()) {
-      params.showPetStatus('当前关闭了语音打断，请等我说完。', 2_800, 3_200)
+      params.showPetStatus(params.ti('voice.interruption_disabled'), 2_800, 3_200)
       return
     }
 
@@ -146,7 +151,7 @@ export async function startParaformerConversation(
           return
         }
 
-        void finalizeParaformerTranscript('长时间未继续说话，正在收尾')
+        void finalizeParaformerTranscript(params.ti('voice.pipeline.long_idle_wrap_up'))
       }, SHERPA_STREAM_MAX_IDLE_MS)
     }
 
@@ -180,7 +185,7 @@ export async function startParaformerConversation(
       } catch (error) {
         params.paraformerSessionRef.current = null
         params.handleVoiceListeningFailure(
-          error instanceof Error ? error.message : 'Paraformer 流式识别失败，请稍后再试。',
+          error instanceof Error ? error.message : params.ti('voice.provider.paraformer.failed_retry'),
         )
       }
     }
@@ -189,13 +194,13 @@ export async function startParaformerConversation(
     params.setMood('happy')
     params.setError(null)
     params.setLiveTranscript('')
-    params.updateVoicePipeline('listening', 'Paraformer 流式识别已启动，边说边转写。')
+    params.updateVoicePipeline('listening', params.ti('voice.pipeline.paraformer_started'))
 
     if (!passive) {
       params.showPetStatus(
         params.shouldAutoRestartVoice()
-          ? 'Paraformer 流式识别已开启，边说边转写。'
-          : '我在听，会实时显示识别内容。',
+          ? params.ti('voice.status.continuous_paraformer_start')
+          : params.ti('voice.status.paraformer_listening'),
         4_200,
         3_600,
       )
@@ -214,7 +219,7 @@ export async function startParaformerConversation(
             speechDetected = true
             params.dispatchVoiceSession({ type: 'speech_detected' })
             params.resetNoSpeechRestartCount()
-            params.updateVoicePipeline('listening', '已检测到说话，正在实时识别')
+            params.updateVoicePipeline('listening', params.ti('voice.pipeline.paraformer_detected'))
           }
 
           armNoSpeechTimer()
@@ -222,7 +227,7 @@ export async function startParaformerConversation(
         onSpeechEnd: async () => {
           // VAD detected speech end — finalize the Paraformer transcript
           if (finalizing || !session || params.paraformerSessionRef.current !== session) return
-          void finalizeParaformerTranscript('检测到你已经停下，正在完成识别')
+          void finalizeParaformerTranscript(params.ti('voice.pipeline.paraformer_silence_finalize'))
         },
         onFrameProcessed: (speechProbability) => {
           if (!session || params.paraformerSessionRef.current !== session || finalizing) return
@@ -265,7 +270,7 @@ export async function startParaformerConversation(
         params.paraformerSessionRef.current = null
         params.handleVoiceListeningFailure(message)
       },
-    })
+    }, params.ti)
 
     params.paraformerSessionRef.current = session
     params.paraformerConversationRef.current = {
@@ -287,7 +292,7 @@ export async function startParaformerConversation(
         return
       }
 
-      void finalizeParaformerTranscript('录音时间到，正在完成识别')
+      void finalizeParaformerTranscript(params.ti('voice.pipeline.paraformer_max_duration'))
     }, API_RECORDING_MAX_DURATION_MS)
   } catch (error) {
     params.clearParaformerConversationState()
@@ -299,7 +304,7 @@ export async function startParaformerConversation(
 
     const message = error instanceof Error
       ? error.message
-      : 'Paraformer 识别启动失败，请检查模型和配置。'
+      : params.ti('voice.provider.paraformer.start_failed')
 
     params.updateVoicePipeline('idle', message)
     params.setError(message)
