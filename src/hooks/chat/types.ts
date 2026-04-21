@@ -98,6 +98,7 @@ export type UseChatContext = {
    * tolerant of being unset.
    */
   getRhythmPromptText?: () => string
+  getEmotionSnapshot?: () => { energy: number; warmth: number; curiosity: number; concern: number } | undefined
   reminderTasksRef: RefObject<ReminderTask[]>
   addReminderTask: (input: {
     title: string

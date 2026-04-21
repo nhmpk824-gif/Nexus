@@ -12,6 +12,8 @@ export type MemoryCategory =
 
 export type MemoryImportance = 'low' | 'normal' | 'high' | 'pinned'
 
+export type EmotionalValence = 'positive' | 'negative' | 'neutral' | 'mixed'
+
 export interface MemoryItem {
   id: string
   content: string
@@ -28,6 +30,10 @@ export interface MemoryItem {
   lastRecalledAt?: string
   /** IDs of semantically related memories (cross-session linking). */
   relatedIds?: string[]
+  /** Emotion snapshot at creation time — enables emotion-aware recall. */
+  emotionSnapshot?: { energy: number; warmth: number; curiosity: number; concern: number }
+  /** Dominant emotional valence when this memory was formed. */
+  emotionalValence?: EmotionalValence
 }
 
 export interface DailyMemoryEntry {

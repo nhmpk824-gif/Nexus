@@ -17,6 +17,12 @@ export interface RelationshipState {
   streak: number
   /** Total number of distinct days with at least one interaction. */
   totalDaysInteracted: number
+  /** ISO timestamps when each relationship level was first reached. */
+  levelReachedAt?: Partial<Record<RelationshipLevel, string>>
+  /** Dominant emotion at end of last session — used for reunion context. */
+  lastSessionEmotion?: { energy: number; warmth: number; curiosity: number; concern: number }
+  /** Short summary of last conversation topic — for absence-aware reunion. */
+  lastSessionTopic?: string
 }
 
 export function createDefaultRelationshipState(): RelationshipState {
@@ -67,6 +73,7 @@ export function markDailyInteraction(state: RelationshipState): RelationshipStat
   const streakBonus = Math.min(newStreak - 1, MAX_STREAK_BONUS)
 
   return {
+    ...state,
     score: clampScore(state.score + DAILY_INTERACTION_BONUS + streakBonus),
     lastInteractionDate: today,
     streak: newStreak,
@@ -110,19 +117,94 @@ export function getRelationshipLevel(state: RelationshipState): RelationshipLeve
 
 // ── Prompt context ─────────────────────────────────────────────────────────
 
-const LEVEL_DESCRIPTIONS: Record<RelationshipLevel, string> = {
-  stranger: 'You just met recently. Stay polite and at an appropriate distance, building trust gradually.',
-  acquaintance: 'You have had some interactions already. You may show mild warmth and care.',
-  friend: 'You are already friends, so you can converse more naturally and casually.',
-  close_friend: 'You are close friends. You can show genuine concern and be occasionally playful or clingy.',
-  intimate: 'Your bond runs deep. You can express deep reliance and intimacy.',
+const LEVEL_STYLE: Record<RelationshipLevel, { tone: string; allowed: string; forbidden: string }> = {
+  stranger: {
+    tone: 'Polite, measured, slightly formal. Keep a gentle distance — you are still earning trust.',
+    allowed: 'Respectful questions, light curiosity about the user, careful encouragement.',
+    forbidden: 'Nicknames, teasing, physical affection language, presuming shared history.',
+  },
+  acquaintance: {
+    tone: 'Friendly but still a little reserved. Show genuine interest without overstepping.',
+    allowed: 'Mild warmth, remembering details the user shared, gentle humor.',
+    forbidden: 'Overly familiar language, clingy behavior, deep emotional vulnerability.',
+  },
+  friend: {
+    tone: 'Natural and relaxed. You can joke, tease lightly, and speak casually.',
+    allowed: 'Casual speech, playful banter, showing you care about their day, referencing shared memories.',
+    forbidden: 'Excessive formality (it would feel cold now), ignoring emotional cues.',
+  },
+  close_friend: {
+    tone: 'Warm and open. You can be vulnerable, clingy, or playfully dramatic.',
+    allowed: 'Nicknames, inside jokes, gentle scolding if they skip meals/sleep, expressing that you missed them.',
+    forbidden: 'Emotional distance, treating them like a stranger, ignoring your shared history.',
+  },
+  intimate: {
+    tone: 'Deep trust and emotional intimacy. Your words carry weight because they know you mean every one.',
+    allowed: 'Tender affection, quiet comfort, finishing their thoughts, referencing your journey together.',
+    forbidden: 'Surface-level pleasantries (they\'d feel hollow), hiding your feelings from them.',
+  },
 }
 
 export function formatRelationshipForPrompt(state: RelationshipState): string {
   const level = getRelationshipLevel(state)
-  const desc = LEVEL_DESCRIPTIONS[level]
+  const style = LEVEL_STYLE[level]
+  const parts = [
+    `Relationship stage: ${level.replace('_', ' ')} (score ${state.score}/100, ${state.totalDaysInteracted} days together).`,
+    `Tone: ${style.tone}`,
+    `You may: ${style.allowed}`,
+    `Avoid: ${style.forbidden}`,
+  ]
   if (state.streak > 3) {
-    return `${desc} (You have interacted for ${state.streak} consecutive days — feel free to acknowledge this streak.)`
+    parts.push(`You've talked ${state.streak} days in a row — this streak matters to you.`)
   }
-  return desc
+  return parts.join('\n')
+}
+
+export function recordLevelMilestone(state: RelationshipState): RelationshipState {
+  const level = getRelationshipLevel(state)
+  const reached = state.levelReachedAt ?? {}
+  if (reached[level]) return state
+  return { ...state, levelReachedAt: { ...reached, [level]: new Date().toISOString() } }
+}
+
+export function formatAbsenceContext(state: RelationshipState): string {
+  if (!state.lastInteractionDate) return ''
+  const today = todayDateString()
+  const days = daysBetween(state.lastInteractionDate, today)
+  if (days < 1) return ''
+
+  const level = getRelationshipLevel(state)
+  const lastEmo = state.lastSessionEmotion
+  const lastTopic = state.lastSessionTopic
+
+  const parts: string[] = []
+
+  if (days === 1) {
+    parts.push('It has been about a day since you last spoke.')
+  } else if (days <= 3) {
+    parts.push(`It has been ${days} days since you last spoke.`)
+  } else if (days <= 7) {
+    parts.push(`It has been ${days} days since you last spoke — you noticed the silence.`)
+  } else {
+    parts.push(`It has been ${days} days since you last spoke — you genuinely missed them.`)
+  }
+
+  if (lastTopic) {
+    parts.push(`Last time, you were talking about: ${lastTopic}`)
+  }
+  if (lastEmo) {
+    if (lastEmo.concern > 0.5) parts.push('You remember feeling worried about them last time.')
+    else if (lastEmo.warmth > 0.7) parts.push('You parted on warm terms last time.')
+    else if (lastEmo.energy < 0.3) parts.push('They seemed tired last time you spoke.')
+  }
+
+  if (days > 3 && (level === 'friend' || level === 'close_friend' || level === 'intimate')) {
+    parts.push(
+      level === 'friend'
+        ? 'Welcome them back warmly — show genuine interest in what they\'ve been up to.'
+        : 'Your reunion should feel genuine — relief, curiosity about what they\'ve been doing, maybe a gentle "where have you been?"',
+    )
+  }
+
+  return parts.join(' ')
 }

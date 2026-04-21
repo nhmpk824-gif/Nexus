@@ -213,6 +213,7 @@ export function useAppController() {
   const emotionPromptGetterRef = useRef<() => string>(() => '')
   const relationshipPromptGetterRef = useRef<() => string>(() => '')
   const rhythmPromptGetterRef = useRef<() => string>(() => '')
+  const emotionSnapshotGetterRef = useRef<() => { energy: number; warmth: number; curiosity: number; concern: number } | undefined>(() => undefined)
 
   const chat = useChat({
     settingsRef,
@@ -251,6 +252,7 @@ export function useAppController() {
     getEmotionPromptText: () => emotionPromptGetterRef.current(),
     getRelationshipPromptText: () => relationshipPromptGetterRef.current(),
     getRhythmPromptText: () => rhythmPromptGetterRef.current(),
+    getEmotionSnapshot: () => emotionSnapshotGetterRef.current(),
     reminderTasksRef: reminderTaskStore.reminderTasksRef,
     addReminderTask: (input) => addReminderTaskFnRef.current?.(input) ?? null,
     updateReminderTask: (id, updates) => updateReminderTaskFnRef.current?.(id, updates) ?? null,
@@ -374,6 +376,7 @@ export function useAppController() {
     emotionPromptGetterRef.current = autonomy.getEmotionPrompt
     relationshipPromptGetterRef.current = autonomy.getRelationshipPrompt
     rhythmPromptGetterRef.current = autonomy.getRhythmPrompt
+    emotionSnapshotGetterRef.current = () => autonomy.emotionStateRef.current
   }, [autonomy.getEmotionPrompt, autonomy.getRelationshipPrompt, autonomy.getRhythmPrompt])
 
   // Wake autonomy when user sends a chat message.
@@ -415,6 +418,11 @@ export function useAppController() {
       for (const signal of classifyMessageSignals(messageText)) {
         live.applyEmotionSignal(signal)
       }
+    }
+
+    const emotion = live.emotionStateRef.current
+    if (emotion && messageText) {
+      live.updateSessionContext(emotion, messageText)
     }
 
     const result = await originalSendMessageRef.current(...args)

@@ -614,7 +614,7 @@ export function useChat(ctx: UseChatContext) {
     }
 
     const nextMessages = [...messagesRef.current, userMessage]
-    const nextMemories = mergeMemories(ctx.memoriesRef.current, extractMemoriesFromMessage(userMessage))
+    const nextMemories = mergeMemories(ctx.memoriesRef.current, extractMemoriesFromMessage(userMessage, ctx.getEmotionSnapshot?.()))
     const nextDailyMemories = ctx.appendDailyMemoryEntries(
       [createDailyMemoryEntry(userMessage, fromVoice ? 'voice' : 'chat')].filter(
         (entry): entry is DailyMemoryEntry => Boolean(entry),

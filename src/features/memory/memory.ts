@@ -2,10 +2,12 @@ import type {
   ChatMessage,
   DailyMemoryEntry,
   DailyMemoryStore,
+  EmotionalValence,
   MemoryCategory,
   MemoryImportance,
   MemoryItem,
 } from '../../types'
+import type { EmotionState } from '../autonomy/emotionModel'
 import { createId } from '../../lib/index.ts'
 
 const longTermDuplicateThreshold = 0.72
@@ -126,10 +128,15 @@ function splitMessageSegments(content: string) {
     .filter((segment) => segment.length >= 6)
 }
 
-export function extractMemoriesFromMessage(message: ChatMessage): MemoryItem[] {
+export function extractMemoriesFromMessage(
+  message: ChatMessage,
+  emotionState?: EmotionState,
+): MemoryItem[] {
   if (message.role !== 'user') {
     return []
   }
+
+  const valence = emotionState ? inferValence(emotionState) : undefined
 
   return splitMessageSegments(message.content)
     .filter((segment) => (
@@ -145,8 +152,19 @@ export function extractMemoriesFromMessage(message: ChatMessage): MemoryItem[] {
         source: 'chat',
         importance: inferImportance(segment, category),
         createdAt: new Date().toISOString(),
+        emotionSnapshot: emotionState,
+        emotionalValence: valence,
       }
     })
+}
+
+function inferValence(emo: EmotionState): EmotionalValence {
+  const pos = emo.warmth + emo.energy
+  const neg = emo.concern + (1 - emo.energy)
+  if (pos > 1.3 && neg < 0.8) return 'positive'
+  if (neg > 1.2 && pos < 1.0) return 'negative'
+  if (pos > 1.0 && neg > 1.0) return 'mixed'
+  return 'neutral'
 }
 
 function inferImportance(content: string, category: MemoryCategory): MemoryImportance {
