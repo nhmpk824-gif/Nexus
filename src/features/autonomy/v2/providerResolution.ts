@@ -44,12 +44,11 @@ export interface AutonomyV2ResolvedConfig {
 }
 
 export function resolveAutonomyV2Config(settings: AppSettings): AutonomyV2ResolvedConfig {
-  const flagOn = Boolean(settings.autonomyEngineV2)
   const level: AutonomyLevelV2 = settings.autonomyLevelV2 ?? 'med'
   const strictness: GuardrailStrictness = (
     settings.autonomyPersonaStrictnessV2 ?? 'med'
   ) as GuardrailStrictness
-  const enabled = flagOn && level !== 'off'
+  const enabled = level !== 'off'
 
   const decisionModel = (settings.autonomyModelV2 ?? '').trim() || settings.model
 

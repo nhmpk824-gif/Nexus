@@ -25,18 +25,6 @@ export interface AutonomyTickState {
   consecutiveIdleTicks: number
 }
 
-// ── Proactive decision ────────────────────────────────────────────────────────
-
-/** Known categories for proactive speech decisions. */
-export type ProactiveSpeakCategory = 'welcome_back' | 'context' | 'memory' | 'idle_check' | 'time' | 'monologue'
-
-export type ProactiveDecision =
-  | { kind: 'silent' }
-  | { kind: 'speak'; text: string; category: ProactiveSpeakCategory; priority: number }
-  | { kind: 'remind'; taskId: string }
-  | { kind: 'suggest'; suggestion: string }
-  | { kind: 'brief'; summary: string }
-
 // ── Memory dream ──────────────────────────────────────────────────────────────
 
 export interface MemoryDreamResult {
@@ -143,20 +131,6 @@ export interface AutonomySettings {
   autonomyQuietHoursStart: number
   autonomyQuietHoursEnd: number
   autonomyCostLimitDailyTicks: number
-  autonomyMonologueEnabled: boolean
-  /** How many autonomy ticks between monologue LLM calls. */
-  autonomyMonologueIntervalTicks: number
-  /** Urgency score (0-100) above which the monologue becomes proactive speech. */
-  autonomyMonologueSpeechThreshold: number
-
-  // ── V2 engine (dormant until Phase 3 lands) ─────────────────────────────────
-  /**
-   * Opt in to the LLM-driven autonomy engine. When false (default) the legacy
-   * rule-based proactiveEngine runs. Flipping this without the v2 code paths
-   * wired up is a no-op — the setting exists so Phase 0 can land ahead of the
-   * code so the v2 rollout doesn't need another settings migration.
-   */
-  autonomyEngineV2: boolean
   /**
    * Density + aggressiveness of autonomous speech under the v2 engine.
    *   off  — never speak proactively, autonomy reduces to state tracking only

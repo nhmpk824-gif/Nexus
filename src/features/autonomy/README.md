@@ -55,45 +55,23 @@ src/types/autonomy.ts           ← shared type surface (AutonomyTickState,
 Breaking this layering is usually what makes autonomy hard to navigate. If
 you find yourself importing `useRef` from `features/autonomy/*`, stop.
 
-## v2 engine migration (in progress)
+## v2 engine (active)
 
-The legacy decision path (`proactiveEngine.ts` + `innerMonologue.ts` +
-`intentPredictor.ts`, ~900 lines) is a rule-based tree over hand-written
-templates. It produces formulaic "主动行为幼稚" output — emotion and
-relationship are tracked but barely influence the words that come out.
-
-The v2 engine replaces that tree with a small LLM call gated by the same
-tick loop. Structure:
+The v2 engine replaced the legacy rule-based decision tree with a small
+LLM call gated by the tick loop:
 
 ```
 tick (eligible?) → gather context → decision LLM → persona guardrail → speak
 ```
 
-Phases:
-
-- **Phase 0** — v2 feature flag in settings (done, dormant)
-- **Phase 1** — state persistence audit + fixes (done: emotion, rhythm)
-- **Phase 2** — `v2/contextGatherer.ts` pure aggregator (done)
-- **Phase 3** — `v2/decisionEngine.ts` LLM prompt + call
-- **Phase 4** — `v2/personaGuardrail.ts` signature + optional LLM-judge
-- **Phase 5** — wire to chat/TTS delivery behind the feature flag
-- **Phase 6** — flip default, delete v1 code
-
-Legacy files stay untouched until Phase 6 so the two paths can run in
-parallel during validation. Don't delete `proactiveEngine.ts` until both
-engines have been tested side-by-side.
+V1 code (`proactiveEngine.ts`, `innerMonologue.ts`, `intentPredictor.ts`,
+`decisionFeedback.ts`, `broadcastGate.ts`) was deleted in Phase 6.
 
 ## Settings surface
 
-v1 engine reads:
-- `autonomyEnabled`, `autonomyTickIntervalSeconds`, `autonomySleepAfterIdleMinutes`,
-- `autonomyQuietHoursStart/End`, `autonomyCostLimitDailyTicks`,
-- `autonomyMonologueEnabled` (+ interval + threshold).
-
-v2 engine adds (dormant until Phase 3):
-- `autonomyEngineV2` — opt-in toggle.
+- `autonomyEnabled` — master toggle.
 - `autonomyLevelV2` — `off | low | med | high`, tick density and speech rate.
-- `autonomyModelV2` — chat provider id, empty means reuse primary chat model.
+- `autonomyModelV2` — model override, empty means reuse primary chat model.
 - `autonomyPersonaStrictnessV2` — `loose | med | strict`, guardrail aggression.
 
 See `src/types/autonomy.ts` for the full `AutonomySettings` interface and

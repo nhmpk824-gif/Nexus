@@ -16,7 +16,6 @@ function makeSettings(overrides: Partial<Record<string, unknown>>): AppSettings 
     apiBaseUrl: 'https://api.anthropic.com',
     apiKey: 'sk-test',
     model: 'claude-sonnet-4-6',
-    autonomyEngineV2: true,
     autonomyLevelV2: 'med',
     autonomyModelV2: '',
     autonomyPersonaStrictnessV2: 'med',
@@ -24,27 +23,13 @@ function makeSettings(overrides: Partial<Record<string, unknown>>): AppSettings 
   } as unknown as AppSettings
 }
 
-test('resolveAutonomyV2Config: flag off → enabled=false', () => {
-  const cfg = resolveAutonomyV2Config(makeSettings({ autonomyEngineV2: false }))
-  assert.equal(cfg.enabled, false)
-  // Other fields still populated (callers may want to display them)
-  assert.equal(cfg.level, 'med')
-  assert.equal(cfg.strictness, 'med')
-})
-
-test('resolveAutonomyV2Config: level=off → enabled=false even with flag on', () => {
-  const cfg = resolveAutonomyV2Config(makeSettings({
-    autonomyEngineV2: true,
-    autonomyLevelV2: 'off',
-  }))
+test('resolveAutonomyV2Config: level=off → enabled=false', () => {
+  const cfg = resolveAutonomyV2Config(makeSettings({ autonomyLevelV2: 'off' }))
   assert.equal(cfg.enabled, false)
 })
 
-test('resolveAutonomyV2Config: flag on + level≠off → enabled=true', () => {
-  const cfg = resolveAutonomyV2Config(makeSettings({
-    autonomyEngineV2: true,
-    autonomyLevelV2: 'high',
-  }))
+test('resolveAutonomyV2Config: level≠off → enabled=true', () => {
+  const cfg = resolveAutonomyV2Config(makeSettings({ autonomyLevelV2: 'high' }))
   assert.equal(cfg.enabled, true)
   assert.equal(cfg.level, 'high')
 })

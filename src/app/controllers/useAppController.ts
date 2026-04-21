@@ -406,7 +406,6 @@ export function useAppController() {
     const live = autonomyRef.current
     live.focusAwareness.markActive()
     live.autonomyTick.wakeUp()
-    live.markUserResponse()
     live.markInteraction()
 
     // Classify user message text for emotion signals

@@ -6,13 +6,13 @@ import {
   shouldTick,
   wakeUpState,
 } from '../features/autonomy/tickLoop'
-import type { AppSettings, AutonomyPhase, AutonomyTickState, FocusState, ProactiveDecision } from '../types'
+import type { AppSettings, AutonomyPhase, AutonomyTickState, FocusState } from '../types'
 
 export type UseAutonomyTickOptions = {
   settingsRef: React.RefObject<AppSettings>
   focusStateRef: React.RefObject<FocusState>
   idleSecondsRef: React.RefObject<number>
-  onTick: (state: AutonomyTickState) => ProactiveDecision | void
+  onTick: (state: AutonomyTickState) => void
   /** Pass actual values (not from ref) so the effect re-runs when they change. */
   enabled: boolean
   tickIntervalSeconds: number

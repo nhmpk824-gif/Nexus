@@ -185,15 +185,6 @@ const defaultSettings: AppSettings = {
   autonomyQuietHoursStart: 23,
   autonomyQuietHoursEnd: 7,
   autonomyCostLimitDailyTicks: 100,
-  autonomyMonologueEnabled: false,
-  autonomyMonologueIntervalTicks: 6,
-  autonomyMonologueSpeechThreshold: 65,
-  // v2 engine — now the default path (Phase 5b landed the full pipeline).
-  // Only kicks in when autonomyEnabled is also true, so users who haven't
-  // opted into autonomy at all are unaffected. Legacy v1 proactiveEngine
-  // stays in the codebase until Phase 6 so users can flip back via this
-  // flag if the LLM-driven behaviour isn't what they want.
-  autonomyEngineV2: true,
   autonomyLevelV2: 'med',
   autonomyModelV2: '',
   autonomyPersonaStrictnessV2: 'med',

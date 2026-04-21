@@ -33,11 +33,7 @@ import {
   getHourlyProbability,
 } from '../rhythmLearner.ts'
 
-// ── Activity classification (v2-local copy) ────────────────────────────────
-// A compact re-implementation of the patterns used by the legacy
-// proactiveEngine so v2 can be deleted and reinstalled without touching
-// old code. Keep in sync by intent, not by copy — these lists will diverge
-// when v2 lands its richer "what is the user actually doing" signals.
+// ── Activity classification ─────────────────────────────────────────────────
 
 export type ActivityClass =
   | 'coding'

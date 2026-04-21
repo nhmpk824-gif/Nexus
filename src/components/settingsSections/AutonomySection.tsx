@@ -414,27 +414,6 @@ export const AutonomySection = memo(function AutonomySection({
             </div>
           )}
 
-          {/* ── Inner Monologue ──────────────────────────────────────────── */}
-          <SubsectionHeader
-            title={ti('settings.autonomy.monologue.title')}
-            hint={ti('settings.autonomy.monologue.hint')}
-          />
-
-          <ToggleField label={ti('settings.autonomy.monologue.enable')} field="autonomyMonologueEnabled" {...fieldProps} />
-
-          {draft.autonomyMonologueEnabled && (
-            <div className="settings-grid">
-              <NumberField label={ti('settings.autonomy.monologue.interval')} field="autonomyMonologueIntervalTicks" min={2} max={30} step={1} {...fieldProps} />
-              <NumberField label={ti('settings.autonomy.monologue.threshold')} field="autonomyMonologueSpeechThreshold" min={0} max={100} step={5} {...fieldProps} />
-            </div>
-          )}
-
-          {draft.autonomyMonologueEnabled && (
-            <p className="settings-drawer__hint">
-              {ti('settings.autonomy.monologue.threshold_note')}
-            </p>
-          )}
-
           {/* ── Context Triggers ────────────────────────────────────────────── */}
           <SubsectionHeader
             title={ti('settings.autonomy.triggers.title')}

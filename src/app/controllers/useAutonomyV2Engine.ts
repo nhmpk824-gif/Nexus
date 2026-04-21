@@ -1,9 +1,8 @@
 /**
- * Autonomy Engine V2 — React/tick integration (Phase 5b).
+ * Autonomy Engine V2 — React/tick integration.
  *
- * Sits alongside the legacy proactiveEngine path in useAutonomyController.
- * When `settings.autonomyEngineV2 && autonomyLevelV2 !== 'off'` the
- * controller routes ticks here instead of the rule-based tree.
+ * Called by useAutonomyController on each tick when
+ * `autonomyLevelV2 !== 'off'`.
  *
  * Responsibilities:
  *  - Load the active persona profile from disk on mount (cached in a ref
