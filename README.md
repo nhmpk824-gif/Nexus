@@ -37,7 +37,7 @@ The design goal is persistence of relationship, not just chat. A nightly **dream
 ## News
 
 - **2026.04.22** — **v0.2.9 released.** Emotional memory, 5-level relationship evolution (stranger → intimate), absence-aware reunions, cross-session memory persistence, weather & scene system overhaul (14 weather states, AI-generated scenes, continuous sunlight), Character Card v2/v3 import, VTube Studio WebSocket bridge, full 5-locale i18n, pet system enhancements (inline expressions, tap reactions, idle fidgets, drag-resize). [Changelog →](https://github.com/FanyinLiu/Nexus/releases/tag/v0.2.9)
-- **2026.04.19** — **v0.2.7 released.** Subagent dispatcher lands — the companion can now spawn a background research helper from autonomy ticks or chat tool calls, surfaced in the chat panel as a live status strip. Barge-in monitor hardened: any TTS reply (voice *or* typed-text) is interruptible, and the wake-word listener's mic is reused to avoid macOS contention. Fixes a render-storm bug that made long STT utterances stall the second turn, and the matching cross-window sync bug that made voice messages invisible to an open chat panel. [What's new in v0.2.7](#whats-new-in-v027) below.
+- **2026.04.19** — **v0.2.7 released.** Subagent dispatcher lands — the companion can now spawn a background research helper from autonomy ticks or chat tool calls, surfaced in the chat panel as a live status strip. Barge-in monitor hardened: any TTS reply (voice *or* typed-text) is interruptible, and the wake-word listener's mic is reused to avoid macOS contention. Fixes a render-storm bug that made long STT utterances stall the second turn, and the matching cross-window sync bug that made voice messages invisible to an open chat panel. [Changelog →](https://github.com/FanyinLiu/Nexus/releases/tag/v0.2.7)
 - **2025.04.19** — v0.2.5 released. Autonomy Engine V2 now default-on (LLM-driven decision + persona guardrail replacing the hand-written rule tree). Chat pane opens fresh each launch with past sessions browsable under Settings → 聊天记录. Voice/TTS reliability pass. New `system-dark` theme preset. [Changelog →](https://github.com/FanyinLiu/Nexus/releases/tag/v0.2.5)
 - **2025.04.16** — v0.2.4 released. Big voice/TTS reliability pass (tool-call TTS, markdown stripping, empty-stream detection, first-audio watchdog), Anthropic prompt caching wired on the system + tools prefix, wake-word gaps tightened, 20+ bug fixes. [Changelog →](https://github.com/FanyinLiu/Nexus/releases/tag/v0.2.4)
 - **2025.04.15** — Wake-word + VAD rewrite (Plan C): main-process Silero VAD + sherpa-onnx-node, single mic stream. Fixes the "only fires once" wake bug.
@@ -54,9 +54,9 @@ The design goal is persistence of relationship, not just chat. A nightly **dream
 
 - 🧠 **Memory that dreams.** Three-tier hot / warm / cold with hybrid BM25 + vector search. A nightly dream cycle clusters conversations into *narrative threads* so the companion's sense of you compounds over time instead of resetting each session.
 
-- 🤖 **Autonomous inner life (V2).** Single LLM decision call per tick, fed a layered snapshot (emotion · relationship · rhythm · desktop · recent chat) and filtered through a per-persona guardrail. No more formulaic template output — it writes in its own voice, can choose to stay silent, and — as of v0.2.7 — can dispatch a background research helper when a task would actually benefit from it.
+- 🤖 **Autonomous inner life (V2).** Single LLM decision call per tick, fed a layered snapshot (emotion · relationship · rhythm · desktop · recent chat) and filtered through a per-persona guardrail. No more formulaic template output — it writes in its own voice, can choose to stay silent, and can dispatch a background research helper when a task would benefit from it.
 
-- 🧰 **Subagent dispatcher (v0.2.7).** The companion can fire a bounded research loop behind the scenes — web search or MCP tools — and weave the summary into its next reply. Capacity + daily budget enforced; opt-in via Settings. See [What's new in v0.2.7](#whats-new-in-v027).
+- 🧰 **Subagent dispatcher.** The companion can fire a bounded research loop behind the scenes — web search or MCP tools — and weave the summary into its next reply. Capacity + daily budget enforced; opt-in via Settings.
 
 - 🔧 **Built-in tools.** Web search, weather, reminders. Works with native function calling **and** a prompt-mode fallback for models that don't support `tools`.
 
@@ -72,126 +72,88 @@ The design goal is persistence of relationship, not just chat. A nightly **dream
 
 - 💰 **Cost-aware.** Built-in budget metering + Anthropic prompt caching on the system + tools prefix (30-50% input token reduction on long sessions).
 
-## What's new in v0.2.7
+## What's new in v0.2.9
 
-> Subagent dispatcher is the headline; barge-in got a hardening pass so
-> it actually works on every TTS reply; and a render-storm bug that made
-> voice turns invisible to an open chat panel is fixed. This section is
-> refreshed each release — older notes live in
-> [Releases](https://github.com/FanyinLiu/Nexus/releases).
+> Emotional memory and relationship evolution are the headline — the
+> companion now tracks how your relationship develops over time and
+> remembers how each conversation felt. The weather & scene system was
+> rebuilt from scratch with 14 weather states and AI-generated scenes.
+> Character Card import, VTube Studio bridge, and full 5-locale i18n
+> round out the release. This section is refreshed each release — older
+> notes live in [Releases](https://github.com/FanyinLiu/Nexus/releases).
 
-### 🧰 Subagent dispatcher — headline
+### 🧠 Emotional memory & relationship evolution — headline
 
-> **TL;DR** — The companion can now spawn a bounded background research
-> agent when a task would genuinely benefit from it (web lookup,
-> doc-reading, fact checks). Two entry points: the autonomy engine can
-> choose `spawn` in place of `speak`, or the chat LLM can call the
-> `spawn_subagent` tool mid-turn. Status is surfaced as a live chip above
-> the chat message list; the summary is woven into the companion's
-> reply. Default off — opt-in per-user.
+The companion now carries emotional context across sessions. If you
+parted on a warm note, it picks up warmly; if you were tired, it checks
+in. Five relationship stages — stranger → acquaintance → friend → close
+friend → intimate — shape the companion's tone, language style, and
+behavioral boundaries. The progression is implicit, driven by
+accumulated interaction, not a visible meter.
 
-Turning on:
+Absence awareness: the companion notices when you've been away. Short
+gaps get a gentle welcome-back; longer absences trigger genuine curiosity
+("where have you been?"). Conversation memories now persist to per-persona
+`memory.md` files so nothing is lost between sessions.
 
-```
-Settings → Subagents → Enable
-  maxConcurrent:    1–3 (hard cap 3)
-  perTaskBudgetUsd: soft cap per task
-  dailyBudgetUsd:   soft cap across all tasks today
-  modelOverride:    optional — point research at a cheaper tier
-```
+### 🌦️ Weather & scene system overhaul
 
-Three-tier model fallback: `subagentSettings.modelOverride →
-autonomyModelV2 → settings.model`. So you can route research through a
-small fast model (Haiku / Flash / a cheap OpenRouter entry) while the
-main chat stays on whatever you've configured.
+The old weather widget was replaced with a full atmospheric system:
 
-Decision engine integration: the autonomy prompt now sees live
-`subagentAvailability` (enabled + current capacity + remaining daily
-budget) on every tick, and the `spawn` action is only advertised when
-the gate is actually open. When the LLM chooses `spawn`, the
-orchestrator can optionally speak a short announcement ("let me look
-that up") via the usual TTS path, **concurrently** with starting the
-research loop — no serial delay before work begins.
+- **14 intensity-graded weather states** with full-scene visual effects —
+  sky tints, dense particle layers, glowing rain and snow.
+- **Continuous sunlight system** with brightness / saturation / hue
+  filters. Real night, fine daytime gradations — not just "day" and
+  "night."
+- **15 AI-generated anime scene variants** (5 locations × day / dusk /
+  night), hand-prompted for visual consistency.
+- **14-state pet time preview** with a lock-to-time-of-day setting so
+  you can preview how each weather looks.
+- **Multi-language weather location parsing** with Nominatim geocoding —
+  type your city in any language.
 
-Chat-tool integration: when subagents are enabled, `spawn_subagent` is
-added to the LLM's tool list. The tool call blocks for the research
-turn (usually 10-30s) and returns a summary, which the main LLM weaves
-into its reply. Users see the live strip the whole time so the wait
-isn't silent.
+### 📇 Character Card import
 
-UI: `SubagentTaskStrip` renders queued / running tasks as a thin
-glassmorphism chip above the chat list, with a pulsing indicator dot.
-Completed tasks don't appear there — their summaries arrive as normal
-chat bubbles. Failed tasks stay visible for 60 s so the reason is
-legible.
+Import Character Card v2 / v3 format (PNG-embedded + JSON) — compatible
+with cards from chub.ai, characterhub, and other community sources.
+Drop a `.png` card file in Settings → Character and the persona is
+populated automatically.
 
-Source tour: `src/features/autonomy/subagents/`
-(`subagentRuntime.ts` state machine, `subagentDispatcher.ts` LLM loop,
-`spawnSubagentTool.ts` + `dispatcherRegistry.ts` for the chat bridge,
-`src/components/SubagentTaskStrip.tsx` UI). Six unit tests cover the
-runtime state machine (admission, budget, concurrency cap, onChange).
+### 🎭 VTube Studio bridge
 
-### 🎙️ Barge-in anywhere
+WebSocket bridge for driving external Live2D models via VTube Studio.
+Expression and motion sync from the companion's emotional state — so
+your VTS model reacts in real time to how the companion feels.
 
-Before: the speech-interrupt monitor only armed when the current turn
-originated from a continuous voice session. Typed-text replies played
-uninterruptibly, which felt wrong — if you can speak to the companion,
-you should also be able to speak *over* it.
+### 🌐 Full i18n
 
-- Monitor arms on every TTS playback once `voiceInterruptionEnabled` is
-  on, not only on voice-originated turns.
-- When the wake-word listener is already running, the monitor now
-  *reuses* its mic frames via `subscribeMicFrames` instead of opening a
-  second `getUserMedia`. macOS occasionally serializes two streams on
-  the default input and produced sporadic monitor silence; this path
-  is now the default whenever KWS is listening.
-- After a successful barge-in, non-wake-word modes force a VAD restart
-  so your continuation is captured without needing to re-wake. Wake-word
-  + always-on KWS modes keep the old behaviour (let KWS reacquire —
-  forcing a second VAD would contend with the listener).
+All UI surfaces now carry full translations across 5 locales (EN /
+ZH-CN / ZH-TW / JA / KO): settings, chat, onboarding, voice stack,
+system prompts, error messages, and data registries. Language switcher
+with globe icon + popover in settings.
 
-### 🐛 Render-storm + cross-window sync
+### 🐾 Pet system enhancements
 
-The headline bug was subtle and came in two layers.
+- **Inline expression overrides**: the companion can write `[expr:name]`
+  tags in its reply to trigger specific Live2D expressions mid-sentence.
+- **Expanded tap-zone reaction pool** — more varied responses when you
+  poke the character.
+- **Per-model weighted idle fidgets** — idle animations feel different
+  per character, weighted by model metadata.
+- **Mouse-drag resize** on the pet character window.
+- **13 fine-grained pet mood states** feeding into expression selection.
 
-**Render storm**: every parent render handed `useChat` / `useMemory` /
-`usePetBehavior` / `useVoice` consumers a fresh object literal.
-Downstream memos (`chatWithAutonomy`, `petView`, `overlays`,
-`panelView`) invalidated on every render, cascading into children
-whose effects wrote state back — the classic "Maximum update depth
-exceeded" loop. Observed as log spam the moment a chat turn settled;
-the second STT utterance would then stall because the renderer was
-starved and VAD's `speech_end` callback never drained. Fixed by
-memoizing the return bag in each hook and — in `useVoice` — explicitly
-excluding `lifecycle.*` / `bindings.*` / `testEntries.*` from the memo
-deps (those factories are reconstructed every render but route through
-stable refs, so old captures still work).
+### 🔧 Other improvements & fixes
 
-**Cross-window sync**: the pet window and chat panel are separate
-Electron renderers with separate React state. They sync chat through
-a `storage` event on `CHAT_STORAGE_KEY` (`nexus:chat`). But `useChat`'s
-save effect was only calling `upsertChatSession`, which writes
-`CHAT_SESSIONS_STORAGE_KEY` (`nexus:chat-sessions`) — `nexus:chat` was
-never written by anyone. Voice turns, which happen inside the pet
-window, never became visible to an open chat panel. Now
-`saveChatMessages(messages)` is called alongside `upsertChatSession`
-so the key the panel listens on actually updates.
-
-### 🔧 Startup fixes
-
-- **Silero VAD now actually runs.** `browserVad.ts` points
-  `onnxWASMBasePath` at `public/vendor/ort/`, but that folder never
-  existed — `setup-vendor.mjs` only copied Live2D assets. Without the
-  ORT runtime, `vad-web` fell back to a CJS `require()` that Vite's
-  ESM dev server can't service, and the whole Silero path failed with
-  a "legacy recording" fallback. `setup-vendor.mjs` now copies the
-  four wasm + mjs bundles vad-web needs from `node_modules` on
-  postinstall.
-- **`mcp:sync-servers` handler registers eagerly.** The handler was
-  deferred-loaded ~1.5 s after app-ready, but `useMcpServerSync` fires
-  on first render and raced the registration. `sherpaIpc` /
-  `notificationIpc` had the same issue earlier; `mcpIpc` now joins
-  them on the eager path.
+- Lorebook semantic hybrid retrieval on top of keyword matching.
+- User-configurable regex transforms on LLM replies.
+- Local voice model health strip on the onboarding voice step.
+- Sherpa models bundled into Mac + Linux installers.
+- Fixed cross-window BroadcastChannel sync save loop and message clobbering.
+- Fixed runtime-state bridge self-feeding render storm.
+- Fixed TTS-timeout render storm.
+- Fixed wakeword transient device errors treated as permanent.
+- Deleted Autonomy V1 code (Phase 6 cleanup).
 
 ## Install
 
