@@ -239,6 +239,40 @@ After first launch, open **Settings**:
 | **TTS** | Edge TTS · MiniMax · Volcengine · DashScope Qwen3-TTS · OmniVoice · OpenAI TTS · ElevenLabs · Custom |
 | **Web search** | DuckDuckGo · Bing · Brave · Tavily · Exa · Firecrawl · Gemini Grounding · Perplexity |
 
+## Recommended model setup
+
+> These recommendations target **English-speaking users**. For other languages see [简体中文](docs/README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md).
+
+### Chat model (LLM)
+
+| Use case | Provider | Model | Notes |
+|----------|----------|-------|-------|
+| **Daily companion (top pick)** | Anthropic | `claude-sonnet-4-6` | Best overall quality, stable tool calling, natural English |
+| **Daily companion (budget)** | DeepSeek | `deepseek-chat` | Extremely cheap, good multilingual, great for long conversations |
+| **Budget friendly** | OpenAI | `gpt-5.4-mini` | Fast and cheap, solid English, good for high-frequency chat |
+| **Free tier** | Google Gemini | `gemini-2.5-flash` | Generous free quota, good for getting started |
+| **Deep reasoning** | DeepSeek | `deepseek-reasoner` | For complex reasoning, math, and code |
+
+### Speech-to-text (STT)
+
+| Use case | Provider | Model | Notes |
+|----------|----------|-------|-------|
+| **Best accuracy** | OpenAI | `whisper-large-v3` | Industry standard, highest English recognition accuracy |
+| **Budget friendly** | OpenAI | `gpt-4o-mini-transcribe` | Multilingual, works with existing OpenAI key |
+| **High-accuracy cloud** | ElevenLabs Scribe | `scribe_v1` | 99 languages, excellent punctuation and speaker detection |
+| **Local streaming** | Paraformer | `paraformer-trilingual` | Real-time transcription while speaking, low latency |
+| **Local fast** | SenseVoice | `sensevoice-zh-en` | 15× faster than Whisper, offline |
+
+### Text-to-speech (TTS)
+
+| Use case | Provider | Voice | Notes |
+|----------|----------|-------|-------|
+| **Free (recommended)** | Edge TTS | Jenny (`en-US-JennyNeural`) | Microsoft free, natural American English female voice, no API key |
+| **Free (male)** | Edge TTS | Guy (`en-US-GuyNeural`) | Calm American English male voice, free |
+| **Best quality** | ElevenLabs | Custom `voice_id` | World-class speech synthesis, voice cloning supported |
+| **Cloud general** | OpenAI TTS | `nova` / `alloy` | Works with existing OpenAI key, `gpt-4o-mini-tts` model |
+| **Local offline** | OmniVoice | Built-in voices | Fully offline, local port 8000, runs on RTX 3060 |
+
 ## Architecture
 
 | Layer | Technology |
