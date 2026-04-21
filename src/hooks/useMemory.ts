@@ -9,6 +9,7 @@ import {
   serializeMemoryArchive,
   warmupMemoryVectorModel,
 } from '../features/memory'
+import { formatMemoriesForPersonaFile } from '../features/memory/memoryPersistence'
 import {
   loadDailyMemories,
   loadMemories,
@@ -67,6 +68,27 @@ export function useMemory({ settings }: UseMemoryParams) {
     }
     saveDailyMemories(dailyMemories)
   }, [dailyMemories])
+
+  // Persist top memories to persona memory.md (debounced 30s)
+  const personaPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const personaPersistSkipRef = useRef(true)
+  useEffect(() => {
+    if (personaPersistSkipRef.current) {
+      personaPersistSkipRef.current = false
+      return
+    }
+    if (personaPersistTimerRef.current) clearTimeout(personaPersistTimerRef.current)
+    personaPersistTimerRef.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const existing = await window.desktopPet?.personaLoadMemory?.() ?? ''
+          const content = formatMemoriesForPersonaFile(memories, existing)
+          await window.desktopPet?.personaSaveMemory?.({ content })
+        } catch { /* best-effort */ }
+      })()
+    }, 30_000)
+    return () => { if (personaPersistTimerRef.current) clearTimeout(personaPersistTimerRef.current) }
+  }, [memories])
 
   useEffect(() => {
     if (settings.memorySearchMode === 'keyword') return
