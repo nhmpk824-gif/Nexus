@@ -2,28 +2,52 @@ import { performNetworkRequest, readJsonSafe } from '../net.js'
 
 const TOOL_WEATHER_TIMEOUT_MS = 12_000
 
-const WEATHER_LOCATION_NOISE_PATTERN = /^(?:嗯|呃|额|啊|呀|诶|欸|那个|这个|就是|然后|那|这)\s*/u
-const WEATHER_LOCATION_PREFIX_PATTERN = /^(?:(?:请|麻烦|帮我|给我|我想|我想知道|你帮我)\s*)*(?:(?:查(?:一下|查看|查询)?|看(?:一下|看)?|找(?:一下)?|搜(?:索)?(?:一下)?|报(?:一下)?|告诉我)\s*)+/u
-const WEATHER_LOCATION_PRONOUN_PREFIX_PATTERN = /^(?:(?:给)?我|我们|你|你们|咱们|自己|这里|这边|这儿|那边|那儿)\s*/u
-const WEATHER_LOCATION_SUFFIX_PATTERN = /(?:今天|明天|后天|现在|目前|当前|这边|那边|我这边|当地)?\s*(?:的)?\s*(?:天气(?:怎么样|如何|咋样|情况)?|气温|温度|冷不冷|热不热|会不会下雨|下不下雨|有没有雨|降不降雨)\s*[呢吗啊呀吧嘛]*$/u
-const WEATHER_LOCATION_FILLER_PATTERN = /(?:一下|现在|目前|当前|这边|那边|我这边|当地)/gu
-const WEATHER_LOCATION_BEFORE_TOPIC_PATTERN = /(.+?)(?:今天|明天|后天|现在|目前|当前)?(?:的)?(?:天气(?:怎么样|如何|咋样|情况)?|气温|温度|冷不冷|热不热|会不会下雨|下不下雨|有没有雨|降不降雨)/u
-const WEATHER_LOCATION_AFTER_TOPIC_PATTERN = /(?:天气(?:怎么样|如何|咋样|情况)?|气温|温度)\s*(?:在|是|如何|怎么样|咋样)?\s*(.+)$/u
-const WEATHER_LOCATION_STT_COMMAND_PREFIX_PATTERN = /^(?:(?:你|你们|我|我们|咱们)\s*)?(?:在\s*)?(?:(?:一)?(?:查|看|找|搜|报|问)\s*)+/u
-const WEATHER_LOCATION_TAIL_PATTERN = /([\u3400-\u9fff]{2,}(?:特别行政区|自治州|自治县|地区|省|市|区|县|镇|乡|州|盟|旗)?)$/u
-const WEATHER_LOCATION_INVALID_PATTERN = /(?:怎么|为什么|告诉|看到|看见|搜(?:索|到)?|查(?:到)?|结果|回答|回复|你|我|我们|你们|不是|已经|刚才|刚刚|天气)/u
-const WEATHER_LOCATION_TIME_WORD_PATTERN = /^(?:今天|明天|后天|现在|目前|当前|当地)$/u
-const WEATHER_LOCATION_META_PREFIX_PATTERN = /^(?:(?:那)?(?:你|我|我们|咱们)\s*)?(?:(?:想问(?:一下)?(?:的|的是)?|问(?:一下)?(?:的|的是)?|想知道|想了解|想看|想查|就是想问|帮忙|帮个忙|说一下|说说)\s*)+/u
-const WEATHER_LOCATION_PARTIAL_TOPIC_SUFFIX_PATTERN = /(?:的)?天(?:气)?$/u
+// SC=Simplified Chinese  TC=Traditional Chinese  JA=Japanese  KO=Korean
+const WEATHER_LOCATION_NOISE_PATTERN = /^(?:嗯|呃|额|額|啊|呀|诶|誒|欸|那个|那個|这个|這個|就是|然后|然後|那|这|這|えーと|あのー?|ええと|その|えー|まあ|なんか|あー|うーん|음+|어+|그|저기?|뭐|그러니까|이제|근데)\s*/u
+const WEATHER_LOCATION_PREFIX_PATTERN = /^(?:(?:请|請|麻烦|麻煩|帮我|幫我|给我|給我|我想|我想知道|你帮我|你幫我)\s*)*(?:(?:查(?:一下|查看|查询|查詢)?|看(?:一下|看)?|找(?:一下)?|搜(?:索)?(?:一下)?|报(?:一下)?|報(?:一下)?|告诉我|告訴我|教えて|調べて|검색해|알려\s*줘)\s*)+/u
+const WEATHER_LOCATION_PRONOUN_PREFIX_PATTERN = /^(?:(?:给)?我|(?:給)?我|我们|我們|你|你们|你們|咱们|咱們|自己|这里|這裡|这边|這邊|这儿|這兒|那边|那邊|那儿|那兒|ここ|そこ|あそこ|こっち|나|우리|여기|저기|거기)\s*/u
+const WEATHER_LOCATION_SUFFIX_PATTERN = /(?:今天|明天|后天|後天|现在|現在|目前|当前|當前|这边|這邊|那边|那邊|我这边|我這邊|当地|當地|今日|明日|あさって|오늘|내일|모레)?\s*(?:的|の|의)?\s*(?:天气(?:怎么样|怎麼樣|如何|咋样|咋樣|情况|情況)?|天氣(?:怎麼樣|如何|情況)?|天気(?:は)?(?:どう(?:です(?:か)?)?|を?(?:教えて|調べて|見て)(?:ください)?)?|날씨(?:\s*(?:어때|어떨까|어떤가요?|알려\s*줘|봐\s*줘|확인해\s*줘|어떻게))?|气温|氣溫|気温|기온|温度|溫度|온도|冷不冷|热不热|熱不熱|会不会下雨|會不會下雨|下不下雨|有没有雨|有沒有雨|降不降雨|雨降る|비\s*오[나는]?)\s*[呢吗啊呀吧嘛よねかなのさ요까지]*$/u
+const WEATHER_LOCATION_FILLER_PATTERN = /(?:一下|现在|現在|目前|当前|當前|这边|這邊|那边|那邊|我这边|我這邊|当地|當地|ちょっと|좀)/gu
+const WEATHER_LOCATION_BEFORE_TOPIC_PATTERN = /(.+?)(?:今天|明天|后天|後天|现在|現在|目前|当前|當前|今日|明日|오늘|내일)?(?:的|の|의)?(?:天气(?:怎么样|怎麼樣|如何|咋样|咋樣|情况|情況)?|天氣(?:怎麼樣|如何|情況)?|天気(?:は)?(?:どう)?|날씨|气温|氣溫|気温|기온|温度|溫度|온도|冷不冷|热不热|熱不熱|会不会下雨|會不會下雨|下不下雨|有没有雨|有沒有雨|降不降雨)/u
+const WEATHER_LOCATION_AFTER_TOPIC_PATTERN = /(?:天气(?:怎么样|怎麼樣|如何|咋样|咋樣|情况|情況)?|天氣(?:怎麼樣|如何|情況)?|天気|날씨|气温|氣溫|気温|기온|温度|溫度|온도)\s*(?:在|は|에서|是|如何|怎么样|怎麼樣|咋样|咋樣|どう)?\s*(.+)$/u
+const WEATHER_LOCATION_STT_COMMAND_PREFIX_PATTERN = /^(?:(?:你|你们|你們|我|我们|我們|咱们|咱們)\s*)?(?:在\s*)?(?:(?:一)?(?:查|看|找|搜|报|報|问|問)\s*)+/u
+const WEATHER_LOCATION_TAIL_PATTERN = /([\u3400-\u9fff]{2,}(?:特别行政区|特別行政區|自治州|自治县|自治縣|地区|地區|省|市|区|區|县|縣|镇|鎮|乡|鄉|州|盟|旗|都|道|府|県|町|村|郡)?)$/u
+const WEATHER_LOCATION_INVALID_PATTERN = /(?:怎么|怎麼|为什么|為什麼|告诉|告訴|看到|看见|看見|搜(?:索|到)?|查(?:到)?|结果|結果|回答|回复|回覆|你|我|我们|我們|你们|你們|不是|已经|已經|刚才|剛才|刚刚|剛剛|天气|天氣|天気|날씨|なぜ|どうして|왜|어째서)/u
+const WEATHER_LOCATION_TIME_WORD_PATTERN = /^(?:今天|明天|后天|後天|现在|現在|目前|当前|當前|当地|當地|今日|明日|あさって|오늘|내일|모레|지금|현재)$/u
+const WEATHER_LOCATION_META_PREFIX_PATTERN = /^(?:(?:那)?(?:你|我|我们|我們|咱们|咱們)\s*)?(?:(?:想问(?:一下)?(?:的|的是)?|想問(?:一下)?(?:的|的是)?|问(?:一下)?(?:的|的是)?|問(?:一下)?(?:的|的是)?|想知道|想了解|想看|想查|就是想问|就是想問|帮忙|幫忙|帮个忙|幫個忙|说一下|說一下|说说|說說|知りたい|教えて|聞きたい|알고\s*싶|궁금)\s*)+/u
+const WEATHER_LOCATION_PARTIAL_TOPIC_SUFFIX_PATTERN = /(?:的|の|의)?(?:天(?:气|氣)?|天気|날씨)$/u
 const WEATHER_LOCATION_ALIAS_MAP = new Map([
+  // SC / TC
   ['北京', ['北京市', 'Beijing']],
   ['上海', ['上海市', 'Shanghai']],
   ['天津', ['天津市', 'Tianjin']],
   ['重庆', ['重庆市', 'Chongqing']],
+  ['重慶', ['重庆市', 'Chongqing']],
   ['香港', ['香港特别行政区', 'Hong Kong']],
   ['澳门', ['澳门特别行政区', 'Macau']],
+  ['澳門', ['澳门特别行政区', 'Macau']],
+  ['台北', ['台北市', 'Taipei']],
+  ['台中', ['台中市', 'Taichung']],
+  ['高雄', ['高雄市', 'Kaohsiung']],
+  // JA
+  ['東京', ['東京都', 'Tokyo']],
+  ['东京', ['東京都', 'Tokyo']],
+  ['大阪', ['大阪市', 'Osaka']],
+  ['京都', ['京都市', 'Kyoto']],
+  ['横浜', ['横浜市', 'Yokohama']],
+  ['名古屋', ['名古屋市', 'Nagoya']],
+  ['札幌', ['札幌市', 'Sapporo']],
+  ['福岡', ['福岡市', 'Fukuoka']],
+  // KO
+  ['서울', ['서울특별시', 'Seoul']],
+  ['부산', ['부산광역시', 'Busan']],
+  ['인천', ['인천광역시', 'Incheon']],
+  ['대구', ['대구광역시', 'Daegu']],
+  ['대전', ['대전광역시', 'Daejeon']],
+  ['광주', ['광주광역시', 'Gwangju']],
+  ['제주', ['제주특별자치도', 'Jeju']],
 ])
-const CHINESE_LOCATION_SUFFIX_PATTERN = /(特别行政区|自治州|自治县|地区|省|市|区|县|镇|乡|州|盟|旗)$/u
+const LOCATION_ADMIN_SUFFIX_PATTERN = /(特别行政区|特別行政區|自治州|自治县|自治縣|地区|地區|省|市|区|區|县|縣|镇|鎮|乡|鄉|州|盟|旗|都|道|府|県|町|村|郡|특별시|광역시|특별자치도|특별자치시|시|도|군|구)$/u
 
 function getWeatherCodeDescription(code) {
   const normalizedCode = Number(code)
@@ -117,7 +141,7 @@ function normalizeWeatherLocationCompareKey(value) {
     .trim()
     .toLowerCase()
     .replace(/[\u3000\s·•．.，,、_-]+/gu, '')
-    .replace(/(特别行政区|自治州|自治县|地区|省|市|区|县|镇|乡|州|盟|旗)$/u, '')
+    .replace(LOCATION_ADMIN_SUFFIX_PATTERN, '')
 }
 
 function normalizeWeatherLocationFragment(text) {
@@ -139,17 +163,17 @@ function normalizeWeatherLocationFragment(text) {
       .replace(WEATHER_LOCATION_PREFIX_PATTERN, '')
       .replace(WEATHER_LOCATION_STT_COMMAND_PREFIX_PATTERN, '')
       .replace(WEATHER_LOCATION_PRONOUN_PREFIX_PATTERN, '')
-      .replace(/^(?:儿|是|在|去|到)\s*/u, '')
+      .replace(/^(?:儿|是|在|去|到|は|が|を|で|に|へ|은|는|을|를|에서|에)\s*/u, '')
       .replace(WEATHER_LOCATION_FILLER_PATTERN, ' ')
       .replace(WEATHER_LOCATION_PARTIAL_TOPIC_SUFFIX_PATTERN, '')
-      .replace(/^[的地得]\s*/u, '')
+      .replace(/^[的地得の의]\s*/u, '')
       .replace(/\s+/gu, ' ')
       .trim()
   }
 
   value = value
     .replace(WEATHER_LOCATION_SUFFIX_PATTERN, '')
-    .replace(/[的地得]$/u, '')
+    .replace(/[的地得の의]$/u, '')
     .replace(/^[,，。！？!?:：；;、\s]+|[,，。！？!?:：；;、\s]+$/gu, '')
     .trim()
 
@@ -179,7 +203,7 @@ function isLikelyWeatherLocationFragment(text) {
     return false
   }
 
-  if (/[\u3400-\u9fff]/u.test(compact)) {
+  if (/[\u3400-\u9fff\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF]/u.test(compact)) {
     return compact.length >= 2
   }
 
@@ -191,7 +215,7 @@ function isLikelyWeatherLocationFragment(text) {
 }
 
 function stripChineseWeatherLocationSuffix(value) {
-  return String(value ?? '').replace(CHINESE_LOCATION_SUFFIX_PATTERN, '').trim()
+  return String(value ?? '').replace(LOCATION_ADMIN_SUFFIX_PATTERN, '').trim()
 }
 
 function collectChineseWeatherLocationTailCandidates(value) {
@@ -204,7 +228,7 @@ function collectChineseWeatherLocationTailCandidates(value) {
     }
   }
 
-  if (!/^[\u3400-\u9fff]+$/u.test(compact)) {
+  if (!/^[\u3400-\u9fff\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF]+$/u.test(compact)) {
     return candidates
   }
 
@@ -242,7 +266,7 @@ function getWeatherLocationQueryVariants(location) {
   if (
     normalizedLocation
     && /[\u3400-\u9fff]/u.test(normalizedLocation)
-    && !/[省市区县州盟旗特别行政区自治州自治县地区]$/u.test(normalizedLocation)
+    && !LOCATION_ADMIN_SUFFIX_PATTERN.test(normalizedLocation)
   ) {
     pushVariant(`${normalizedLocation}市`)
   }
@@ -416,6 +440,8 @@ function pickBestWeatherPlace(results, query) {
 
   const normalizedQuery = normalizeWeatherLocationFragment(query).toLowerCase()
   const queryHasChinese = /[\u3400-\u9fff]/u.test(normalizedQuery)
+  const queryHasKana = /[\u3040-\u30FF]/u.test(normalizedQuery)
+  const queryHasHangul = /[\uAC00-\uD7AF]/u.test(normalizedQuery)
   const normalizedQueryKey = normalizeWeatherLocationCompareKey(query)
 
   const scored = results.map((place) => {
@@ -444,6 +470,12 @@ function pickBestWeatherPlace(results, query) {
     if (queryHasChinese && (place?.country_code === 'CN' || country.includes('中国'))) {
       score += 3
     }
+    if (queryHasKana && place?.country_code === 'JP') {
+      score += 3
+    }
+    if (queryHasHangul && place?.country_code === 'KR') {
+      score += 3
+    }
 
     score += getWeatherPlaceFeatureScore(place?.feature_code)
     score += getWeatherPlacePopulationScore(place?.population)
@@ -453,6 +485,13 @@ function pickBestWeatherPlace(results, query) {
 
   scored.sort((a, b) => b.score - a.score)
   return scored[0] ?? null
+}
+
+function detectWeatherQueryLanguage(query) {
+  if (/[\uAC00-\uD7AF]/u.test(query)) return 'ko'
+  if (/[\u3040-\u30FF]/u.test(query)) return 'ja'
+  if (/[\u3400-\u9FFF]/u.test(query)) return 'zh'
+  return 'en'
 }
 
 function formatResolvedWeatherPlaceName(place) {
@@ -505,14 +544,15 @@ export async function lookupWeatherByLocation(location, fallbackLocation = '') {
     // Nominatim's usage policy requires a User-Agent that identifies this
     // app, and throttles anonymous callers to ~1 req/sec. Occasional
     // user-driven weather lookups easily fit inside that budget.
+    const acceptLang = detectWeatherQueryLanguage(candidate)
     const geocodingResponse = await performNetworkRequest(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(candidate)}&format=jsonv2&limit=5&addressdetails=1&accept-language=zh`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(candidate)}&format=jsonv2&limit=5&addressdetails=1&accept-language=${acceptLang}`,
       {
         method: 'GET',
         timeoutMs: TOOL_WEATHER_TIMEOUT_MS,
         timeoutMessage: '天气定位超时，请稍后再试。',
         headers: {
-          'User-Agent': 'Nexus-Companion/0.2.7 (https://github.com/FanyinLiu/Nexus)',
+          'User-Agent': 'Nexus-Companion/0.2.8 (https://github.com/FanyinLiu/Nexus)',
           Accept: 'application/json',
         },
         // Route via Node's undici fetch so TLS verification uses the OS

@@ -8,26 +8,23 @@ type WeatherAmbientProps = {
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000
 
-// Particle counts per condition — tuned so "heavy" reads as heavier, not
-// just more. Keeping numbers as named constants so the WeatherAmbient JSX
-// below stays readable and the diff when we tune densities is obvious.
 const RAIN_COUNT = {
-  drizzle: 50,
-  rain: 120,
-  heavy_rain: 220,
-  thunder: 140,
-  storm: 240,
+  drizzle: 40,
+  rain: 100,
+  heavy_rain: 180,
+  thunder: 120,
+  storm: 200,
 } as const
 
 const SNOW_COUNT = {
-  light_snow: 38,
-  snow: 80,
-  heavy_snow: 160,
+  light_snow: 30,
+  snow: 70,
+  heavy_snow: 140,
 } as const
 
 const WIND_COUNT = {
-  breeze: 18,
-  gale: 56,
+  breeze: 14,
+  gale: 45,
 } as const
 
 export function WeatherAmbient({ condition }: WeatherAmbientProps) {
@@ -68,15 +65,11 @@ export function WeatherAmbient({ condition }: WeatherAmbientProps) {
     [condition],
   )
   const cloudBlobs = useMemo(
-    () => makeIndexArray(
-      condition === 'overcast' ? 8
-        : condition === 'partly_cloudy' ? 3
-          : 0,
-    ),
+    () => makeIndexArray(condition === 'partly_cloudy' ? 4 : 0),
     [condition],
   )
   const dustMotes = useMemo(
-    () => makeIndexArray(condition === 'clear' ? 40 : 0),
+    () => makeIndexArray(condition === 'clear' ? 18 : 0),
     [condition],
   )
 
@@ -103,15 +96,7 @@ export function WeatherAmbient({ condition }: WeatherAmbientProps) {
       ) : null}
 
       {condition === 'partly_cloudy' ? (
-        <div className="weather-ambient__clouds">
-          {cloudBlobs.map((i) => (
-            <span key={i} className={`weather-ambient__cloud weather-ambient__cloud--${i + 1}`} />
-          ))}
-        </div>
-      ) : null}
-
-      {condition === 'overcast' ? (
-        <div className="weather-ambient__clouds weather-ambient__clouds--dense">
+        <div className="weather-ambient__clouds weather-ambient__clouds--upper">
           {cloudBlobs.map((i) => (
             <span key={i} className={`weather-ambient__cloud weather-ambient__cloud--${i + 1}`} />
           ))}
@@ -119,11 +104,15 @@ export function WeatherAmbient({ condition }: WeatherAmbientProps) {
       ) : null}
 
       {condition === 'fog' ? (
-        <>
+        <div className="weather-ambient__fog">
           <div className="weather-ambient__fog-a" />
           <div className="weather-ambient__fog-b" />
           <div className="weather-ambient__fog-c" />
-        </>
+        </div>
+      ) : null}
+
+      {condition === 'drizzle' ? (
+        <div className="weather-ambient__drizzle-mist" />
       ) : null}
 
       {isRainy ? (
@@ -166,23 +155,22 @@ function makeIndexArray(n: number): number[] {
 }
 
 function makeRainStyle(i: number, condition: WeatherCondition): React.CSSProperties {
-  const left = ((i * 83) % 100) + (i % 5) / 5
-  const delay = ((i * 17) % 100) / 100
-  // Drizzle is slower + thinner; heavy_rain / storm fall faster and longer.
-  const base = condition === 'drizzle' ? 0.8
-    : condition === 'heavy_rain' || condition === 'storm' ? 0.4
-      : 0.55
+  const left = ((i * 83 + i * i * 7) % 100) + (i % 7) / 7
+  const base = condition === 'drizzle' ? 1.0
+    : condition === 'heavy_rain' || condition === 'storm' ? 0.45
+      : 0.6
   const duration = base + ((i * 11) % 40) / 100
-  const heightBase = condition === 'drizzle' ? 10
-    : condition === 'heavy_rain' || condition === 'storm' ? 22
-      : 16
-  const height = heightBase + (i % 5) * 3
-  const opacity = 0.5 + ((i * 13) % 40) / 100
-  // Horizontal drift varied per-drop so sheets of rain look gusty,
-  // not like a uniform slanted curtain. Range ~15-42px.
-  const driftX = -(15 + ((i * 19) % 28))
-  // Tilt the drop slightly so long drops look angled, not vertical.
-  const tilt = ((i * 23) % 14) - 7
+  // Negative delay → drops start mid-fall so the screen is already filled
+  const delay = -(duration * (((i * 37) % 100) / 100))
+  const heightBase = condition === 'drizzle' ? 8
+    : condition === 'heavy_rain' || condition === 'storm' ? 20
+      : 14
+  const height = heightBase + (i % 6) * 2
+  const opacity = condition === 'drizzle'
+    ? 0.3 + ((i * 13) % 30) / 100
+    : 0.45 + ((i * 13) % 40) / 100
+  const driftX = -(12 + ((i * 19) % 30))
+  const tilt = ((i * 23) % 10) - 5
   return {
     left: `${left}%`,
     height: `${height}px`,
@@ -195,20 +183,17 @@ function makeRainStyle(i: number, condition: WeatherCondition): React.CSSPropert
 }
 
 function makeSnowStyle(i: number, condition: WeatherCondition): React.CSSProperties {
-  const left = ((i * 71) % 100) + (i % 5) / 5
-  const delay = ((i * 13) % 100) / 10
-  const duration = condition === 'light_snow' ? 7 + ((i * 7) % 60) / 10
-    : condition === 'heavy_snow' ? 3.5 + ((i * 7) % 40) / 10
-      : 5 + ((i * 7) % 60) / 10
+  const left = ((i * 71 + i * i * 3) % 100) + (i % 7) / 7
+  const duration = condition === 'light_snow' ? 8 + ((i * 7) % 60) / 10
+    : condition === 'heavy_snow' ? 4 + ((i * 7) % 40) / 10
+      : 6 + ((i * 7) % 50) / 10
+  // Negative delay so flakes are already scattered on screen
+  const delay = -(duration * (((i * 31) % 100) / 100))
   const sizeBase = condition === 'heavy_snow' ? 4 : 3
-  const size = sizeBase + (i % 5)
-  const opacity = 0.7 + ((i * 11) % 30) / 100
-  // Zig-zag amplitude and bias varied per-flake so snow tumbles rather
-  // than all flakes tracing the same S-curve. Range ±8..40px.
+  const size = sizeBase + (i % 4)
+  const opacity = 0.6 + ((i * 11) % 35) / 100
   const wobble = 8 + ((i * 41) % 32)
   const drift = ((i * 53) % 30) - 15
-  // Three-phase path assigned by i%3 — each flake takes one of three
-  // shuffled animation patterns so they don't visually sync.
   const variant = i % 3
   return {
     left: `${left}%`,
@@ -224,20 +209,19 @@ function makeSnowStyle(i: number, condition: WeatherCondition): React.CSSPropert
 }
 
 function makeWindStyle(i: number, condition: WeatherCondition): React.CSSProperties {
-  const top = ((i * 41) % 92) + 2
-  const delay = ((i * 19) % 100) / 20
-  const duration = condition === 'gale' ? 0.5 + ((i * 23) % 30) / 100
-    : 1.2 + ((i * 23) % 40) / 100
-  const lengthBase = condition === 'gale' ? 80 : 45
-  const length = lengthBase + ((i * 37) % 70)
-  const thickness = condition === 'gale' ? 1.4 + (i % 3) * 0.8
-    : 0.8 + (i % 3) * 0.4
-  const opacity = 0.5 + ((i * 17) % 40) / 100
-  // Slight vertical rise/fall per streak so the whole line field looks
-  // gusty rather than perfectly horizontal stripes. ±6-14px range.
-  const verticalDrift = ((i * 29) % 26) - 13
-  // Streak tilt so some lines slant upward, some downward.
-  const tilt = ((i * 17) % 8) - 4
+  const top = ((i * 41) % 88) + 4
+  const duration = condition === 'gale' ? 0.6 + ((i * 23) % 30) / 100
+    : 1.4 + ((i * 23) % 50) / 100
+  const delay = -(duration * (((i * 19) % 100) / 100))
+  const lengthBase = condition === 'gale' ? 60 : 35
+  const length = lengthBase + ((i * 37) % 80)
+  const thickness = condition === 'gale' ? 1.2 + (i % 3) * 0.6
+    : 0.6 + (i % 3) * 0.3
+  const opacity = 0.35 + ((i * 17) % 40) / 100
+  const verticalDrift = ((i * 29) % 22) - 11
+  const tilt = condition === 'gale'
+    ? ((i * 17) % 12) - 6
+    : ((i * 17) % 6) - 3
   return {
     top: `${top}%`,
     width: `${length}px`,
@@ -251,15 +235,13 @@ function makeWindStyle(i: number, condition: WeatherCondition): React.CSSPropert
 }
 
 function makeDustStyle(i: number): React.CSSProperties {
-  const left = ((i * 53) % 100)
-  const startY = 20 + ((i * 29) % 60)
-  const delay = ((i * 11) % 100) / 10
-  const duration = 7 + ((i * 19) % 80) / 10
-  const size = 2 + (i % 4)
-  // Randomize drift direction per mote so they swirl in different
-  // directions instead of all drifting the same up-right path.
-  const driftX = ((i * 41) % 60) - 30
-  const driftY = -((i * 37) % 50) - 10
+  const left = ((i * 53 + i * i * 11) % 100)
+  const startY = 25 + ((i * 29) % 55)
+  const duration = 9 + ((i * 19) % 80) / 10
+  const delay = -(duration * (((i * 17) % 100) / 100))
+  const size = 2 + (i % 3)
+  const driftX = ((i * 41) % 50) - 25
+  const driftY = -((i * 37) % 40) - 8
   return {
     left: `${left}%`,
     top: `${startY}%`,

@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.8] - 2026-04-21
+
+### Added
+- **3-layer pet backdrop system** — scene image (5 hand-prompted AI anime scenes × day/dusk/night variants) → weather particle overlay → sunlight tint filter. Configured via `panelSceneMode` (off/auto/pinned).
+- **14-state sunlight tint** — continuous brightness/saturation/hue CSS filter driven by real clock, covering deep_night through night with smooth transitions.
+- **14 weather particle animations** — clear (dust motes), partly_cloudy (drifting clouds), overcast (static gradient), fog (ground-level drift with mask-image), drizzle/rain/heavy_rain/thunder/storm (scattered raindrops with negative delays), light_snow/snow/heavy_snow (wobbling snowflakes), breeze/gale (horizontal wind streaks). All CSS-only, GPU-composited.
+- **Weather/time preview** — settings panel lets user lock any of the 14 time-of-day states or weather conditions for visual preview.
+- **Multi-language weather location parsing** — voice/STT input now cleans Japanese (えーと/あの/教えて/調べて…), Korean (음/어/알려줘/검색해…), and Traditional Chinese filler/command words. City alias map expanded from 6 → 24 entries (CN/TC/JA/KO). Nominatim `accept-language` dynamically switches by detected script. `pickBestWeatherPlace` adds +3 scoring bonus for Kana→JP and Hangul→KR matches.
+- **5-locale i18n migration** — all UI strings (onboarding, settings, chat, voice, memory, autonomy, system prompts) migrated from inline zh/en bilingual to 5-language `ti()` calls: zh-CN, en, zh-TW, ja, ko.
+- **Panel toolbar** — connection dot (online/offline indicator) + status text + action buttons now properly laid out with flex alignment. Previously these CSS classes had no styles defined.
+
+### Changed
+- **Pet window resizable** — `resizable: true`, min 280×400, max 1400×1400. Transparent frameless window, user drags system resize handles at edges.
+- **Responsive controls island** — bottom-right anchor buttons (expand + mic) and expanded panel (5 function buttons) now scale proportionally with pet window size via `clamp()` + `vw` units. Buttons: 44→30px, panel buttons: 40→28px, icons scale accordingly.
+- **Weather animations refined** — all particles use negative `animationDelay` so screen is pre-filled on render (no "curtain drop" effect). Rain drops thinner (2.5px default), removed box-shadows for subtlety. Overcast simplified to static multiply-blend gradient (no animated cloud blobs). Fog restricted to bottom 60% with CSS mask-image fade. Dust motes reduced from 40→18 with lower opacity.
+- **Panel-scene feature removed** — old chat-panel backdrop code entirely deleted; backdrop now lives exclusively in pet view.
+
+### Next Steps
+- **Character Card v3 import** — PNG embed → `personas/<id>/` six-file set, consume SillyTavern/RisuAI/Soul-of-Waifu community cards. Top priority from roadmap.
+- **VTube Studio API integration** — WebSocket bridge so users can reuse existing VTS character rigs instead of bundled Live2D models.
+- **Autonomy V1 cleanup** — delete legacy autonomy engine code once V2 is confirmed stable in production.
+
 ## [0.2.7] - 2026-04-19
 
 ### Added
