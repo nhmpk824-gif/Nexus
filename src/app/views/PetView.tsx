@@ -24,6 +24,8 @@ import { useAmbientWeather } from '../../hooks/useAmbientWeather'
 import { clamp } from '../../lib'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type { PetTouchZone } from '../../types'
+import { useVTSBridge } from '../../features/pet/vts/useVTSBridge'
+import { resolveExpressionSlot } from '../../features/pet/components/live2d/expressions'
 import type { UseAppControllerResult } from '../controllers/useAppController'
 
 const Live2DCanvas = lazy(async () => {
@@ -67,6 +69,30 @@ export function PetView({
     params?: Parameters<typeof pickTranslatedUiText>[2],
   ) => pickTranslatedUiText(settings.uiLanguage, key, params)
   const characterPreset = useMemo(() => resolveCharacterPreset(), [])
+  const vtsBridge = useVTSBridge(settings.vtsEnabled, settings.vtsPort)
+  const vtsActive = settings.vtsEnabled && vtsBridge.state === 'ready'
+
+  useEffect(() => {
+    if (!settings.vtsEnabled) return
+    const slot = resolveExpressionSlot(
+      pet.mood,
+      pet.petTapActive ? pet.petTouchZone : null,
+      voice.voiceState === 'listening',
+      voice.voiceState === 'speaking',
+      pet.petPerformanceCue?.expressionSlot,
+    )
+    vtsBridge.updateInput({
+      expressionSlot: slot,
+      speechLevel: voice.speechLevel,
+      gazeTarget: pet.gazeTarget,
+      isSpeaking: voice.voiceState === 'speaking',
+      isListening: voice.voiceState === 'listening',
+    })
+  }, [
+    settings.vtsEnabled, pet.mood, pet.petTapActive, pet.petTouchZone,
+    voice.voiceState, voice.speechLevel, pet.gazeTarget, pet.petPerformanceCue,
+    vtsBridge,
+  ])
   const ambientWeather = useAmbientWeather(
     settings.toolWeatherDefaultLocation,
     settings.ambientWeatherEnabled,
@@ -469,19 +495,25 @@ export function PetView({
                 onPointerUp={handleMascotPointerUp}
                 onDoubleClick={voice.toggleVoiceConversation}
               >
-                <Suspense fallback={null}>
-                  <Live2DCanvas
-                    modelDefinition={petModel}
-                    mood={pet.mood}
-                    touchZone={pet.petTapActive ? pet.petTouchZone : null}
-                    isListening={voice.voiceState === 'listening'}
-                    isSpeaking={voice.voiceState === 'speaking'}
-                    speechLevel={voice.speechLevel}
-                    gazeTarget={pet.gazeTarget}
-                    performanceCue={pet.petPerformanceCue}
-                    placement="pet-stage"
-                  />
-                </Suspense>
+                {vtsActive ? (
+                  <div className="pet-window__vts-indicator">
+                    VTS: {vtsBridge.modelName || 'Connected'}
+                  </div>
+                ) : (
+                  <Suspense fallback={null}>
+                    <Live2DCanvas
+                      modelDefinition={petModel}
+                      mood={pet.mood}
+                      touchZone={pet.petTapActive ? pet.petTouchZone : null}
+                      isListening={voice.voiceState === 'listening'}
+                      isSpeaking={voice.voiceState === 'speaking'}
+                      speechLevel={voice.speechLevel}
+                      gazeTarget={pet.gazeTarget}
+                      performanceCue={pet.petPerformanceCue}
+                      placement="pet-stage"
+                    />
+                  </Suspense>
+                )}
               </div>
             </div>
 

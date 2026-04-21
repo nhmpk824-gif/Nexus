@@ -2289,6 +2289,17 @@
   pointer-events: none;
 }
 
+.pet-window__vts-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 13px;
+  color: rgba(94, 198, 255, 0.6);
+  letter-spacing: 0.05em;
+}
+
 .pet-window__floor-shadow {
   position: absolute;
   left: 50%;
