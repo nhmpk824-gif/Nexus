@@ -103,6 +103,8 @@ export interface AppearanceSettings {
    * clock.
    */
   petTimePreview: PetTimePreview
+  vtsEnabled: boolean
+  vtsPort: number
 }
 
 export type PetSceneLocation =

@@ -225,6 +225,7 @@ contextBridge.exposeInMainWorld('desktopPet', {
   // v2 per-profile persona (userData/personas/<id>/soul.md + style.json + ...)
   personaLoadProfile: (profileId) => ipcRenderer.invoke('persona:load-profile', { profileId }),
   personaProfileDir: (profileId) => ipcRenderer.invoke('persona:profile-dir', { profileId }),
+  personaImportCard: () => ipcRenderer.invoke('persona:import-card'),
 
   // Sandboxed workspace fs (agent loop tools)
   workspaceSetRoot: (payload) => ipcRenderer.invoke('workspace:set-root', payload),

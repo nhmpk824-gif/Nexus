@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { PetModelDefinition } from '../../features/pet'
 import {
@@ -9,6 +9,7 @@ import {
   updateCharacterProfile,
 } from '../../features/character/profiles'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
+import { loadLorebookEntries, saveLorebookEntries } from '../../lib/storage/lorebooks'
 import type { AppSettings, CharacterProfile } from '../../types'
 import type { TranslationKey } from '../../types/i18n'
 
@@ -78,6 +79,57 @@ export const ChatSection = memo(function ChatSection({
       ...prev,
       characterProfiles: updateCharacterProfile(prev.characterProfiles, profileId, { label }),
     }))
+  }
+
+  const [importingCard, setImportingCard] = useState(false)
+  const [cardStatus, setCardStatus] = useState<StatusMessage>(null)
+
+  async function handleImportCard() {
+    if (!window.desktopPet?.personaImportCard) return
+    setImportingCard(true)
+    setCardStatus(null)
+    try {
+      const result = await window.desktopPet.personaImportCard()
+      if (!result) { setImportingCard(false); return }
+
+      const profile: CharacterProfile = {
+        id: result.profile.id,
+        label: result.profile.label,
+        companionName: result.profile.companionName,
+        systemPrompt: result.profile.systemPrompt,
+        petModelId: result.profile.petModelId || draft.petModelId,
+      }
+
+      setDraft((prev) => ({
+        ...prev,
+        companionName: profile.companionName,
+        systemPrompt: profile.systemPrompt,
+        characterProfiles: [...prev.characterProfiles, profile],
+        activeCharacterProfileId: profile.id,
+      }))
+
+      if (result.lorebookEntries.length) {
+        const existing = loadLorebookEntries()
+        saveLorebookEntries([...existing, ...result.lorebookEntries])
+      }
+
+      setCardStatus({
+        ok: true,
+        message: ti('settings.chat.import_card_success', {
+          name: profile.companionName,
+          count: result.lorebookEntries.length,
+        }),
+      })
+    } catch (err) {
+      setCardStatus({
+        ok: false,
+        message: ti('settings.chat.import_card_error', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      })
+    } finally {
+      setImportingCard(false)
+    }
   }
 
   const profileCount = draft.characterProfiles.length
@@ -249,7 +301,51 @@ export const ChatSection = memo(function ChatSection({
         </label>
       </div>
 
+      <div className="settings-drawer__card">
+        <div className="settings-section__title-row">
+          <div>
+            <h5>{ti('settings.chat.vts_title')}</h5>
+            <p className="settings-drawer__hint">
+              {ti('settings.chat.vts_hint')}
+            </p>
+          </div>
+        </div>
+        <label className="settings-toggle">
+          <span>{ti('settings.chat.vts_enabled')}</span>
+          <input
+            type="checkbox"
+            checked={draft.vtsEnabled}
+            onChange={(event) =>
+              setDraft((prev) => ({ ...prev, vtsEnabled: event.target.checked }))
+            }
+          />
+        </label>
+        {draft.vtsEnabled ? (
+          <label>
+            <span>{ti('settings.chat.vts_port')}</span>
+            <input
+              type="number"
+              value={draft.vtsPort}
+              onChange={(event) =>
+                setDraft((prev) => ({ ...prev, vtsPort: Number(event.target.value) || 8001 }))
+              }
+            />
+          </label>
+        ) : null}
+      </div>
+
       <div className="settings-inline-row">
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={handleImportCard}
+          disabled={importingCard}
+        >
+          {importingCard
+            ? ti('settings.chat.importing_card')
+            : ti('settings.chat.import_card')}
+        </button>
+
         <button
           type="button"
           className="ghost-button"
@@ -292,6 +388,12 @@ export const ChatSection = memo(function ChatSection({
       {petModelStatus ? (
         <div className={petModelStatus.ok ? 'settings-test-result is-success' : 'settings-test-result is-error'}>
           {petModelStatus.message}
+        </div>
+      ) : null}
+
+      {cardStatus ? (
+        <div className={cardStatus.ok ? 'settings-test-result is-success' : 'settings-test-result is-error'}>
+          {cardStatus.message}
         </div>
       ) : null}
     </section>

@@ -472,6 +472,26 @@ declare global {
         present: boolean
       }>
       personaProfileDir: (profileId: string) => Promise<{ dir: string }>
+      personaImportCard: () => Promise<{
+        profile: {
+          id: string
+          label: string
+          companionName: string
+          systemPrompt: string
+          petModelId: string
+        }
+        greeting: string | null
+        lorebookEntries: Array<{
+          id: string
+          label: string
+          keywords: string[]
+          content: string
+          enabled: boolean
+          priority: number
+          createdAt: string
+          updatedAt: string
+        }>
+      } | null>
 
       // Sandboxed workspace fs (agent loop tools)
       workspaceSetRoot: (payload: { root: string }) => Promise<{ ok: boolean; root: string }>

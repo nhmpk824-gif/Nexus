@@ -1,5 +1,7 @@
-import { ipcMain, shell } from 'electron'
+import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import * as personaLoader from '../services/personaLoader.js'
+import { parseCharacterCard } from '../services/characterCardParser.js'
+import { mapCardToPersona } from '../services/characterCardMapper.js'
 import { requireTrustedSender } from './validate.js'
 
 export function register() {
@@ -60,5 +62,28 @@ export function register() {
       throw new Error('persona:profile-dir 需要非空的 profileId。')
     }
     return { dir: personaLoader.getPersonaProfileDir(profileId) }
+  })
+
+  ipcMain.handle('persona:import-card', async (event) => {
+    requireTrustedSender(event)
+    const sourceWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+    const selection = await dialog.showOpenDialog(sourceWindow, {
+      title: 'Import Character Card',
+      filters: [
+        { name: 'Character Card', extensions: ['png', 'json'] },
+      ],
+      properties: ['openFile'],
+    })
+    if (selection.canceled || !selection.filePaths.length) return null
+
+    const card = await parseCharacterCard(selection.filePaths[0])
+    const mapped = mapCardToPersona(card)
+    await personaLoader.writePersonaProfile(mapped.profileId, mapped.files)
+
+    return {
+      profile: mapped.profile,
+      greeting: mapped.greeting,
+      lorebookEntries: mapped.lorebookEntries,
+    }
   })
 }

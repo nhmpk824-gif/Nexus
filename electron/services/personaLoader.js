@@ -107,6 +107,17 @@ export function getPersonaPaths() {
   }
 }
 
+export async function writePersonaProfile(profileId, files) {
+  const dir = getPersonaProfileDir(profileId)
+  await mkdir(dir, { recursive: true })
+  await Promise.all(
+    Object.entries(files).map(([filename, content]) =>
+      writeFile(path.join(dir, filename), content, 'utf8'),
+    ),
+  )
+  return { dir }
+}
+
 // ── v2: per-profile multi-file persona (soul/memory/examples/style/voice/tools)
 
 const V2_PERSONAS_DIR = 'personas'
