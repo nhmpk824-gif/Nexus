@@ -1,0 +1,55 @@
+name: 💡 Feature Request
+description: Suggest a new feature or improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a bigger idea? Consider posting it in [Ideas Discussion](https://github.com/FanyinLiu/Nexus/discussions/categories/ideas) first — that way others can weigh in before it becomes an issue.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the pain point, not the solution. The more concrete the scenario, the better.
+      placeholder: "When I use Nexus with headphones, the wake word keeps firing from TTS leakage into the mic."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Your proposed solution
+      description: Optional — describe what you think should happen.
+      placeholder: "Add an 'output device is headphones' detection that disables wake word while TTS is playing."
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Optional — other approaches you rejected and why.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area does this affect?
+      multiple: true
+      options:
+        - Voice (wake word / STT / TTS / VAD)
+        - Chat UX
+        - Memory / Dreams
+        - Autonomy / Persona
+        - Desktop awareness (window / clipboard / OCR)
+        - Tool calling / Subagent
+        - Providers (LLM / STT / TTS connectors)
+        - Installer / Auto-update
+        - Other
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and discussions for this
+          required: true

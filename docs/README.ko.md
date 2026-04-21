@@ -35,9 +35,15 @@ Electron + React + TypeScript로 구축, Windows / macOS / Linux 지원. 18+ LLM
 
 - 🧠 **꿈꾸는 기억** — 핫 / 웜 / 콜드 3단계 구조에 BM25 + 벡터 하이브리드 검색. 야간 꿈 사이클이 대화를 *내러티브 스레드*로 클러스터링하여, 세션마다 리셋되는 대신 시간이 지날수록 당신에 대한 이해가 쌓여 갑니다.
 
-- 🤖 **자율적 내면 생활 (V2)** — tick마다 한 번의 LLM 판단 호출, 계층적 스냅샷(감정 · 관계 · 리듬 · 데스크톱 · 최근 대화) 입력, 페르소나 가드레일을 통과한 출력. 템플릿 같은 발화는 더 이상 없고 — 캐릭터의 목소리로 말하거나, 침묵을 선택할 수 있으며 — 도움이 될 경우 백그라운드 조사 서브에이전트를 파견할 수도 있습니다.
+- 💝 **감정 메모리 + 관계 아크 (v0.2.9)** — 동반자가 이별 시의 *감정 톤*을 기억하여, 말한 내용뿐 아니라 감정까지 기억합니다. 5단계 관계 진화(낯선 사람 → 아는 사이 → 친구 → 가까운 친구 → 친밀)가 톤, 어휘, 행동 경계에 영향. 메모리가 페르소나별 `memory.md` 파일에 영속화되어, 페르소나 전환 시 관계 컨텍스트가 유실되지 않습니다.
 
-- 🧰 **서브에이전트 디스패처** — 동반자가 뒤에서 제한된 조사 루프(Web 검색 / MCP 툴)를 실행하고 요약을 다음 응답에 엮어 넣을 수 있습니다. 동시 실행 수 + 일일 예산으로 제어; 옵트인, `설정`에서 활성화.
+- 🎭 **캐릭터 카드 + VTube Studio 브리지 (v0.2.9)** — Character Card v2/v3 포맷 임포트(chub.ai / characterhub 호환). VTube Studio WebSocket 플러그인 API로 외부 Live2D 모델을 구동하면서 Nexus의 기억 / 자율 행동 스택은 유지.
+
+- 🌤️ **살아 있는 장면 (v0.2.9)** — 14단계 날씨 상태, 24시간 연속 햇빛 필터, 15장의 AI 생성 낮/황혼/밤 장면 변형. 분위기 있는 깊이감, 정적인 배경화면이 아닙니다.
+
+- 🤖 **자율적 내면 생활 (V2)** — tick마다 한 번의 LLM 판단 호출, 계층적 스냅샷(감정 · 관계 · 리듬 · 데스크톱 · 최근 대화) 입력, 페르소나 가드레일을 통과한 출력. 템플릿 같은 발화는 더 이상 없고 — 캐릭터의 목소리로 말하거나, 침묵을 선택할 수 있으며 — v0.2.7부터 백그라운드 조사 서브에이전트를 파견할 수도 있습니다.
+
+- 🧰 **서브에이전트 디스패처 (v0.2.7)** — 동반자가 뒤에서 제한된 조사 루프(Web 검색 / MCP 툴)를 실행하고 요약을 다음 응답에 엮어 넣을 수 있습니다. 동시 실행 수 + 일일 예산으로 제어; 옵트인, `설정`에서 활성화.
 
 - 🔧 **내장 툴** — 웹 검색, 날씨, 알림. 네이티브 함수 호출과 `tools`를 지원하지 않는 모델용 프롬프트 모드 폴백 **모두** 작동.
 
@@ -207,9 +213,37 @@ npm run package:win     # 또는 package:mac / package:linux
 
 ---
 
+## 커뮤니티
+
+Nexus는 개인 유지 프로젝트로, issue와 PR 처리 속도는 정확한 분류에 달려 있습니다:
+
+- 🐛 **버그를 발견했나요?** → [버그 신고](https://github.com/FanyinLiu/Nexus/issues/new?template=bug_report.yml)
+- 💡 **명확한 기능 아이디어?** → [기능 요청](https://github.com/FanyinLiu/Nexus/issues/new?template=feature_request.yml)
+- 🧠 **더 큰 아이디어?** → 먼저 [Ideas 토론](https://github.com/FanyinLiu/Nexus/discussions/categories/ideas)에서 다른 사람들의 의견을 들어보세요
+- ❓ **설치나 사용에 문제가 있나요?** → [Q&A](https://github.com/FanyinLiu/Nexus/discussions/categories/q-a)
+- 🎨 **사용 방법을 공유하고 싶나요?** → [Show and tell](https://github.com/FanyinLiu/Nexus/discussions/categories/show-and-tell)
+- 💬 **그냥 수다?** → [General](https://github.com/FanyinLiu/Nexus/discussions/categories/general)
+- 📣 **릴리스 노트 및 로드맵 업데이트** → [Announcements](https://github.com/FanyinLiu/Nexus/discussions/categories/announcements)
+
+---
+
 ## 기여하기
 
-모든 형태의 기여를 환영합니다! 버그 수정, 새 기능, 번역, 문서 등 — 언제든 PR을 제출하거나 Issues에서 토론을 시작하세요.
+모든 형태의 기여를 환영합니다 — 버그 수정, 새 제공자, UI 개선, 번역, Live2D 모델, 새로운 자율 행동. 한 줄짜리 issue나 오타 수정 PR도 프로젝트를 앞으로 나아가게 합니다.
+
+빠른 시작:
+
+- [**기여 가이드**](../CONTRIBUTING.md)에서 개발 환경, 프로젝트 구조, 코드 스타일, PR 워크플로우를 확인하세요.
+- [issue 템플릿](https://github.com/FanyinLiu/Nexus/issues/new/choose)으로 버그와 기능 요청을 제출하세요 — 통일된 형식으로 빠르게 분류할 수 있습니다.
+- 푸시 전에 `npm run verify:release`(lint + 테스트 + 빌드)를 실행하세요 — CI와 동일한 체크입니다.
+- 커밋 메시지는 [Conventional Commits](https://www.conventionalcommits.org/)를 따르세요: `feat:`, `fix:`, `docs:`, `refactor:` 등.
+- PR당 하나의 논리적 변경만. 관련 없는 수정은 별도의 PR로 분리하세요.
+
+모든 참여는 [행동 강령](../CODE_OF_CONDUCT.md)을 따릅니다 — 요약: **친절하게, 선의를 가정하고, 일에 집중**.
+
+### 보안 문제
+
+보안 취약점을 발견한 경우 공개 issue를 만들지 **마세요**. 대신 [비공개 보안 자문](https://github.com/FanyinLiu/Nexus/security/advisories/new)을 통해 신고해 주세요.
 
 ---
 

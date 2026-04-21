@@ -36,9 +36,15 @@ Electron + React + TypeScript で構築。Windows、macOS、Linux に対応。18
 
 - 🧠 **夢を見る記憶** — ホット / ウォーム / コールドの三層記憶アーキテクチャ、BM25 + ベクトルのハイブリッド検索。毎晩の*ドリームサイクル*が会話を*ナラティブスレッド*にクラスタリングし、コンパニオンがあなたの全体像を徐々に構築。
 
-- 🤖 **自律的な内面生活（V2）** — tick ごとに 1 回の LLM 判断呼び出し。入力は階層化スナップショット（感情・関係・リズム・デスクトップ・直近の会話）、出力はペルソナ・ガードレールを通過。テンプレート的な発話ではなく、キャラクター自身の声で話し、黙ることもできます；必要に応じてバックグラウンド調査のサブエージェントを派遣することも可能。
+- 💝 **感情メモリ + 関係アーク（v0.2.9）** — コンパニオンは別れ際の*感情のトーン*を記憶し、言葉の内容だけでなく感情も覚えます。5 段階の関係進化（他人 → 知り合い → 友人 → 親友 → 親密）がトーン、言葉遣い、行動の境界に影響。メモリはペルソナごとの `memory.md` ファイルに永続化され、ペルソナ切替で関係コンテキストが失われません。
 
-- 🧰 **サブエージェント派遣** — コンパニオンが背後で制限付きの調査ループ（Web 検索 / MCP ツール）を走らせ、結果のサマリーを次の返信に織り込みます。並列数・日次予算の制御付き、デフォルト OFF、`設定` から有効化。
+- 🎭 **キャラクターカード + VTube Studio ブリッジ（v0.2.9）** — Character Card v2/v3 形式をインポート（chub.ai / characterhub 互換）。VTube Studio WebSocket プラグイン API で外部 Live2D モデルを駆動しつつ、Nexus のメモリ / 自律行動スタックを維持。
+
+- 🌤️ **リビングシーン（v0.2.9）** — 14 段階の天気状態、24 時間連続サンライトフィルター、15 枚の AI 生成 日中/夕暮れ/夜 シーンバリアント。雰囲気のある奥行き、静的な壁紙ではなく。
+
+- 🤖 **自律的な内面生活（V2）** — tick ごとに 1 回の LLM 判断呼び出し。入力は階層化スナップショット（感情・関係・リズム・デスクトップ・直近の会話）、出力はペルソナ・ガードレールを通過。テンプレート的な発話ではなく、キャラクター自身の声で話し、黙ることもできます；v0.2.7 からはバックグラウンド調査のサブエージェントを派遣することも可能。
+
+- 🧰 **サブエージェント派遣（v0.2.7）** — コンパニオンが背後で制限付きの調査ループ（Web 検索 / MCP ツール）を走らせ、結果のサマリーを次の返信に織り込みます。並列数・日次予算の制御付き、デフォルト OFF、`設定` から有効化。
 
 - 🔧 **ツール呼び出し (MCP)** — ウェブ検索、天気、リマインダー、あらゆる MCP 互換ツール。ネイティブ関数呼び出しに対応し、`tools` をサポートしないモデル向けにプロンプトモードのフォールバックも搭載。
 
@@ -208,9 +214,37 @@ npm run package:win     # または package:mac / package:linux
 
 ---
 
+## コミュニティ
+
+Nexus は個人メンテナンスのプロジェクトです。issue や PR の対応速度はトリアージの精度に左右されます：
+
+- 🐛 **バグを見つけた？** → [バグ報告](https://github.com/FanyinLiu/Nexus/issues/new?template=bug_report.yml)
+- 💡 **明確な機能アイデア？** → [機能リクエスト](https://github.com/FanyinLiu/Nexus/issues/new?template=feature_request.yml)
+- 🧠 **もっと大きなアイデア？** → まず [Ideas ディスカッション](https://github.com/FanyinLiu/Nexus/discussions/categories/ideas) で皆の意見を聞く
+- ❓ **セットアップや使い方で困った？** → [Q&A](https://github.com/FanyinLiu/Nexus/discussions/categories/q-a)
+- 🎨 **使い方を共有したい？** → [Show and tell](https://github.com/FanyinLiu/Nexus/discussions/categories/show-and-tell)
+- 💬 **雑談？** → [General](https://github.com/FanyinLiu/Nexus/discussions/categories/general)
+- 📣 **リリースノートとロードマップ** → [Announcements](https://github.com/FanyinLiu/Nexus/discussions/categories/announcements)
+
+---
+
 ## コントリビューション
 
-コントリビューションを歓迎します！バグ修正、新機能、翻訳、ドキュメントなど——お気軽に PR を送るか、Issues でディスカッションを始めてください。
+コントリビューション歓迎——バグ修正、新プロバイダー、UI 調整、翻訳、Live2D モデル、新しい自律行動など。一行の issue やタイポ修正の PR でもプロジェクトを前進させます。
+
+クイックスタート：
+
+- [**コントリビューティングガイド**](../CONTRIBUTING.md) で開発環境、プロジェクト構成、コードスタイル、PR ワークフローを確認。
+- [issue テンプレート](https://github.com/FanyinLiu/Nexus/issues/new/choose) でバグや機能リクエストを投稿——統一フォーマットでトリアージが迅速に。
+- プッシュ前に `npm run verify:release`（lint + テスト + ビルド）を実行——CI と同じチェックです。
+- コミットメッセージは [Conventional Commits](https://www.conventionalcommits.org/) に従う：`feat:`、`fix:`、`docs:`、`refactor:` など。
+- PR は 1 つの論理的な変更のみ。関係のない修正は別 PR に分割。
+
+すべての参加は [行動規範](../CODE_OF_CONDUCT.md) に基づきます——要約：**思いやり、善意の推定、仕事に集中**。
+
+### セキュリティ問題
+
+セキュリティ脆弱性を見つけた場合、公開 issue を作成**しないでください**。代わりに [プライベートセキュリティアドバイザリ](https://github.com/FanyinLiu/Nexus/security/advisories/new) から報告してください。
 
 ---
 

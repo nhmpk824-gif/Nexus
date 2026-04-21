@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 General chat
+    url: https://github.com/FanyinLiu/Nexus/discussions/categories/general
+    about: For casual chat, share how you use Nexus, or just say hi.
+  - name: ❓ Questions and help
+    url: https://github.com/FanyinLiu/Nexus/discussions/categories/q-a
+    about: Stuck on setup, usage, or config? Ask in Q&A.
+  - name: 💡 Ideas and feature brainstorming
+    url: https://github.com/FanyinLiu/Nexus/discussions/categories/ideas
+    about: For rough ideas you want community input on before filing as an issue.
+  - name: 📣 Announcements and project updates
+    url: https://github.com/FanyinLiu/Nexus/discussions/categories/announcements
+    about: Read maintainer announcements.
