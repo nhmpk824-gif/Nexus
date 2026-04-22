@@ -187,7 +187,7 @@ npm run package:win     # または package:mac / package:linux
 
 | レイヤー | テクノロジー |
 |----------|-------------|
-| ランタイム | Electron 36 |
+| ランタイム | Electron 41 |
 | フロントエンド | React 19 · TypeScript · Vite 8 |
 | キャラクター | PixiJS · pixi-live2d-display |
 | ローカル ML | sherpa-onnx-node · onnxruntime-web · @huggingface/transformers |

@@ -186,7 +186,7 @@ npm run package:win     # 또는 package:mac / package:linux
 
 | 레이어 | 기술 |
 |--------|------|
-| 런타임 | Electron 36 |
+| 런타임 | Electron 41 |
 | 프론트엔드 | React 19 · TypeScript · Vite 8 |
 | 캐릭터 렌더링 | PixiJS · pixi-live2d-display |
 | 로컬 ML | sherpa-onnx-node · onnxruntime-web · @huggingface/transformers |

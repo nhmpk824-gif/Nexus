@@ -189,7 +189,7 @@ npm run package:win     # 或 package:mac / package:linux
 
 | 層級 | 技術 |
 |------|------|
-| 執行環境 | Electron 36 |
+| 執行環境 | Electron 41 |
 | 前端 | React 19 · TypeScript · Vite 8 |
 | 角色渲染 | PixiJS · pixi-live2d-display |
 | 本地 ML | sherpa-onnx-node · onnxruntime-web · @huggingface/transformers |

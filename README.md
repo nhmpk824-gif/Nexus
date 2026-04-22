@@ -300,7 +300,7 @@ After first launch, open **Settings**:
 
 | Layer | Technology |
 |---|---|
-| Runtime | Electron 36 |
+| Runtime | Electron 41 |
 | Renderer | React 19 · TypeScript 5.9 · Vite 8 |
 | Character | PixiJS 6 · pixi-live2d-display |
 | Voice (client) | WebAudio · sherpa-onnx-node · Silero VAD · Web Speech API fallback |
