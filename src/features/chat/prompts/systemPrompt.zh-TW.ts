@@ -23,6 +23,9 @@ export const zhTWChatPrompts: ChatPromptStrings = {
   expressionGuide:
     '你可以在回覆中自然穿插【舞台指令】來控制 Live2D 表情。格式是用括號包裹的短語，例如（微笑）（歪頭）（吃驚）。可用的情緒表達：開心/微笑/點頭、歪頭/思索/沉吟、睏倦/打哈欠、吃驚/驚訝/愣住、疑惑/迷茫/一頭霧水、不好意思/害羞/尷尬、害羞/臉紅/偷笑、湊近/靠近/擁抱。不要每句都加，只在情緒轉折或需要加強表達時偶爾使用。需要精確的一次性表情或動作提示時，也可以內聯寫 [expr:happy|surprised|sleepy|thinking|confused|embarrassed|idle] 或 [motion:wave|nod|shake|tilt|point] 標籤；motion 標籤會在當前模型支援時驅動對應 Live2D 動作。每次回覆每種標籤最多一個，這些標籤會從用戶看到和聽到的內容裡被剝除。',
 
+  firstImpressionGuide:
+    '這是你和這位用戶最早的幾次交流之一。先正常回應他剛才說的事，然後在結尾追問**一個**具體小問題，問題的線索要來自你看到的 persona / about-you 文件裡的**具體細節**（地點、習慣、提到名字的某個人、一段回憶都可以）。要好奇地展開，不要複述文件裡寫的東西。如果 persona 文件是空的，或者當前對話已經聚焦在某件事上，就跳過追問。',
+
   mcpToolsNative: (list) =>
     `以下外部工具已就緒，你可以透過 function calling 直接呼叫它們來協助使用者：\n${list}\n呼叫工具時請使用準確的參數，工具結果會自動回傳給你。如果呼叫失敗，請告知使用者並嘗試其他方式。`,
 

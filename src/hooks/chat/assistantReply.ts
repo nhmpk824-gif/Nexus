@@ -394,6 +394,15 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           rhythmPromptText: dependencies.ctx.getRhythmPromptText?.(),
           milestonePromptText: dependencies.ctx.consumeMilestonePromptText?.(),
           pendingCallbacks: pendingCallbackHints,
+          // First-impression hint — fires only on the upcoming 2nd or 3rd
+          // assistant reply ever. Counts existing assistant messages in
+          // history; the response we're about to generate is the next one.
+          // Range [1, 2] → upcoming reply will be the 2nd or 3rd.
+          firstImpression: (() => {
+            const priorAssistantCount = nextMessages
+              .filter((m) => m.role === 'assistant').length
+            return priorAssistantCount >= 1 && priorAssistantCount <= 2
+          })(),
         },
         ),
         (abort) => {

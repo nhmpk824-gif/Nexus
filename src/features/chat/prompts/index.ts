@@ -24,6 +24,9 @@ export interface ChatPromptStrings {
   responseStyleVoice: string
   /** Live2D stage-direction guide. */
   expressionGuide: string
+  /** Soft instruction for the 2nd/3rd assistant reply ever — ask one
+   *  specific curious question rooted in a concrete persona detail. */
+  firstImpressionGuide: string
   /** Native function-calling intro; `list` is the newline-joined `1. name: desc`. */
   mcpToolsNative: (list: string) => string
   /** Outer wrapper for skill guides. */

@@ -23,6 +23,9 @@ export const enUSChatPrompts: ChatPromptStrings = {
   expressionGuide:
     'You may weave in [stage directions] in your reply to drive Live2D expressions. Format: a short phrase in parentheses, such as (smile) (tilt head) (surprised). Available expressions: happy/smile/nod, tilt-head/pondering/musing, sleepy/yawn, surprised/startled/dazed, puzzled/confused/lost, embarrassed/shy/awkward, shy/blush/giggle, lean-in/closer/hug. Do not add one to every sentence — only during real emotional shifts or when extra expression genuinely helps. For precise one-shot cues you may also emit inline [expr:happy|surprised|sleepy|thinking|confused|embarrassed|idle] or [motion:wave|nod|shake|tilt|point] tags when natural phrasing would not fit; motion tags drive a matching Live2D gesture when the model supports it. At most one inline tag of each kind per reply; they are stripped from what the user sees and hears.',
 
+  firstImpressionGuide:
+    'This is one of your earliest replies to this user. After answering normally, end your reply with exactly one short specific question rooted in a CONCRETE detail you can see in their persona / about-you notes (a place, a habit, a person mentioned by name, a memory). Be curious — extrapolate, do not just repeat what is written. Skip if the persona file is empty or the conversation is already focused on something specific.',
+
   mcpToolsNative: (list) =>
     `The following external tools are ready — call them directly via function calling when they help the user:\n${list}\nPass accurate arguments; tool results will be returned to you automatically. If a tool call fails, tell the user and try another approach.`,
 

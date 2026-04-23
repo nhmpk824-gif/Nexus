@@ -111,6 +111,14 @@ export type AssistantReplyRequestOptions = {
     content: string
     daysAgo: number
   }>
+  /**
+   * Set true when this is the user's 2nd or 3rd assistant reply ever.
+   * The builder appends a short "ask one specific curious question rooted
+   * in persona detail" instruction. Caller (assistantReply) computes the
+   * flag from chat-history length so we don't introduce a new session
+   * counter just for this signal.
+   */
+  firstImpression?: boolean
 }
 
 export async function buildSystemPrompt(
@@ -161,6 +169,8 @@ export async function buildSystemPrompt(
     : ''
 
   const expressionGuideSection = prompts.expressionGuide
+
+  const firstImpressionSection = options.firstImpression ? prompts.firstImpressionGuide : ''
 
   // Tool catalog: in prompt mode we inject the full schema + protocol; in
   // native mode we just nudge the model that function calling is available.
@@ -228,6 +238,7 @@ export async function buildSystemPrompt(
     rhythmSection,
     responseStyleSection,
     expressionGuideSection,
+    firstImpressionSection,
     toolHonestySection,
     screenDisplaySection,
     bridgedMessageSection,
