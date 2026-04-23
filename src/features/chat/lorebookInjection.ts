@@ -76,6 +76,68 @@ export function selectTriggeredLorebookEntries(
 const DEFAULT_LOCAL_HASH_THRESHOLD = 0.13
 const DEFAULT_REMOTE_SEMANTIC_THRESHOLD = 0.55
 
+/** Caller bridge for the LLM rewrite pass. Identical shape to decisionEngine's
+ * ChatCaller: deliberately minimal so we don't drag in the autonomy module
+ * from chat code. Return `{ content: string }`; exceptions are caught by
+ * the rewrite wrapper and treated as "no rewrites available." */
+export type LorebookRewriteCaller = (prompt: string) => Promise<string>
+
+const MAX_REWRITE_VARIANTS = 3
+
+/**
+ * Ask a small LLM to rephrase the user's recent turn into alternative
+ * search queries. Borrowed from goodai-ltm — users speak colloquially but
+ * lorebook entries are usually written in formal prose, so direct cosine
+ * similarity often misses. Rewrites that *fail silently*: any error, empty
+ * response, or unparseable text returns [] so the caller falls back to
+ * the literal text.
+ */
+export async function rewriteQueryForLorebook(
+  userText: string,
+  caller: LorebookRewriteCaller,
+): Promise<string[]> {
+  const trimmed = userText.trim()
+  if (!trimmed) return []
+
+  const prompt = [
+    'Rewrite the following user message into 2-3 short alternative search queries',
+    'that could retrieve background lore entries written in formal prose. Preserve',
+    'the original language. One query per line, no numbering, no explanation, no',
+    'quotation marks. If the message is too short or has no retrievable substance,',
+    'output nothing.',
+    '',
+    `Message: ${trimmed}`,
+  ].join('\n')
+
+  let raw: string
+  try {
+    raw = await caller(prompt)
+  } catch {
+    return []
+  }
+  if (!raw) return []
+
+  // Strip list markers only: leading whitespace, then either a single
+  // bullet symbol (-*•·) or `\d+\.` style numbering, then one whitespace.
+  // Matching bare digits would eat content starting with a year or count.
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*(?:[-*•·]|\d+\.)\s+/, '').trim())
+    .filter((line) => line.length > 0 && line.length < 200)
+  if (lines.length === 0) return []
+
+  const deduped: string[] = []
+  const seen = new Set<string>()
+  for (const line of lines) {
+    const key = line.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(line)
+    if (deduped.length >= MAX_REWRITE_VARIANTS) break
+  }
+  return deduped
+}
+
 /**
  * Semantic-enriched variant of selectTriggeredLorebookEntries. Runs the
  * cheap keyword pass first (deterministic, catches explicit mentions of
@@ -103,6 +165,12 @@ export async function selectTriggeredLorebookEntriesWithSemantic(
   options: {
     embeddingModel: string
     semanticThreshold?: number
+    /** Optional rewrite bridge. When set and the first semantic pass
+     * returns zero hits, the caller is asked to rephrase the user text
+     * into alternative queries, and the search is retried over those
+     * rephrasings. Opt-in — not every deployment wants the extra LLM
+     * call per turn. */
+    rewriteQuery?: LorebookRewriteCaller
   },
 ): Promise<LorebookEntry[]> {
   const keywordHits = selectTriggeredLorebookEntries(entries, recentMessages)
@@ -131,16 +199,10 @@ export async function selectTriggeredLorebookEntriesWithSemantic(
       : DEFAULT_REMOTE_SEMANTIC_THRESHOLD)
   const queryText = scanTexts.join('\n')
 
-  let queryEmbedding: number[]
-  try {
-    queryEmbedding = await embedMemorySearchText(queryText, options.embeddingModel)
-  } catch (err) {
-    console.warn('[lorebook] semantic query embedding failed; keyword-only:', err)
-    return keywordHits
-  }
-  if (!queryEmbedding.length) return keywordHits
-
-  const semanticHits: Array<{ entry: LorebookEntry; score: number }> = []
+  // Pre-embed each remaining candidate once — we may reuse it across the
+  // literal query and (optionally) the rewritten queries, so hoisting the
+  // work outside the scoring loop amortises rewrite cost.
+  const candidateEmbeddings = new Map<string, number[]>()
   for (const entry of remainingCandidates) {
     const haystack = [
       entry.label,
@@ -148,18 +210,56 @@ export async function selectTriggeredLorebookEntriesWithSemantic(
       entry.content.slice(0, MAX_LOREBOOK_CONTENT_CHARS),
     ].filter(Boolean).join(' ')
     if (!haystack) continue
-
     try {
-      const entryEmbedding = await embedMemorySearchText(haystack, options.embeddingModel)
-      if (!entryEmbedding.length) continue
-      const score = cosineSimilarity(queryEmbedding, entryEmbedding)
-      if (score >= threshold) {
-        semanticHits.push({ entry, score })
-      }
+      const embedding = await embedMemorySearchText(haystack, options.embeddingModel)
+      if (embedding.length) candidateEmbeddings.set(entry.id, embedding)
     } catch {
       // One bad entry shouldn't poison the rest — skip and continue.
       continue
     }
+  }
+
+  const scoreAgainstQuery = async (query: string): Promise<Map<string, number>> => {
+    const results = new Map<string, number>()
+    let queryEmbedding: number[]
+    try {
+      queryEmbedding = await embedMemorySearchText(query, options.embeddingModel)
+    } catch (err) {
+      console.warn('[lorebook] semantic query embedding failed; keyword-only:', err)
+      return results
+    }
+    if (!queryEmbedding.length) return results
+    for (const [id, entryEmbedding] of candidateEmbeddings) {
+      const score = cosineSimilarity(queryEmbedding, entryEmbedding)
+      if (score >= threshold) results.set(id, score)
+    }
+    return results
+  }
+
+  const bestScoreById = new Map<string, number>()
+  const mergeScores = (next: Map<string, number>) => {
+    for (const [id, score] of next) {
+      const prev = bestScoreById.get(id) ?? -Infinity
+      if (score > prev) bestScoreById.set(id, score)
+    }
+  }
+
+  mergeScores(await scoreAgainstQuery(queryText))
+
+  // Rewrite retry — only when the literal pass found nothing AND the
+  // caller opted in. Rephrasings run ONE rewrite call and each produced
+  // query reuses the pre-computed candidate embeddings.
+  if (bestScoreById.size === 0 && options.rewriteQuery) {
+    const rewrites = await rewriteQueryForLorebook(scanTexts[0] ?? queryText, options.rewriteQuery)
+    for (const rewrite of rewrites) {
+      mergeScores(await scoreAgainstQuery(rewrite))
+    }
+  }
+
+  const semanticHits: Array<{ entry: LorebookEntry; score: number }> = []
+  for (const entry of remainingCandidates) {
+    const score = bestScoreById.get(entry.id)
+    if (score != null) semanticHits.push({ entry, score })
   }
 
   semanticHits.sort((a, b) => {

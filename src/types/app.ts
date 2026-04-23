@@ -247,6 +247,12 @@ export interface MemorySettings {
   memoryDiaryRetentionDays: number
   memoryHotTierMaxChars: number
   autoSkillGenerationEnabled: boolean
+  // When enabled and the semantic pass finds no hits, a cheap LLM call
+  // rewrites the user's recent text into 2-3 alternative phrasings
+  // (borrowed from goodai-ltm) and re-runs the embedding search. Adds one
+  // small LLM call per turn but catches colloquial phrasing that the
+  // literal user text misses against formal lorebook entries.
+  lorebookRewriteQueryEnabled: boolean
 }
 
 export interface ContextSettings {

@@ -234,7 +234,35 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
         selectTriggeredLorebookEntriesWithSemantic(
           loadLorebookEntries(),
           nextMessages,
-          { embeddingModel: currentSettings.memoryEmbeddingModel },
+          {
+            embeddingModel: currentSettings.memoryEmbeddingModel,
+            rewriteQuery: currentSettings.lorebookRewriteQueryEnabled
+              ? async (prompt: string) => {
+                  const desktopPet = window.desktopPet
+                  if (!desktopPet?.completeChat) return ''
+                  const rewriteModel = (
+                    currentSettings.smartModelRoutingEnabled
+                    && currentSettings.modelCheap?.trim()
+                  )
+                    ? currentSettings.modelCheap
+                    : currentSettings.model
+                  try {
+                    const resp = await desktopPet.completeChat({
+                      providerId: currentSettings.apiProviderId,
+                      baseUrl: currentSettings.apiBaseUrl,
+                      apiKey: currentSettings.apiKey,
+                      model: rewriteModel,
+                      messages: [{ role: 'user', content: prompt }],
+                      temperature: 0.3,
+                      maxTokens: 120,
+                    })
+                    return resp.content ?? ''
+                  } catch {
+                    return ''
+                  }
+                }
+              : undefined,
+          },
         ).catch((err) => {
           console.warn('[assistantReply] lorebook semantic pass failed; continuing without lorebook injection.', err)
           return []

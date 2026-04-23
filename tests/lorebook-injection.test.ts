@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 import {
   buildLorebookSection,
+  rewriteQueryForLorebook,
   selectTriggeredLorebookEntries,
   selectTriggeredLorebookEntriesWithSemantic,
 } from '../src/features/chat/lorebookInjection.ts'
@@ -158,4 +159,50 @@ test('semantic hybrid honors MAX_LOREBOOK_ENTRIES_PER_TURN cap', async () => {
     embeddingModel: LOCAL_HASH_MEMORY_MODEL_ID,
   })
   assert.ok(hits.length <= 6, `expected ≤ 6 hits, got ${hits.length}`)
+})
+
+// ── Query rewrite ────────────────────────────────────────────────────────
+
+test('rewriteQueryForLorebook splits newlines, strips list bullets, de-dupes', async () => {
+  const caller = async () => '- apple tree\n* apple tree\n1. apple harvest\n•  2024 crop'
+  const rewrites = await rewriteQueryForLorebook('apples are red', caller)
+  assert.deepEqual(rewrites, ['apple tree', 'apple harvest', '2024 crop'])
+})
+
+test('rewriteQueryForLorebook returns [] on empty input', async () => {
+  const caller = async () => 'something'
+  assert.deepEqual(await rewriteQueryForLorebook('', caller), [])
+  assert.deepEqual(await rewriteQueryForLorebook('   ', caller), [])
+})
+
+test('rewriteQueryForLorebook returns [] when caller throws', async () => {
+  const caller = async () => { throw new Error('503') }
+  assert.deepEqual(await rewriteQueryForLorebook('hello', caller), [])
+})
+
+test('rewriteQueryForLorebook caps at 3 variants', async () => {
+  const caller = async () => 'q1\nq2\nq3\nq4\nq5'
+  const rewrites = await rewriteQueryForLorebook('original', caller)
+  assert.equal(rewrites.length, 3)
+})
+
+test('selectTriggeredLorebookEntriesWithSemantic rewrites and matches when literal pass finds nothing', async () => {
+  const entries = [
+    makeEntry({
+      id: 'laptop',
+      keywords: ['ThinkPad X1 Carbon'],
+      content: 'ThinkPad X1 Carbon is the user\'s daily driver laptop for programming.',
+      priority: 5,
+    }),
+  ]
+  const messages = [userMessage('remind me what machine I code on')]
+
+  const keywordOnly = await selectTriggeredLorebookEntriesWithSemantic(entries, messages, {
+    embeddingModel: LOCAL_HASH_MEMORY_MODEL_ID,
+  })
+  const withRewrite = await selectTriggeredLorebookEntriesWithSemantic(entries, messages, {
+    embeddingModel: LOCAL_HASH_MEMORY_MODEL_ID,
+    rewriteQuery: async () => 'ThinkPad X1 Carbon laptop programming\ndaily driver laptop',
+  })
+  assert.ok(withRewrite.length >= keywordOnly.length)
 })

@@ -112,6 +112,7 @@ const defaultSettings: AppSettings = {
   memoryDiaryRetentionDays: 7,
   memoryHotTierMaxChars: 3500,
   autoSkillGenerationEnabled: true,
+  lorebookRewriteQueryEnabled: false,
   contextAwarenessEnabled: true,
   activeWindowContextEnabled: true,
   clipboardContextEnabled: true,
