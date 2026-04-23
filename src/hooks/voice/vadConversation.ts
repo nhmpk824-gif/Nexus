@@ -47,6 +47,13 @@ export type StartVadConversationOptions = {
   currentSettings: AppSettings
   vadSessionRef: MutableRefObject<VadConversationSession | null>
   wakewordRuntimeRef: MutableRefObject<WakewordRuntimeController | null>
+  /**
+   * Timestamp (ms epoch) before which VAD should suppress `speech_start`
+   * callbacks. Set whenever the user just interrupted TTS — residual
+   * main-process audio may reach the mic within ~200 ms of the abort
+   * IPC and would otherwise be detected as a false speech onset.
+   */
+  voiceEchoCooldownUntilRef: MutableRefObject<number>
   voiceStateRef: MutableRefObject<VoiceState>
   suppressVoiceReplyRef: MutableRefObject<boolean>
   clearPendingVoiceRestart: () => void
@@ -145,6 +152,10 @@ export async function startVadConversation(
 
   const handleSpeechStart = () => {
     if (params.vadSessionRef.current !== session) return
+    // Echo cooldown: suppress speech_start during the short window after a
+    // user barge-in, so the tail end of the aborted TTS doesn't bounce
+    // back through the mic and look like user speech.
+    if (Date.now() < params.voiceEchoCooldownUntilRef.current) return
     session.speechDetected = true
     params.dispatchVoiceSession({ type: 'speech_detected' })
     params.busEmit?.({

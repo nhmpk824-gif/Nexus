@@ -34,6 +34,7 @@ export function createVoiceConversationStarters(bag: VoiceRuntimeBag): VoiceEngi
       currentSettings: ctx.settingsRef.current,
       vadSessionRef: refs.vadSessionRef,
       wakewordRuntimeRef: refs.wakewordRuntimeRef,
+      voiceEchoCooldownUntilRef: refs.voiceEchoCooldownUntilRef,
       voiceStateRef: refs.voiceStateRef,
       suppressVoiceReplyRef: refs.suppressVoiceReplyRef,
       clearPendingVoiceRestart: hookCallbacks.clearPendingVoiceRestart,

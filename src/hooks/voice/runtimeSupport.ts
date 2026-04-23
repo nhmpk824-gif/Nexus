@@ -86,6 +86,7 @@ type InterruptSpeakingForVoiceInputRuntimeOptions = {
   showPetStatus: ShowPetStatus
   stopActiveSpeechOutput: () => void
   dispatchVoiceSessionAndSync: (event: VoiceSessionEvent) => VoiceSessionState
+  voiceEchoCooldownUntilRef: MutableRefObject<number>
   ti: Translator
 }
 
@@ -280,6 +281,10 @@ export function interruptSpeakingForVoiceInputRuntime(
   }
 
   options.stopActiveSpeechOutput()
+  // Arm the echo cooldown so the VAD session that opens ~60 ms from now
+  // doesn't mistake the tail of the aborted TTS audio for a fresh speech
+  // onset. 200 ms covers the longest typical main-process PCM ring drain.
+  options.voiceEchoCooldownUntilRef.current = Date.now() + 200
   options.dispatchVoiceSessionAndSync({ type: 'tts_interrupted' })
   // Bus emission is now handled by dispatchVoiceSessionAndSync, which maps
   // the legacy tts_interrupted event to tts:interrupted on the bus.

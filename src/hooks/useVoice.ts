@@ -114,8 +114,10 @@ export function useVoice(ctx: UseVoiceContext) {
   const speechLevelValueRef = useRef(0)
   const paraformerSessionRef = useRef<ParaformerStreamSession | null>(null)
   const paraformerConversationRef = useRef<ParaformerConversationState | null>(null)
+  const paraformerStartingRef = useRef(false)
   const sensevoiceSessionRef = useRef<SenseVoiceStreamSession | null>(null)
   const sensevoiceConversationRef = useRef<SenseVoiceConversationState | null>(null)
+  const sensevoiceStartingRef = useRef(false)
   const tencentAsrSessionRef = useRef<TencentAsrStreamSession | null>(null)
   const tencentConversationRef = useRef<TencentConversationState | null>(null)
   const speechInterruptMonitorRef = useRef<SpeechInterruptMonitorSession | null>(null)
@@ -129,6 +131,13 @@ export function useVoice(ctx: UseVoiceContext) {
   // Handle for the ACK → startVoiceConversation setTimeout. Kept so we
   // can cancel it if the wakeword runtime is torn down mid-window.
   const wakewordAckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Set to Date.now() + N ms whenever the user interrupts TTS — VAD
+  // then ignores speech-start callbacks until past the deadline.
+  const voiceEchoCooldownUntilRef = useRef(0)
+
+  // Need the echo-cooldown ref inside the runtime-bag. Place it here to
+  // keep the ordering consistent with other runtime refs; bag collection
+  // happens below.
   const activeVoiceConversationOptionsRef = useRef<VoiceConversationOptions>({})
   const assistantSpeechGenerationRef = useRef(0)
   const interruptedSpeechGenerationRef = useRef<number | null>(null)
@@ -405,14 +414,17 @@ export function useVoice(ctx: UseVoiceContext) {
       speechLevelValueRef,
       paraformerSessionRef,
       paraformerConversationRef,
+      paraformerStartingRef,
       sensevoiceSessionRef,
       sensevoiceConversationRef,
+      sensevoiceStartingRef,
       tencentAsrSessionRef,
       tencentConversationRef,
       speechInterruptMonitorRef,
       wakewordRuntimeRef,
       wakewordAcknowledgingRef,
       wakewordAckTimerRef,
+      voiceEchoCooldownUntilRef,
       activeVoiceConversationOptionsRef,
       assistantSpeechGenerationRef,
       interruptedSpeechGenerationRef,

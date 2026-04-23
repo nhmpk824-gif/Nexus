@@ -54,6 +54,14 @@ export type StartVoiceConversationEntrypointOptions = {
   paraformerSessionRef: MutableRefObject<ParaformerStreamSession | null>
   sensevoiceSessionRef: MutableRefObject<SenseVoiceStreamSession | null>
   tencentAsrSessionRef: MutableRefObject<TencentAsrStreamSession | null>
+  /**
+   * Sentinels that close the async window between availability-check
+   * and startXxxConversation. Without them, a second entrypoint call
+   * inside ~50 ms can pass the session-ref guard (both see null refs)
+   * and both launch; the loser leaks detector + mic + AudioContext.
+   */
+  paraformerStartingRef: MutableRefObject<boolean>
+  sensevoiceStartingRef: MutableRefObject<boolean>
   clearPendingVoiceRestart: () => void
   canInterruptSpeech: () => boolean
   interruptSpeakingForVoiceInput: () => boolean
@@ -130,6 +138,10 @@ export function startVoiceConversationEntrypoint(
   let currentSettings = params.ensureSupportedSpeechInputSettings(true)
 
   if (isParaformerSpeechInputProvider(currentSettings.speechInputProviderId)) {
+    // Close the async window — a second entrypoint call during the
+    // availability-check await would see sessionRef=null and race.
+    if (params.paraformerStartingRef.current) return
+    params.paraformerStartingRef.current = true
     void checkParaformerAvailability().then((status) => {
       if (!isParaformerSpeechInputProvider(params.settingsRef.current.speechInputProviderId)) {
         return
@@ -147,11 +159,15 @@ export function startVoiceConversationEntrypoint(
       void params.startParaformerConversation(params.options)
     }).catch(() => {
       params.setError(params.ti('voice.provider.paraformer.unavailable'))
+    }).finally(() => {
+      params.paraformerStartingRef.current = false
     })
     return
   }
 
   if (isSenseVoiceSpeechInputProvider(currentSettings.speechInputProviderId)) {
+    if (params.sensevoiceStartingRef.current) return
+    params.sensevoiceStartingRef.current = true
     void checkSenseVoiceAvailability().then((status) => {
       if (!isSenseVoiceSpeechInputProvider(params.settingsRef.current.speechInputProviderId)) {
         return
@@ -172,6 +188,8 @@ export function startVoiceConversationEntrypoint(
       void params.startSenseVoiceConversation(params.options)
     }).catch(() => {
       params.setError(params.ti('voice.provider.sensevoice.unavailable'))
+    }).finally(() => {
+      params.sensevoiceStartingRef.current = false
     })
     return
   }

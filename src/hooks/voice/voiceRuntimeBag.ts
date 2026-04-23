@@ -74,14 +74,20 @@ export type VoiceRefs = {
   speechLevelValueRef: MutableRefObject<number>
   paraformerSessionRef: MutableRefObject<ParaformerStreamSession | null>
   paraformerConversationRef: MutableRefObject<ParaformerConversationState | null>
+  /** True while the Paraformer availability check → start sequence is in flight. */
+  paraformerStartingRef: MutableRefObject<boolean>
   sensevoiceSessionRef: MutableRefObject<SenseVoiceStreamSession | null>
   sensevoiceConversationRef: MutableRefObject<SenseVoiceConversationState | null>
+  /** True while the SenseVoice availability check → start sequence is in flight. */
+  sensevoiceStartingRef: MutableRefObject<boolean>
   tencentAsrSessionRef: MutableRefObject<TencentAsrStreamSession | null>
   tencentConversationRef: MutableRefObject<TencentConversationState | null>
   speechInterruptMonitorRef: MutableRefObject<SpeechInterruptMonitorSession | null>
   wakewordRuntimeRef: MutableRefObject<WakewordRuntimeController | null>
   wakewordAcknowledgingRef: MutableRefObject<boolean>
   wakewordAckTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>
+  /** Echo cooldown timestamp — VAD skips speech_start if now < value. */
+  voiceEchoCooldownUntilRef: MutableRefObject<number>
   activeVoiceConversationOptionsRef: MutableRefObject<VoiceConversationOptions>
   assistantSpeechGenerationRef: MutableRefObject<number>
   interruptedSpeechGenerationRef: MutableRefObject<number | null>

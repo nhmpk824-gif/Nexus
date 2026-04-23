@@ -259,7 +259,14 @@ export function createStreamingSpeechOutputController(
 
     finishSent = true
     void ensureStarted()
-      .then(() => window.desktopPet!.ttsStreamFinish({ requestId }))
+      .then(() => {
+        // Re-check after the stream-start await: abort() or another finish
+        // path may have fired while ensureStarted was pending. Without this
+        // guard the main-process request-id state machine sees a stray
+        // ttsStreamFinish after the abort it already processed.
+        if (settled || aborted) return
+        return window.desktopPet!.ttsStreamFinish({ requestId })
+      })
       .catch((error) => {
         fail(error instanceof Error ? error : new Error('Streaming TTS finalize failed.'))
       })

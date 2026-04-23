@@ -82,6 +82,17 @@ export function ensureSupportedSpeechInputSettingsRuntime(
   return nextSettings
 }
 
+/**
+ * Swap the **runtime-ref** speech-input provider to the failover candidate.
+ *
+ * INVARIANT: in-flight STT sessions (vad/paraformer/sensevoice/tencent
+ * conversations) must read from their own `currentSettings` snapshot that
+ * was captured at session start — never from `settingsRef.current` — so
+ * mid-session failover cannot pollute telemetry, credentials, or any
+ * follow-up logic for the session that's already running.
+ *
+ * The new settings here apply only to the NEXT session start.
+ */
 export function applySpeechInputProviderFallbackRuntime(
   options: ApplySpeechInputProviderFallbackRuntimeOptions,
 ) {
@@ -106,6 +117,11 @@ export function createSpeechOutputFallbackSettings(
   return switchSpeechOutputProvider(currentSettings, providerId)
 }
 
+/**
+ * Same invariant as `applySpeechInputProviderFallbackRuntime` — TTS
+ * turns must capture settings at `startSpeechOutputRuntime` entry and
+ * not re-read `settingsRef.current` for the rest of that turn.
+ */
 export function applySpeechOutputProviderFallbackRuntime(
   options: ApplySpeechOutputProviderFallbackRuntimeOptions,
 ) {

@@ -130,6 +130,7 @@ export function createVoiceBindings(bag: VoiceRuntimeBag): VoiceBindings {
       showPetStatus,
       stopActiveSpeechOutput,
       dispatchVoiceSessionAndSync,
+      voiceEchoCooldownUntilRef: refs.voiceEchoCooldownUntilRef,
       ti,
     })
   }

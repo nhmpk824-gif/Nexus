@@ -150,6 +150,8 @@ export function createVoiceLifecycleControls(bag: VoiceRuntimeBag): VoiceLifecyc
         paraformerSessionRef: refs.paraformerSessionRef,
         sensevoiceSessionRef: refs.sensevoiceSessionRef,
         tencentAsrSessionRef: refs.tencentAsrSessionRef,
+        paraformerStartingRef: refs.paraformerStartingRef,
+        sensevoiceStartingRef: refs.sensevoiceStartingRef,
         clearPendingVoiceRestart: hookCallbacks.clearPendingVoiceRestart,
         canInterruptSpeech: bindings.canInterruptSpeech,
         interruptSpeakingForVoiceInput: bindings.interruptSpeakingForVoiceInput,

@@ -141,6 +141,11 @@ export async function handleRecognizedVoiceTranscriptRuntime(
 
   if (transcriptDecision.kind === 'manual_confirm') {
     logVoiceEvent('stored transcript in composer for manual confirmation')
+    // Any recognized speech (even one destined for the composer instead of
+    // direct send) counts as successful STT. Without this the no-speech
+    // restart counter climbs across wake-word-matched turns and eventually
+    // forces the runtime into its "give up" state.
+    options.resetNoSpeechRestartCount()
     options.dispatchVoiceSessionAndSync({ type: 'session_completed' })
     options.setMood('idle')
     options.openChatPanelForVoice()
@@ -167,6 +172,8 @@ export async function handleRecognizedVoiceTranscriptRuntime(
       content: transcriptDecision.content,
       mode: transcriptDecision.mode,
     })
+    // Transcript arrived even if we're holding it — counter should reset.
+    options.resetNoSpeechRestartCount()
     options.dispatchVoiceSessionAndSync({ type: 'session_completed' })
     options.setMood('idle')
     options.setError(null)
@@ -249,6 +256,10 @@ export async function handleRecognizedVoiceTranscriptRuntime(
 
   if (transcriptDecision.kind === 'wake_word_only') {
     logVoiceEvent('wake word matched but no content remained after stripping')
+    // Wake word was heard, which is a successful STT. Reset the counter so
+    // repeated wake-word-only rounds don't accumulate toward the max-retry
+    // cap and cause the runtime to pause mid-use.
+    options.resetNoSpeechRestartCount()
     options.dispatchVoiceSessionAndSync({ type: 'session_completed' })
     options.setMood('happy')
     options.setError(null)
