@@ -37,13 +37,15 @@ RSS / webhook URL is taken verbatim from renderer and passed to `net.fetch`, whi
 - Files: `electron/ipc/notificationIpc.js:18-24` → `electron/services/notificationBridge.js:160`
 - Fix: validate each channel shape (`kind ∈ {rss, webhook}`), require `https:` for network URLs, block RFC1918 / loopback / link-local CIDRs, clamp poll interval to [60s, 1d].
 
-### H4 — `vault:retrieve` has no user-consent gate
+### H4 — `vault:retrieve` has no user-consent gate (PARTIALLY MITIGATED)
 
 Any code running in the renderer (XSS in a rendered chat message, compromised plugin) can enumerate slots (`vault:list-slots`) and pull every stored secret (OpenAI key, Telegram bot token, Discord bot token, Tencent ASR keys).
 
 - Channel: `vault:retrieve`, `vault:retrieve-many`, `vault:list-slots`
-- File: `electron/ipc/vaultIpc.js:33-68`
-- Fix (design): return an opaque handle from `vault:retrieve` that the main process resolves to plaintext only inside an outbound-request handler; renderer never sees plaintext again. Audit the call sites to know how intrusive this is.
+- File: `electron/ipc/vaultIpc.js:47-77`
+- Status: PARTIALLY MITIGATED — bulk-operation rate limit (6 calls per 60 s per webContents) added in milestone M1; rate-limit hits are audited to `audit.log` so post-incident detection is possible. Single `vault:retrieve(slot)` is unchanged because the renderer needs each slot name explicitly.
+- Remaining gap: a slow-burn attacker (1 call every 11 s) can still enumerate every key over a few minutes. Full closure requires the opaque-handle architecture below.
+- Fix (design, deferred): return an opaque handle from `vault:retrieve` that the main process resolves to plaintext only inside an outbound-request handler; renderer never sees plaintext again. Estimated effort: 1-2 days because every consumer of API keys (chat IPC, voice STT/TTS, Telegram/Discord bot init) needs to switch from "string in settings object" to "handle resolved at IPC boundary".
 
 ### H5 — chat `baseUrl` SSRF
 

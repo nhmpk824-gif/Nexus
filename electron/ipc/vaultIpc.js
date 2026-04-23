@@ -17,6 +17,34 @@ import {
 } from './validate.js'
 import { audit } from '../services/auditLog.js'
 
+// Per-sender rate limit on bulk vault operations. Hostile renderer code
+// (XSS in chat-rendered markdown, compromised plugin page) could
+// otherwise enumerate every stored API key in milliseconds via
+// retrieve-many. The limit is generous for legit settings hydration on
+// startup but kicks in fast enough to make brute exfil noisy.
+//
+// Strict rate-limit on bulk reads only — single retrieve(slot) requires
+// the renderer to know each slot name, which is itself a barrier.
+const BULK_OP_WINDOW_MS = 60_000
+const BULK_OP_MAX_PER_WINDOW = 6
+
+const _bulkOpHistory = new WeakMap() // webContents → [timestamps]
+
+function rateLimitBulkOp(event, opName) {
+  const now = Date.now()
+  const history = _bulkOpHistory.get(event.sender) ?? []
+  const recent = history.filter((t) => now - t < BULK_OP_WINDOW_MS)
+  if (recent.length >= BULK_OP_MAX_PER_WINDOW) {
+    audit('vault', `${opName}-rate-limited`, { recentCount: recent.length })
+    throw new Error(
+      `vault ${opName} rate-limited: more than ${BULK_OP_MAX_PER_WINDOW} bulk operations in 60s — `
+      + 'looks like programmatic enumeration. Check the audit log.',
+    )
+  }
+  recent.push(now)
+  _bulkOpHistory.set(event.sender, recent)
+}
+
 export function register() {
   ipcMain.handle('vault:is-available', (event) => {
     requireTrustedSender(event)
@@ -46,6 +74,7 @@ export function register() {
 
   ipcMain.handle('vault:list-slots', (event) => {
     requireTrustedSender(event)
+    rateLimitBulkOp(event, 'list-slots')
     audit('vault', 'list-slots')
     return vaultListSlots()
   })
@@ -62,6 +91,7 @@ export function register() {
 
   ipcMain.handle('vault:retrieve-many', (event, slots) => {
     requireTrustedSender(event)
+    rateLimitBulkOp(event, 'retrieve-many')
     const names = requireSlotNames(slots)
     audit('vault', 'retrieve-many', { slots: names })
     return vaultRetrieveMany(names)
