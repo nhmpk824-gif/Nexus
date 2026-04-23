@@ -559,6 +559,7 @@ export const koMessages: TranslationDictionary = {
   'onboarding.welcome.user_name_placeholder': '예: 민수',
   'onboarding.welcome.companion_name_label': '동반자 이름',
   'onboarding.welcome.companion_name_placeholder': '예: 노바',
+  'onboarding.welcome.language_label': '인터페이스 언어',
   'onboarding.text.provider_label': '텍스트 모델 공급자',
   'onboarding.text.api_base_label': 'API URL',
   'onboarding.text.model_label': '모델 이름',

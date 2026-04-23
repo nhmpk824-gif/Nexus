@@ -559,6 +559,7 @@ export const zhTWMessages: TranslationDictionary = {
   'onboarding.welcome.user_name_placeholder': '例如：阿寧',
   'onboarding.welcome.companion_name_label': '桌寵名字',
   'onboarding.welcome.companion_name_placeholder': '例如：星繪',
+  'onboarding.welcome.language_label': '介面語言',
   'onboarding.text.provider_label': '文字模型提供商',
   'onboarding.text.api_base_label': '介面位址',
   'onboarding.text.model_label': '模型名稱',

@@ -560,6 +560,7 @@ export type TranslationKey =
   | 'onboarding.welcome.user_name_placeholder'
   | 'onboarding.welcome.companion_name_label'
   | 'onboarding.welcome.companion_name_placeholder'
+  | 'onboarding.welcome.language_label'
   | 'onboarding.text.provider_label'
   | 'onboarding.text.api_base_label'
   | 'onboarding.text.model_label'

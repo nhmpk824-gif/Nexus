@@ -559,6 +559,7 @@ export const enMessages: TranslationDictionary = {
   'onboarding.welcome.user_name_placeholder': 'e.g. Alex',
   'onboarding.welcome.companion_name_label': 'Companion name',
   'onboarding.welcome.companion_name_placeholder': 'e.g. Nova',
+  'onboarding.welcome.language_label': 'Interface language',
   'onboarding.text.provider_label': 'Text model provider',
   'onboarding.text.api_base_label': 'API base URL',
   'onboarding.text.model_label': 'Model name',

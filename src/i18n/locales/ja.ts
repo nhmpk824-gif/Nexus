@@ -559,6 +559,7 @@ export const jaMessages: TranslationDictionary = {
   'onboarding.welcome.user_name_placeholder': '例：たろう',
   'onboarding.welcome.companion_name_label': 'パートナーの名前',
   'onboarding.welcome.companion_name_placeholder': '例：ノヴァ',
+  'onboarding.welcome.language_label': '表示言語',
   'onboarding.text.provider_label': 'テキストモデルプロバイダー',
   'onboarding.text.api_base_label': 'エンドポイント URL',
   'onboarding.text.model_label': 'モデル名',
