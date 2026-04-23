@@ -4,11 +4,6 @@
  * Only minecraftGateway is testable in plain Node.js — discordGateway and
  * telegramGateway import `{ net } from 'electron'` and cannot be loaded
  * without an Electron runtime.
- *
- * NOTE: minecraftGateway.connect() never wires up a 'message' event listener
- * on the WebSocket, so handleWsMessage is dead code and incoming server
- * messages are silently dropped. The tests below verify current actual
- * behaviour (only 'connected'/'disconnected' events are logged).
  */
 import assert from 'node:assert/strict'
 import { describe, test, before, after } from 'node:test'
@@ -209,6 +204,36 @@ describe('minecraftGateway: WebSocket integration', () => {
     // There should be at least a 'connected' event.
     const limited = getRecentEvents(1)
     assert.ok(limited.length <= 1)
+    await disconnect()
+  })
+
+  test('server-sent event messages land in the event log', async () => {
+    // Regression guard: a previous version of connect() never attached a
+    // 'message' event listener, so handleWsMessage was dead code.
+    const received: Array<{ type: string }> = []
+    const unsubscribe = (() => {
+      const handler = (e: unknown) => received.push(e as { type: string })
+      onEvent(handler)
+      return () => onEvent(null)
+    })()
+
+    wss.once('connection', (ws) => {
+      setTimeout(() => {
+        ws.send(JSON.stringify({
+          header: { messagePurpose: 'event', eventName: 'PlayerMessage' },
+          body: { sender: 'Steve', message: 'hi' },
+        }))
+      }, 20)
+    })
+
+    await connect('127.0.0.1', port, 'MsgUser')
+    await new Promise((r) => setTimeout(r, 120))
+
+    const types = received.map((e) => e.type)
+    assert.ok(types.includes('PlayerMessage'),
+      `expected PlayerMessage in event stream, got ${JSON.stringify(types)}`)
+
+    unsubscribe()
     await disconnect()
   })
 })

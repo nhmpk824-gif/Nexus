@@ -57,7 +57,9 @@ const SIGNAL_PATTERNS: Array<{ signal: RelationshipSignal; pattern: RegExp }> = 
   { signal: 'shared_feeling', pattern: /(我.{0,4}感觉|我觉得.{0,5}(难过|孤独|害怕|焦虑|压力|累|委屈|失落|不开心|开心|高兴|幸福)|我心情|i feel|i['’]m feeling|feeling (sad|lonely|scared|anxious|stressed|tired|down|happy))/i },
   { signal: 'personal_story', pattern: /(我小时候|以前.{0,5}我|我记得.{0,3}(那年|年|时候)|我爸|我妈|我家|我爷爷|我奶奶|我朋友|growing up|when i was (a kid|little|young)|my (family|parents|dad|mom|grandma|grandpa))/i },
   // Subject has to be the user themselves — exclude "我朋友/我妈/我他" etc.
-  { signal: 'expressed_sadness', pattern: /(我(?!.{0,8}(朋友|妈|爸|家人|他|她|爷|奶|别人|他们))(.{0,8})(难过|伤心|孤独|想哭|泪目|心碎)|i['’]?m?\s+(so\s+)?(sad|lonely|heartbroken|crying|tearing up))/i },
+  // English form requires an explicit first-person copula (am / was / 'm /
+  // feel / felt / been) to prevent "she is sad" / "his sad story" matching.
+  { signal: 'expressed_sadness', pattern: /(我(?!.{0,8}(朋友|妈|爸|家人|他|她|爷|奶|别人|他们))(.{0,8})(难过|伤心|孤独|想哭|泪目|心碎)|i(?:['’]?m|\s+(?:am|was|feel|felt|been))\s+(?:so\s+)?(sad|lonely|heartbroken|crying|tearing up))/i },
 
   // Playfulness: laughter, teasing, banter.
   { signal: 'joke', pattern: /(哈哈|嘻嘻|笑死|233|草w?$|wwwww|lol|lmao|rofl|haha|😂|🤣|that['’]s hilarious|so funny)/i },

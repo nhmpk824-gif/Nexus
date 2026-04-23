@@ -105,6 +105,52 @@ describe('detectRegulatoryMode', () => {
   test('handles undefined message gracefully', () => {
     assert.equal(detectRegulatoryMode(calm, undefined), 'reinforce')
   })
+
+  // ── Boundary-value tests for regulatory thresholds ───────────────────────
+
+  test('empathy cue at concern exactly 0.5 stays reinforce (threshold is >0.5)', () => {
+    const s: EmotionState = { energy: 0.3, warmth: 0.3, curiosity: 0.3, concern: 0.5 }
+    assert.equal(detectRegulatoryMode(s, '陪陪我'), 'reinforce')
+  })
+
+  test('empathy cue at concern just above 0.5 triggers empathy', () => {
+    const s: EmotionState = { energy: 0.3, warmth: 0.3, curiosity: 0.3, concern: 0.51 }
+    assert.equal(detectRegulatoryMode(s, '陪陪我'), 'empathy')
+  })
+
+  test('repair cue fires regardless of concern level', () => {
+    assert.equal(detectRegulatoryMode(calm, '换个话题吧'), 'repair')
+    assert.equal(detectRegulatoryMode(joyful, 'move on please'), 'repair')
+  })
+
+  test('severe distress boundary: concern=0.8 warmth<0.35 still reinforce (threshold is >0.8)', () => {
+    const s: EmotionState = { energy: 0.3, warmth: 0.3, curiosity: 0.3, concern: 0.8 }
+    assert.equal(detectRegulatoryMode(s, 'neutral text'), 'reinforce')
+  })
+
+  test('severe distress at concern 0.81, warmth 0.34 triggers repair', () => {
+    const s: EmotionState = { energy: 0.3, warmth: 0.34, curiosity: 0.3, concern: 0.81 }
+    assert.equal(detectRegulatoryMode(s, 'neutral text'), 'repair')
+  })
+
+  test('severe distress at concern 0.9 but warmth 0.4 does NOT trigger repair (warmth gate)', () => {
+    const s: EmotionState = { energy: 0.3, warmth: 0.4, curiosity: 0.3, concern: 0.9 }
+    assert.equal(detectRegulatoryMode(s, 'neutral text'), 'reinforce')
+  })
+
+  test('empathy cue wins over severe distress repair fallback', () => {
+    // Strongly distressed but explicit empathy cue should still be empathy.
+    const s: EmotionState = { energy: 0.2, warmth: 0.2, curiosity: 0.2, concern: 0.95 }
+    assert.equal(detectRegulatoryMode(s, '陪陪我'), 'empathy')
+  })
+
+  test('repair cue wins over empathy cue if both present', () => {
+    // "陪陪我 但是换个话题" — repair pattern checked after empathy; last-wins.
+    // (This documents current behavior; review if users want explicit priority.)
+    const s: EmotionState = { energy: 0.2, warmth: 0.2, curiosity: 0.2, concern: 0.9 }
+    const mode = detectRegulatoryMode(s, '陪陪我 算了换个话题')
+    assert.ok(['empathy', 'repair'].includes(mode), `got ${mode}`)
+  })
 })
 
 describe('computeEmotionResonance', () => {

@@ -121,6 +121,10 @@ export async function connect(address, port, username) {
       resolve()
     })
 
+    ws.addEventListener('message', (event) => {
+      handleWsMessage(event.data)
+    })
+
     ws.addEventListener('error', (event) => {
       console.error('[minecraft] ws error:', event.message ?? 'unknown')
     })

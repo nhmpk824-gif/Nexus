@@ -98,6 +98,62 @@ describe('classifyRelationshipSignals', () => {
     const signals = classifyRelationshipSignals('今天天气不错')
     assert.equal(signals.length, 0)
   })
+
+  // ── Corner cases: mixed signals, near-misses, first-person specificity ──
+
+  test('joking about sadness fires joke but not expressed_sadness (first-person guard)', () => {
+    // The user is joking about a sad thing — should register as playfulness,
+    // not vulnerability, because the sadness is not the user's own.
+    const signals = classifyRelationshipSignals('哈哈哈 我朋友真的好难过 太搞笑了')
+    assert.ok(signals.includes('joke'))
+    assert.ok(!signals.includes('expressed_sadness'),
+      `expressed_sadness should not fire for third-party sadness: ${signals}`)
+  })
+
+  test('deep question + teaching fires both intellectual signals', () => {
+    const signals = classifyRelationshipSignals('你知道吗 为什么会下雨呢')
+    assert.ok(signals.includes('taught_something'))
+    assert.ok(signals.includes('asked_deep_question'))
+  })
+
+  test('debate disagreement + personal story both fire on the same message', () => {
+    const signals = classifyRelationshipSignals('我觉得不对 我小时候我爸就教过我')
+    assert.ok(signals.includes('debated'))
+    assert.ok(signals.includes('personal_story'))
+  })
+
+  test('"笨蛋" in "笨蛋不是的" context is NOT a teasing match', () => {
+    // The pattern has a negative lookahead to avoid matching "笨蛋不是/笨蛋并不".
+    const signals = classifyRelationshipSignals('我不是笨蛋并不 stupid')
+    assert.ok(!signals.includes('teasing'),
+      `teasing should not fire on disclaimer phrases: ${signals}`)
+  })
+
+  test('"I am sad" first-person English triggers expressed_sadness', () => {
+    const signals = classifyRelationshipSignals('I am sad today')
+    assert.ok(signals.includes('expressed_sadness'))
+  })
+
+  test('"she is sad" third-person English does NOT trigger expressed_sadness', () => {
+    const signals = classifyRelationshipSignals('she is sad today')
+    assert.ok(!signals.includes('expressed_sadness'),
+      `third-party sadness should not trigger: ${signals}`)
+  })
+
+  test('empty and whitespace input classify as no signals', () => {
+    assert.deepEqual(classifyRelationshipSignals(''), [])
+    assert.deepEqual(classifyRelationshipSignals('   '), [])
+  })
+
+  test('non-trivial length does not cause catastrophic backtracking', () => {
+    // Stress guard: a moderately long adversarial string should still return
+    // in reasonable time (this test would time out if patterns had bad
+    // backtracking behaviour).
+    const start = Date.now()
+    const adversarial = '我' + 'a'.repeat(1000) + '难过'
+    classifyRelationshipSignals(adversarial)
+    assert.ok(Date.now() - start < 100, 'regex should not backtrack catastrophically')
+  })
 })
 
 describe('applyRelationshipSignals', () => {

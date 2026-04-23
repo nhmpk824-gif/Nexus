@@ -380,7 +380,7 @@ export function useAppController() {
     rhythmPromptGetterRef.current = autonomy.getRhythmPrompt
     emotionSnapshotGetterRef.current = () => autonomy.emotionStateRef.current
     milestoneConsumerRef.current = autonomy.consumePendingMilestoneText
-  }, [autonomy.consumePendingMilestoneText, autonomy.getEmotionPrompt, autonomy.getRelationshipPrompt, autonomy.getRhythmPrompt])
+  }, [autonomy.consumePendingMilestoneText, autonomy.emotionStateRef, autonomy.getEmotionPrompt, autonomy.getRelationshipPrompt, autonomy.getRhythmPrompt])
 
   // Wake autonomy when user sends a chat message.
   //

@@ -1,6 +1,6 @@
 # Nexus v0.3.0-beta.1
 
-> **Pre-release.** This build is published on the `beta` auto-update channel and ships unsigned. Existing stable users (v0.2.9 and earlier) are **not** auto-upgraded to betas — you have to install this one manually. Once the stable `v0.3.0` ships, beta users will auto-update onto the same stable line.
+> **Pre-release.** This build is published as a GitHub pre-release and ships unsigned. GitHub's "latest release" API excludes pre-releases, so existing stable users (v0.2.9 and earlier) are **not** auto-upgraded to betas — you have to install this one manually. Once the stable `v0.3.0` ships, beta users auto-update to it on next app launch (semver-aware, so `0.3.0 > 0.3.0-beta.1`).
 
 Nexus 0.3.0-beta.1 focuses on a single theme: **relationship evolution + emotional memory**. The score you already have (0–100) is now the visible surface of a deeper three-layer affective system, and every user message leaves a specific emotional fingerprint — not just a generic `+1`.
 
