@@ -201,3 +201,33 @@ test('motion cues can be shaped into PetPerformancePlan with gestureName for the
   // expressionSlot absent on pure motion cues — mood engine keeps the face.
   assert.equal('expressionSlot' in plan, false)
 })
+
+test('extractPerformanceTags captures [recall:<id>] tags with original case preserved', () => {
+  const result = extractPerformanceTags('Hey, [recall:memory-aB12cD] did you ever pick a gift?')
+  assert.equal(result.content, 'Hey,  did you ever pick a gift?')
+  assert.equal(result.recallCues.length, 1)
+  assert.equal(result.recallCues[0].memoryId, 'memory-aB12cD')
+  assert.equal(result.recallCues[0].stageDirection, '(recall:memory-aB12cD)')
+})
+
+test('extractPerformanceTags handles mixed expr+motion+recall in one reply', () => {
+  const result = extractPerformanceTags(
+    '[expr:happy] 嗨 [motion:wave]，[recall:memory-xyz123] 你昨天提到的事进展如何？',
+  )
+  assert.equal(result.exprCues.length, 1)
+  assert.equal(result.motionCues.length, 1)
+  assert.equal(result.recallCues.length, 1)
+  assert.equal(result.recallCues[0].memoryId, 'memory-xyz123')
+})
+
+test('PerformanceTagStreamFilter holds back partial [recall: prefix across deltas', async () => {
+  const { PerformanceTagStreamFilter } = await import('../src/features/pet/performance.ts')
+  const filter = new PerformanceTagStreamFilter()
+  const pieces = ['Hey ', '[', 're', 'call:', 'mem-x', ']', ' good day']
+  let streamed = ''
+  for (const piece of pieces) {
+    streamed += filter.push(piece)
+  }
+  streamed += filter.flush()
+  assert.equal(streamed, 'Hey  good day')
+})

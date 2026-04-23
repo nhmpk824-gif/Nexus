@@ -16,8 +16,13 @@ import {
   extractReflectionsFromMemories,
   mergeReflections,
   parseReflectionResponse,
+  selectCallbackCandidates,
   type ReflectionCandidate,
 } from '../features/memory/reflectionGenerator'
+import {
+  enqueueCallbacks,
+  loadCallbackQueue,
+} from '../features/memory/callbackStore'
 import { recordUsage } from '../features/metering/contextMeter'
 import {
   loadEmotionHistory,
@@ -310,6 +315,25 @@ export function useMemoryDream({
       // ── Rebuild narrative threads from the actual updated memories ──
       const narrativeSnapshot = rebuildNarrative(finalMemories)
 
+      // ── Pick callback candidates for the next chat (Top retention move) ──
+      let callbackCount = 0
+      try {
+        const pendingIds = new Set(loadCallbackQueue().map((p) => p.memoryId))
+        const newCandidates = selectCallbackCandidates(finalMemories, pendingIds)
+        if (newCandidates.length) {
+          // 7-day TTL — feels-like-a-callback timing range; older than that
+          // and "did you ever pick a gift?" stops feeling natural.
+          enqueueCallbacks(newCandidates, 7 * 24 * 60 * 60 * 1000)
+          callbackCount = newCandidates.length
+        }
+      } catch (callbackError) {
+        appendDebugConsoleEvent({
+          source: 'autonomy',
+          title: 'Callback selection failed',
+          detail: callbackError instanceof Error ? callbackError.message : String(callbackError),
+        })
+      }
+
       const result: MemoryDreamResult = {
         mergedTopics: ops.updates.length,
         prunedEntries: ops.pruneIds.length,
@@ -323,7 +347,7 @@ export function useMemoryDream({
       appendDebugConsoleEvent({
         source: 'autonomy',
         title: 'Memory consolidation completed',
-        detail: `added ${ops.newMemories.length}, updated ${result.mergedTopics}, pruned ${result.prunedEntries}${distilledSkillCount ? `, skills +${distilledSkillCount}` : ''}${clusterCount ? `, clusters ${clusterCount}` : ''}${archivedCount ? `, archived ${archivedCount}` : ''}${narrativeSnapshot.threads.length ? `, narrative threads ${narrativeSnapshot.threads.length}` : ''}`,
+        detail: `added ${ops.newMemories.length}, updated ${result.mergedTopics}, pruned ${result.prunedEntries}${distilledSkillCount ? `, skills +${distilledSkillCount}` : ''}${clusterCount ? `, clusters ${clusterCount}` : ''}${archivedCount ? `, archived ${archivedCount}` : ''}${narrativeSnapshot.threads.length ? `, narrative threads ${narrativeSnapshot.threads.length}` : ''}${callbackCount ? `, callbacks queued ${callbackCount}` : ''}`,
       })
     } catch (error) {
       appendDebugConsoleEvent({

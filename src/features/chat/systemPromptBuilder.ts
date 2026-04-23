@@ -99,6 +99,18 @@ export type AssistantReplyRequestOptions = {
    * render the result card in chat history. Not invoked for MCP tools.
    */
   onBuiltInToolResult?: (result: BuiltInToolResult) => void
+  /**
+   * Pre-resolved callback hints — memories the dream cycle queued for
+   * resurfacing. Caller (assistantReply) loads loadCallbackQueue() and
+   * resolves each id against the current memory list. The builder writes
+   * a soft "consider weaving this in" section + asks the LLM to emit
+   * `[recall:<id>]` if it uses the memory.
+   */
+  pendingCallbacks?: Array<{
+    memoryId: string
+    content: string
+    daysAgo: number
+  }>
 }
 
 export async function buildSystemPrompt(
@@ -203,6 +215,8 @@ export async function buildSystemPrompt(
 
   const hotTier = buildHotTierMemorySections(memoryContext, settings.memoryHotTierMaxChars)
 
+  const callbackSection = buildCallbackSection(options.pendingCallbacks)
+
   return [
     personaSection,
     personaMemorySection,
@@ -222,6 +236,7 @@ export async function buildSystemPrompt(
     hotTier.dailySection,
     buildLorebookSection(options.triggeredLorebookEntries ?? []),
     buildSemanticMemorySection(memoryContext),
+    callbackSection,
     mcpToolsSection,
     skillGuideSection,
     options.autoSkillContext ?? '',
@@ -231,6 +246,36 @@ export async function buildSystemPrompt(
   ]
     .filter(Boolean)
     .join('\n\n')
+}
+
+/**
+ * Soft hint asking the LLM to consider weaving in one of the queued
+ * callback memories. Frame as PERMISSION not REQUIREMENT — if it doesn't
+ * fit naturally, the LLM should ignore. Recall tag emission is what marks
+ * the callback as consumed (see callbackStore.consumeCallback).
+ */
+function buildCallbackSection(
+  callbacks: AssistantReplyRequestOptions['pendingCallbacks'],
+): string {
+  if (!callbacks?.length) return ''
+  const lines = callbacks.map((cb) => {
+    const ago = cb.daysAgo < 1
+      ? 'earlier today'
+      : cb.daysAgo < 2
+        ? 'yesterday'
+        : `${Math.round(cb.daysAgo)} days ago`
+    return `- [${cb.memoryId}] (${ago}): ${cb.content}`
+  })
+  return [
+    'Optional callback hints — these are real things the user shared with you',
+    'that you might gently weave into this reply IF it fits naturally. Do not',
+    'force it. Do not list them. If you reference one, emit the matching',
+    `[recall:<id>] tag inline once so the chat layer knows. Use at most one`,
+    `callback per reply. Skip them entirely if the current conversation`,
+    `is on a different topic.`,
+    '',
+    ...lines,
+  ].join('\n')
 }
 
 /**

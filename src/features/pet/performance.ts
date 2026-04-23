@@ -632,24 +632,26 @@ export function parseAssistantPerformanceContent(content: string): ParsedAssista
 
 // ── Inline performance tags ────────────────────────────────────────────────
 //
-// LLMs can emit inline `[expr:name]`, `[motion:name]`, and `[tts:mode]`
-// markers to request one-shot performance cues for the current reply —
-// SillyTavern- / ChatdollKit-style. The override is ephemeral: unlike
-// setMood it doesn't persist into the emotion model, it just queues a
-// single cue that plays for its default duration, then the pet falls
-// back to whatever mood the main emotion engine has decided.
+// LLMs can emit inline `[expr:name]`, `[motion:name]`, `[tts:mode]`, and
+// `[recall:memId]` markers — SillyTavern- / ChatdollKit-style. expr / motion
+// / tts are ephemeral one-shot cues that don't persist into the emotion
+// model. `recall` flags that the LLM is intentionally referencing a
+// callback-pending memory; the chat layer uses it to mark the bubble with
+// a "recalled from <date>" affordance and consume the pending callback so
+// it doesn't get re-suggested.
 //
 // `expr` accepts the seven "speakable" PetMood slots. `motion` accepts
 // gesture names declared on the active pet model (validated at apply
 // time, not here). `tts` is parsed here but currently collected-and-
 // dropped — wiring will land when an emotion-aware TTS adapter does.
-const PERFORMANCE_TAG_PATTERN = /\[(expr|motion|tts)\s*:\s*([a-zA-Z_-]+)\s*\]/giu
+// `recall` value is a memory id (alphanumeric + hyphen).
+const PERFORMANCE_TAG_PATTERN = /\[(expr|motion|tts|recall)\s*:\s*([a-zA-Z0-9_-]+)\s*\]/giu
 const EXPRESSION_OVERRIDE_DURATION_MS = 2_400
 const PUBLIC_EXPRESSION_SLOTS: ReadonlySet<PetExpressionSlot> = new Set([
   'idle', 'thinking', 'happy', 'sleepy', 'surprised', 'confused', 'embarrassed',
 ])
 
-const TAG_KEYS = ['expr', 'motion', 'tts'] as const
+const TAG_KEYS = ['expr', 'motion', 'tts', 'recall'] as const
 
 export type MotionCue = {
   gestureName: string
@@ -661,11 +663,17 @@ export type TtsCue = {
   stageDirection: string
 }
 
+export type RecallCue = {
+  memoryId: string
+  stageDirection: string
+}
+
 export type ExtractedPerformanceTags = {
   content: string
   exprCues: PetPerformancePlan[]
   motionCues: MotionCue[]
   ttsCues: TtsCue[]
+  recallCues: RecallCue[]
 }
 
 /**
@@ -677,16 +685,22 @@ export type ExtractedPerformanceTags = {
  * site decides whether the current model / tts adapter supports them.
  */
 export function extractPerformanceTags(content: string): ExtractedPerformanceTags {
-  if (!content) return { content: '', exprCues: [], motionCues: [], ttsCues: [] }
+  if (!content) {
+    return { content: '', exprCues: [], motionCues: [], ttsCues: [], recallCues: [] }
+  }
   const exprCues: PetPerformancePlan[] = []
   const motionCues: MotionCue[] = []
   const ttsCues: TtsCue[] = []
+  const recallCues: RecallCue[] = []
   const cleaned = content.replace(PERFORMANCE_TAG_PATTERN, (_match, rawKind: string, rawValue: string) => {
     const kind = String(rawKind ?? '').toLowerCase().trim()
-    const value = String(rawValue ?? '').toLowerCase().trim()
-    if (!value) return ''
+    // Note: only lower-case for kind. Memory ids preserve original case for
+    // `recall` since createId uses base36 which is case-sensitive.
+    const lowerValue = String(rawValue ?? '').toLowerCase().trim()
+    const rawTrimmed = String(rawValue ?? '').trim()
+    if (!rawTrimmed) return ''
     if (kind === 'expr') {
-      const slot = value as PetExpressionSlot
+      const slot = lowerValue as PetExpressionSlot
       if (PUBLIC_EXPRESSION_SLOTS.has(slot)) {
         exprCues.push({
           expressionSlot: slot,
@@ -695,13 +709,15 @@ export function extractPerformanceTags(content: string): ExtractedPerformanceTag
         })
       }
     } else if (kind === 'motion') {
-      motionCues.push({ gestureName: value, stageDirection: `(motion:${value})` })
+      motionCues.push({ gestureName: lowerValue, stageDirection: `(motion:${lowerValue})` })
     } else if (kind === 'tts') {
-      ttsCues.push({ mode: value, stageDirection: `(tts:${value})` })
+      ttsCues.push({ mode: lowerValue, stageDirection: `(tts:${lowerValue})` })
+    } else if (kind === 'recall') {
+      recallCues.push({ memoryId: rawTrimmed, stageDirection: `(recall:${rawTrimmed})` })
     }
     return ''
   })
-  return { content: cleaned, exprCues, motionCues, ttsCues }
+  return { content: cleaned, exprCues, motionCues, ttsCues, recallCues }
 }
 
 /**

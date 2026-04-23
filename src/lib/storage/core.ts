@@ -47,6 +47,7 @@ export const PLAN_STORE_STORAGE_KEY = 'nexus:plans'
 export const OPEN_GOALS_STORAGE_KEY = 'nexus:open-goals'
 export const AGENT_TRACE_STORAGE_KEY = 'nexus:agent-traces'
 export const BACKGROUND_TASKS_STORAGE_KEY = 'nexus:background-tasks'
+export const MEMORY_CALLBACK_QUEUE_STORAGE_KEY = 'nexus:memory:callback-queue'
 
 export function readJson<T>(key: string, fallback: T): T {
   try {

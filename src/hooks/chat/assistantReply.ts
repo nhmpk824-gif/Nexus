@@ -2,6 +2,7 @@ import { PromptModeStreamFilter } from '../../features/chat/promptModeMcp'
 import { applyChatOutputTransforms } from '../../features/chat/chatOutputTransforms'
 import { selectToolDeliveryMode } from '../../features/chat/systemPromptBuilder'
 import { requestAssistantReplyStreaming } from '../../features/chat/runtime'
+import type { AssistantReplyRequestOptions } from '../../features/chat/systemPromptBuilder'
 import { selectTriggeredLorebookEntriesWithSemantic } from '../../features/chat/lorebookInjection'
 import { loadLorebookEntries } from '../../lib/storage/lorebooks'
 import { loadSubagentSettings } from '../../lib/storage'
@@ -20,6 +21,10 @@ import {
   extractPerformanceTags,
   parseAssistantPerformanceContent,
 } from '../../features/pet/performance'
+import {
+  consumeCallback,
+  loadCallbackQueue,
+} from '../../features/memory/callbackStore'
 import { buildBuiltInToolDescriptors } from '../../features/tools/builtInToolSchemas'
 import { toChatToolResult, type BuiltInToolResult } from '../../features/tools/toolTypes.ts'
 import { logVoiceEvent } from '../../features/voice/shared'
@@ -306,6 +311,30 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
       // in the bubble and get pronounced character-by-character over the
       // TTS channel.
       const expressionOverrideStreamFilter = new PerformanceTagStreamFilter()
+
+      // Resolve queued callbacks into memory snippets for the system prompt.
+      // Stale ids (memory was archived between dream and now) silently drop.
+      const pendingCallbackHints = (() => {
+        const queue = loadCallbackQueue()
+        if (!queue.length) return undefined
+        const memoriesById = new Map(nextMemories.map((m) => [m.id, m]))
+        const nowMs = Date.now()
+        const resolved: NonNullable<AssistantReplyRequestOptions['pendingCallbacks']> = []
+        for (const entry of queue) {
+          const memory = memoriesById.get(entry.memoryId)
+          if (!memory) continue
+          const queuedMs = Date.parse(memory.createdAt)
+          const daysAgo = Number.isFinite(queuedMs)
+            ? Math.max(0, (nowMs - queuedMs) / (24 * 60 * 60 * 1000))
+            : 0
+          resolved.push({
+            memoryId: entry.memoryId,
+            content: memory.content.slice(0, 240),
+            daysAgo,
+          })
+        }
+        return resolved.length ? resolved : undefined
+      })()
       const request = bindStreamingAbort(
         requestAssistantReplyStreaming(
         currentSettings,
@@ -364,6 +393,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           relationshipPromptText: dependencies.ctx.getRelationshipPromptText?.(),
           rhythmPromptText: dependencies.ctx.getRhythmPromptText?.(),
           milestonePromptText: dependencies.ctx.consumeMilestonePromptText?.(),
+          pendingCallbacks: pendingCallbackHints,
         },
         ),
         (abort) => {
@@ -430,6 +460,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
         content: rawAssistantText,
         exprCues: inlineExpressionOverrideCues,
         motionCues: inlineMotionCues,
+        recallCues: inlineRecallCues,
       } = extractPerformanceTags(transformedAssistantText)
       const GESTURE_CUE_DURATION_MS = 1_600
       const PUBLIC_GESTURE_SET = new Set<string>(PUBLIC_GESTURE_NAMES)
@@ -440,6 +471,19 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           durationMs: GESTURE_CUE_DURATION_MS,
           stageDirection: motion.stageDirection,
         }))
+      // The LLM used [recall:<id>] — drop those memories from the callback
+      // queue so the next dream cycle doesn't re-suggest them, and bump
+      // their lastRecalledAt so the recency cooldown applies.
+      if (inlineRecallCues.length) {
+        const recalledIds = new Set<string>()
+        for (const cue of inlineRecallCues) {
+          consumeCallback(cue.memoryId)
+          recalledIds.add(cue.memoryId)
+        }
+        if (recalledIds.size && dependencies.onMemoryRecalled) {
+          dependencies.onMemoryRecalled([...recalledIds])
+        }
+      }
       const assistantPerformance = parseAssistantPerformanceContent(rawAssistantText)
       const assistantMessageContent = assistantPerformance.displayContent
         || (assistantPerformance.stageDirections.length ? t('chat.assistant.stage_direction_fallback') : t('chat.assistant.empty_speech_fallback'))

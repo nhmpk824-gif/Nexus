@@ -201,3 +201,87 @@ export function extractReflectionsFromMemories(memories: MemoryItem[]): Array<{ 
     .filter((m) => m.importance === 'reflection' && m.reflectionTopic)
     .map((m) => ({ topic: String(m.reflectionTopic), content: m.content }))
 }
+
+// ── Callback-candidate selection ───────────────────────────────────────────
+//
+// "Callback moments" — the #1-cited retention pattern across Replika /
+// Nomi / Kindroid reviews: companion brings back a detail from days/weeks
+// ago at a relevant moment ("Hey, did you pick a gift for Mei's birthday?").
+//
+// The dream cycle picks 0–N high-value memories that haven't been recalled
+// recently. The chat layer reads the queue and softly suggests them in
+// the next system prompt.
+
+const MS_PER_DAY = 86_400_000
+
+const CALLBACK_DEFAULTS = {
+  maxCandidates: 2,
+  /** Minimum significance score to be eligible (0–1). */
+  minSignificance: 0.25,
+  /** Don't surface memories formed in the last N days — they're too recent
+   *  to feel like a "callback." */
+  minAgeDays: 1.5,
+  /** Drop candidates older than this. */
+  maxAgeDays: 21,
+  /** Skip memories already recalled within the last N days. */
+  recallCooldownDays: 7,
+} as const
+
+function callbackScore(memory: MemoryItem, nowMs: number): number {
+  const sig = memory.significance ?? 0
+  if (sig < CALLBACK_DEFAULTS.minSignificance) return -1
+
+  const createdMs = Date.parse(memory.createdAt)
+  if (!Number.isFinite(createdMs)) return -1
+  const ageDays = (nowMs - createdMs) / MS_PER_DAY
+  if (ageDays < CALLBACK_DEFAULTS.minAgeDays) return -1
+  if (ageDays > CALLBACK_DEFAULTS.maxAgeDays) return -1
+
+  // Skip if recently recalled
+  if (memory.lastRecalledAt) {
+    const recalledMs = Date.parse(memory.lastRecalledAt)
+    if (Number.isFinite(recalledMs)) {
+      const daysSinceRecall = (nowMs - recalledMs) / MS_PER_DAY
+      if (daysSinceRecall < CALLBACK_DEFAULTS.recallCooldownDays) return -1
+    }
+  }
+
+  // Recency curve — peaks around 3–6 days, gradually decays toward maxAge.
+  // Memory that's 3 days old feels like the perfect "remember when" timing;
+  // 14 days is still plausible; 21+ days is the cutoff above.
+  const recencyPeak = 4
+  const recencyWidth = 8
+  const recencyTerm = Math.exp(-((ageDays - recencyPeak) ** 2) / (2 * recencyWidth ** 2))
+
+  // Never-recalled memories get a small bonus — first surface is the most
+  // emotionally loaded one. Either signal counts as "has been recalled."
+  const everRecalled = (memory.recallCount ?? 0) > 0 || memory.lastRecalledAt != null
+  const noveltyBonus = everRecalled ? 1 : 1.4
+
+  return sig * recencyTerm * noveltyBonus
+}
+
+/**
+ * Pick the top-N callback candidates from a memory pool. Pure: caller
+ * supplies the list, function returns memory ids. Excludes ids already
+ * in `excludeIds` (typically the current pending-callback set so we don't
+ * double-queue).
+ */
+export function selectCallbackCandidates(
+  memories: MemoryItem[],
+  excludeIds: ReadonlySet<string> = new Set(),
+  nowMs: number = Date.now(),
+  maxCandidates: number = CALLBACK_DEFAULTS.maxCandidates,
+): string[] {
+  const scored: Array<{ id: string; score: number }> = []
+  for (const m of memories) {
+    if (excludeIds.has(m.id)) continue
+    // Skip system-generated reflections — those aren't callbacks, they're
+    // observations. The chat layer surfaces them differently.
+    if (m.importance === 'reflection') continue
+    const score = callbackScore(m, nowMs)
+    if (score > 0) scored.push({ id: m.id, score })
+  }
+  scored.sort((a, b) => b.score - a.score)
+  return scored.slice(0, maxCandidates).map((s) => s.id)
+}
