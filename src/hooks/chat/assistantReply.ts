@@ -124,6 +124,7 @@ type AssistantReplyRunnerDependencies = {
     | 'busEmit'
     | 'clearPendingVoiceRestart'
     | 'getEmotionPromptText'
+    | 'getEmotionSnapshot'
     | 'getRelationshipPromptText'
     | 'getRhythmPromptText'
     | 'loadDesktopContextSnapshot'
@@ -222,6 +223,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           dailyLimit: currentSettings.memoryDailyRecallCount,
           semanticLimit: currentSettings.memorySemanticRecallCount,
           retentionDays: currentSettings.memoryDiaryRetentionDays,
+          currentEmotion: dependencies.ctx.getEmotionSnapshot?.(),
         }),
         loadRelevantSkills(content).catch((err) => {
           console.warn('[assistantReply] loadRelevantSkills failed; continuing without skill context.', err)

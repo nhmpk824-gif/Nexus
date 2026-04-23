@@ -6,6 +6,7 @@ import type {
   MemorySearchMode,
   MemorySemanticMatch,
 } from '../../types'
+import type { EmotionState } from '../autonomy/emotionModel'
 import {
   getRecentDailyEntries,
   rankDailyEntries,
@@ -14,6 +15,13 @@ import {
 } from './memory'
 import { cosineSimilarity, embedMemorySearchText } from './vectorSearch'
 import { getDecayedScore } from './decay'
+import {
+  computeEmotionResonance,
+  detectRegulatoryMode,
+  projectToVA,
+  recordPrimingCentroid,
+  type RegulatoryMode,
+} from './emotionResonance'
 
 type BuildMemoryRecallContextParams = {
   query: string
@@ -25,6 +33,8 @@ type BuildMemoryRecallContextParams = {
   dailyLimit: number
   semanticLimit: number
   retentionDays: number
+  /** Current emotion state — enables mood-aware recall ranking. */
+  currentEmotion?: EmotionState
 }
 
 type ScoredItem<T extends { id: string; createdAt: string; content: string }> = {
@@ -65,11 +75,25 @@ const CATEGORY_WEIGHT: Record<string, number> = {
   profile: 0,
 }
 
-function scoreItem<T extends { content: string; createdAt: string; category?: string; importanceScore?: number; importance?: string }>(
+type EmotionContext = {
+  currentEmotion: EmotionState
+  regulatoryMode: RegulatoryMode
+}
+
+function scoreItem<T extends {
+  content: string
+  createdAt: string
+  category?: string
+  importanceScore?: number
+  importance?: string
+  emotionSnapshot?: MemoryItem['emotionSnapshot']
+  emotionalValence?: MemoryItem['emotionalValence']
+}>(
   item: T,
   query: string,
   mode: MemorySearchMode,
   scores: ScoreMapEntry,
+  emotionContext: EmotionContext | null,
 ) {
   // Use BM25 score from main process when available, fall back to Jaccard
   const keywordScore = scores.bm25Score > 0
@@ -84,26 +108,43 @@ function scoreItem<T extends { content: string; createdAt: string; category?: st
     ? (getDecayedScore(item as unknown as MemoryItem) - 0.5) * 0.3
     : 0
 
+  const emotionBoost = emotionContext
+    ? computeEmotionResonance({
+        currentEmotion: emotionContext.currentEmotion,
+        memorySnapshot: item.emotionSnapshot,
+        memoryValence: item.emotionalValence,
+        mode: emotionContext.regulatoryMode,
+      })
+    : 0
+
   if (mode === 'vector') {
     return {
       keywordScore,
       vectorScore,
-      finalScore: vectorScore + recencyBoost + categoryBoost + decayBoost,
+      finalScore: vectorScore + recencyBoost + categoryBoost + decayBoost + emotionBoost,
     }
   }
 
   return {
     keywordScore,
     vectorScore,
-    finalScore: keywordScore * 0.3 + vectorScore * 0.7 + recencyBoost + categoryBoost + decayBoost,
+    finalScore:
+      keywordScore * 0.3 + vectorScore * 0.7 + recencyBoost + categoryBoost + decayBoost + emotionBoost,
   }
 }
 
-function sortScoredItems<T extends { id: string; createdAt: string; content: string }>(
+function sortScoredItems<T extends {
+  id: string
+  createdAt: string
+  content: string
+  emotionSnapshot?: MemoryItem['emotionSnapshot']
+  emotionalValence?: MemoryItem['emotionalValence']
+}>(
   items: T[],
   query: string,
   mode: MemorySearchMode,
   scoreMap: Map<string, ScoreMapEntry>,
+  emotionContext: EmotionContext | null,
 ) {
   const defaultScores: ScoreMapEntry = { vectorScore: 0, bm25Score: 0 }
 
@@ -114,6 +155,7 @@ function sortScoredItems<T extends { id: string; createdAt: string; content: str
         query,
         mode,
         scoreMap.get(item.id) ?? defaultScores,
+        emotionContext,
       )
 
       return {
@@ -287,6 +329,34 @@ function buildSemanticMatches(
     .slice(0, limit)
 }
 
+function buildEmotionContext(
+  currentEmotion: EmotionState | undefined,
+  userMessage: string,
+): EmotionContext | null {
+  if (!currentEmotion) return null
+  return {
+    currentEmotion,
+    regulatoryMode: detectRegulatoryMode(currentEmotion, userMessage),
+  }
+}
+
+function updatePrimingFromSelection(
+  selected: Array<{ emotionSnapshot?: MemoryItem['emotionSnapshot'] }>,
+): void {
+  const snapshots = selected
+    .map((item) => item.emotionSnapshot)
+    .filter((snap): snap is NonNullable<typeof snap> => !!snap)
+  if (snapshots.length === 0) return
+
+  let v = 0, a = 0
+  for (const s of snapshots) {
+    const va = projectToVA(s)
+    v += va.valence
+    a += va.arousal
+  }
+  recordPrimingCentroid({ valence: v / snapshots.length, arousal: a / snapshots.length })
+}
+
 export async function buildMemoryRecallContext({
   query,
   longTermMemories,
@@ -297,10 +367,13 @@ export async function buildMemoryRecallContext({
   dailyLimit,
   semanticLimit,
   retentionDays,
+  currentEmotion,
 }: BuildMemoryRecallContextParams): Promise<MemoryRecallContext> {
   const keywordLongTerm = rankMemories(longTermMemories, query)
   const recentDaily = getRecentDailyEntries(dailyMemories, retentionDays).slice(0, 24)
   const keywordDaily = rankDailyEntries(recentDaily, query)
+
+  const emotionContext = buildEmotionContext(currentEmotion, query)
 
   const keywordDailyResult = uniqueById([
     ...keywordDaily.slice(0, dailyLimit),
@@ -309,6 +382,7 @@ export async function buildMemoryRecallContext({
 
   if (searchMode === 'keyword') {
     const selectedLongTerm = keywordLongTerm.slice(0, longTermLimit)
+    updatePrimingFromSelection(selectedLongTerm)
     return {
       longTerm: selectedLongTerm,
       daily: keywordDailyResult,
@@ -336,13 +410,14 @@ export async function buildMemoryRecallContext({
       embeddingModel,
     )
 
-    const scoredLongTerm = sortScoredItems(longTermCandidates, query, searchMode, scoreMap)
-    const scoredDaily = sortScoredItems(dailyCandidates, query, searchMode, scoreMap)
+    const scoredLongTerm = sortScoredItems(longTermCandidates, query, searchMode, scoreMap, emotionContext)
+    const scoredDaily = sortScoredItems(dailyCandidates, query, searchMode, scoreMap, emotionContext)
 
     void indexMemoriesToVectorStore(longTermCandidates, embeddingModel, 'long_term')
     void indexMemoriesToVectorStore(dailyCandidates, embeddingModel, 'daily')
 
     const selectedLongTerm = scoredLongTerm.slice(0, longTermLimit).map(({ item }) => item)
+    updatePrimingFromSelection(selectedLongTerm)
     return {
       longTerm: selectedLongTerm,
       daily: uniqueById([
@@ -357,6 +432,7 @@ export async function buildMemoryRecallContext({
   } catch (error) {
     console.warn('[Memory] Score map build failed, falling back to keyword-only:', error)
     const fallbackLongTerm = keywordLongTerm.slice(0, longTermLimit)
+    updatePrimingFromSelection(fallbackLongTerm)
     return {
       longTerm: fallbackLongTerm,
       daily: keywordDailyResult,
