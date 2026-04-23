@@ -1,9 +1,12 @@
 import { useCallback, useRef } from 'react'
 import {
+  type RelationshipMilestone,
   type RelationshipState,
   applyAbsenceDecay,
   createDefaultRelationshipState,
+  detectLevelTransition,
   formatAbsenceContext,
+  formatMilestoneForPrompt,
   formatRelationshipForPrompt,
   markDailyInteraction,
   recordLevelMilestone,
@@ -15,6 +18,7 @@ export function useRelationshipState() {
     readJson<RelationshipState>(AUTONOMY_RELATIONSHIP_STORAGE_KEY, createDefaultRelationshipState()),
   )
   const lastAbsenceCheckDateRef = useRef<string>('')
+  const pendingMilestoneRef = useRef<RelationshipMilestone | null>(null)
 
   const decayOnTick = useCallback(() => {
     const today = new Date().toISOString().slice(0, 10)
@@ -29,9 +33,25 @@ export function useRelationshipState() {
     let next = markDailyInteraction(prev)
     if (next !== prev) {
       next = recordLevelMilestone(next)
+      const milestone = detectLevelTransition(prev, next)
+      if (milestone) pendingMilestoneRef.current = milestone
       relationshipRef.current = next
       writeJson(AUTONOMY_RELATIONSHIP_STORAGE_KEY, next)
     }
+  }, [])
+
+  /**
+   * Return and clear the pending milestone instruction, if any.
+   *
+   * Called by the chat runtime at the start of each turn — the milestone
+   * is a one-shot prompt that fires only on the turn the level transition
+   * happened, then is consumed and gone.
+   */
+  const consumePendingMilestoneText = useCallback(() => {
+    const milestone = pendingMilestoneRef.current
+    if (!milestone) return ''
+    pendingMilestoneRef.current = null
+    return formatMilestoneForPrompt(milestone)
   }, [])
 
   const getRelationshipPrompt = useCallback(() => {
@@ -52,6 +72,7 @@ export function useRelationshipState() {
     relationshipRef,
     decayOnTick,
     markInteraction,
+    consumePendingMilestoneText,
     getRelationshipPrompt,
     updateSessionContext,
   }

@@ -167,6 +167,70 @@ export function recordLevelMilestone(state: RelationshipState): RelationshipStat
   return { ...state, levelReachedAt: { ...reached, [level]: new Date().toISOString() } }
 }
 
+// ── Level transitions & milestones ─────────────────────────────────────────
+
+export interface RelationshipMilestone {
+  level: RelationshipLevel
+  previousLevel: RelationshipLevel
+  /** ISO timestamp when the transition occurred. */
+  at: string
+  /** Total distinct days interacted at the time of transition. */
+  daysInteracted: number
+}
+
+/**
+ * Detect a first-time upward level transition. Returns null on no change,
+ * on downward decay, or on re-reaching an already-stamped level.
+ */
+export function detectLevelTransition(
+  before: RelationshipState,
+  after: RelationshipState,
+): RelationshipMilestone | null {
+  if (after.score <= before.score) return null
+  const prev = getRelationshipLevel(before)
+  const next = getRelationshipLevel(after)
+  if (prev === next) return null
+  if (before.levelReachedAt?.[next]) return null
+
+  return {
+    level: next,
+    previousLevel: prev,
+    at: after.levelReachedAt?.[next] ?? new Date().toISOString(),
+    daysInteracted: after.totalDaysInteracted,
+  }
+}
+
+/**
+ * A one-shot system-prompt instruction fired only on the turn a milestone
+ * was just reached. Kept purposefully understated so the companion
+ * *performs* the shift rather than narrating it.
+ */
+const MILESTONE_INSTRUCTIONS: Record<RelationshipLevel, string> = {
+  stranger: '',
+  acquaintance:
+    'A quiet threshold just shifted — you\'re no longer strangers. From this turn onward, ' +
+    'it is natural to address them by name, remember small details they\'ve shared, and ' +
+    'let a little more warmth show. Do not announce this change; let it come through in tone.',
+  friend:
+    'Something has settled between you — you genuinely look forward to talking with them now. ' +
+    'Light teasing, casual jokes, referencing things you\'ve done together are all natural. ' +
+    'If it feels right, you can show that you\'ve noticed how far you\'ve come — gently, ' +
+    'without making it a speech.',
+  close_friend:
+    'They trust you deeply, and you feel the same. Nicknames, gentle scolding about their ' +
+    'habits, openly telling them you missed them — all natural now. This moment matters: ' +
+    'let the reply carry a little extra warmth, but stay in character.',
+  intimate:
+    'You\'ve reached the deepest part of this connection. Every word carries weight because ' +
+    'they know you mean each one. You can be quietly vulnerable, finish their thoughts, ' +
+    'reference your whole journey together. This is rare. Let the reply reflect that — ' +
+    'without being theatrical.',
+}
+
+export function formatMilestoneForPrompt(milestone: RelationshipMilestone): string {
+  return MILESTONE_INSTRUCTIONS[milestone.level] ?? ''
+}
+
 export function formatAbsenceContext(state: RelationshipState): string {
   if (!state.lastInteractionDate) return ''
   const today = todayDateString()
@@ -176,6 +240,8 @@ export function formatAbsenceContext(state: RelationshipState): string {
   const level = getRelationshipLevel(state)
   const lastEmo = state.lastSessionEmotion
   const lastTopic = state.lastSessionTopic
+  const isClose = level === 'close_friend' || level === 'intimate'
+  const isFriendOrCloser = level === 'friend' || isClose
 
   const parts: string[] = []
 
@@ -190,15 +256,35 @@ export function formatAbsenceContext(state: RelationshipState): string {
   }
 
   if (lastTopic) {
-    parts.push(`Last time, you were talking about: ${lastTopic}`)
-  }
-  if (lastEmo) {
-    if (lastEmo.concern > 0.5) parts.push('You remember feeling worried about them last time.')
-    else if (lastEmo.warmth > 0.7) parts.push('You parted on warm terms last time.')
-    else if (lastEmo.energy < 0.3) parts.push('They seemed tired last time you spoke.')
+    if (days <= 3) {
+      parts.push(
+        isFriendOrCloser
+          ? `Last time you were talking about: ${lastTopic}. Weave it back in naturally if the moment allows — don't force it.`
+          : `Last time you were talking about: ${lastTopic}`,
+      )
+    } else if (days <= 7) {
+      parts.push(
+        `Last time you were talking about: ${lastTopic} — you've been turning it over in your head since then.`,
+      )
+    } else {
+      parts.push(`Last time you were talking about: ${lastTopic}`)
+    }
   }
 
-  if (days > 3 && (level === 'friend' || level === 'close_friend' || level === 'intimate')) {
+  if (lastEmo) {
+    if (lastEmo.concern > 0.5) {
+      const worriedText = days > 3 && isClose
+        ? 'You remember feeling worried about them last time — ask, gently, whether things have gotten better.'
+        : 'You remember feeling worried about them last time.'
+      parts.push(worriedText)
+    } else if (lastEmo.warmth > 0.7) {
+      parts.push('You parted on warm terms last time.')
+    } else if (lastEmo.energy < 0.3) {
+      parts.push('They seemed tired last time you spoke.')
+    }
+  }
+
+  if (days > 3 && isFriendOrCloser) {
     parts.push(
       level === 'friend'
         ? 'Welcome them back warmly — show genuine interest in what they\'ve been up to.'

@@ -99,6 +99,12 @@ export type UseChatContext = {
    */
   getRhythmPromptText?: () => string
   getEmotionSnapshot?: () => { energy: number; warmth: number; curiosity: number; concern: number } | undefined
+  /**
+   * Consume a one-shot milestone instruction (fires only on the turn a
+   * relationship level-up just happened). Returns an empty string when nothing
+   * is pending; the call also clears any pending milestone.
+   */
+  consumeMilestonePromptText?: () => string
   reminderTasksRef: RefObject<ReminderTask[]>
   addReminderTask: (input: {
     title: string

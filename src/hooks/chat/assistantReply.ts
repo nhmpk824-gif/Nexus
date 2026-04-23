@@ -123,6 +123,7 @@ type AssistantReplyRunnerDependencies = {
     | 'beginStreamingSpeechReply'
     | 'busEmit'
     | 'clearPendingVoiceRestart'
+    | 'consumeMilestonePromptText'
     | 'getEmotionPromptText'
     | 'getEmotionSnapshot'
     | 'getRelationshipPromptText'
@@ -332,6 +333,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           emotionPromptText: dependencies.ctx.getEmotionPromptText?.(),
           relationshipPromptText: dependencies.ctx.getRelationshipPromptText?.(),
           rhythmPromptText: dependencies.ctx.getRhythmPromptText?.(),
+          milestonePromptText: dependencies.ctx.consumeMilestonePromptText?.(),
         },
         ),
         (abort) => {

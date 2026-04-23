@@ -214,6 +214,7 @@ export function useAppController() {
   const relationshipPromptGetterRef = useRef<() => string>(() => '')
   const rhythmPromptGetterRef = useRef<() => string>(() => '')
   const emotionSnapshotGetterRef = useRef<() => { energy: number; warmth: number; curiosity: number; concern: number } | undefined>(() => undefined)
+  const milestoneConsumerRef = useRef<() => string>(() => '')
 
   const chat = useChat({
     settingsRef,
@@ -253,6 +254,7 @@ export function useAppController() {
     getRelationshipPromptText: () => relationshipPromptGetterRef.current(),
     getRhythmPromptText: () => rhythmPromptGetterRef.current(),
     getEmotionSnapshot: () => emotionSnapshotGetterRef.current(),
+    consumeMilestonePromptText: () => milestoneConsumerRef.current(),
     reminderTasksRef: reminderTaskStore.reminderTasksRef,
     addReminderTask: (input) => addReminderTaskFnRef.current?.(input) ?? null,
     updateReminderTask: (id, updates) => updateReminderTaskFnRef.current?.(id, updates) ?? null,
@@ -377,7 +379,8 @@ export function useAppController() {
     relationshipPromptGetterRef.current = autonomy.getRelationshipPrompt
     rhythmPromptGetterRef.current = autonomy.getRhythmPrompt
     emotionSnapshotGetterRef.current = () => autonomy.emotionStateRef.current
-  }, [autonomy.getEmotionPrompt, autonomy.getRelationshipPrompt, autonomy.getRhythmPrompt])
+    milestoneConsumerRef.current = autonomy.consumePendingMilestoneText
+  }, [autonomy.consumePendingMilestoneText, autonomy.getEmotionPrompt, autonomy.getRelationshipPrompt, autonomy.getRhythmPrompt])
 
   // Wake autonomy when user sends a chat message.
   //
