@@ -1,6 +1,13 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { unsubscribeAll } from './pluginMessageBus.js'
+import {
+  hashMcpCommand,
+  isMcpServerApproved,
+  promptMcpApproval,
+  revokeMcpApproval,
+} from './mcpApprovals.js'
+import { parseArgsString as parseArgsStringPure } from './mcpHostUtils.js'
 
 const REQUEST_TIMEOUT_MS = 15_000
 
@@ -198,6 +205,27 @@ class McpInstance {
     for (const arg of args) {
       if (SHELL_META_PATTERN.test(String(arg))) {
         throw new Error(`MCP server [${this.id}] argument contains unsafe shell metacharacters`)
+      }
+    }
+
+    // ── Approval gate ────────────────────────────────────────────────
+    // Renderer-supplied commands MUST be explicitly approved by the user
+    // before we spawn anything. The first time a (server_id, command,
+    // args) tuple is seen, we show a native dialog. The user can approve
+    // (saves the hash, allows the spawn) or reject (we leave the
+    // instance in `awaiting_approval` and surface that via getStatus).
+    const commandHash = hashMcpCommand(command, args)
+    const alreadyApproved = await isMcpServerApproved(this.id, commandHash)
+    if (!alreadyApproved) {
+      const approved = await promptMcpApproval(this.id, command, args)
+      if (!approved) {
+        this.state = 'awaiting_approval'
+        this.pendingStartCommand = command
+        this.pendingStartArgs = args
+        throw new Error(
+          `MCP server [${this.id}] launch was rejected by the user. `
+          + 'Re-enable from Settings → Integrations → MCP after reviewing the command.',
+        )
       }
     }
 
@@ -476,43 +504,11 @@ export async function stopAll() {
 }
 
 /**
- * Parse a free-form args string from the settings UI into an argv array.
- * Supports quoted args with embedded spaces: `--root "F:\my data"` → ['--root', 'F:\\my data'].
- * Lines are joined first so a user can freely use newlines in the textarea.
+ * Re-export parseArgsString for backward compatibility. Implementation
+ * lives in `./mcpHostUtils.js` so unit tests can pull it in without
+ * triggering this file's Electron-dependent imports.
  */
-export function parseArgsString(raw) {
-  if (!raw) return []
-  const flat = String(raw).replace(/\r?\n/g, ' ').trim()
-  if (!flat) return []
-
-  const out = []
-  let current = ''
-  let quote = null
-  for (const ch of flat) {
-    if (quote) {
-      if (ch === quote) {
-        quote = null
-      } else {
-        current += ch
-      }
-      continue
-    }
-    if (ch === '"' || ch === '\'') {
-      quote = ch
-      continue
-    }
-    if (ch === ' ' || ch === '\t') {
-      if (current) {
-        out.push(current)
-        current = ''
-      }
-      continue
-    }
-    current += ch
-  }
-  if (current) out.push(current)
-  return out
-}
+export const parseArgsString = parseArgsStringPure
 
 /**
  * Reconcile running MCP instances with a desired-state list from user
@@ -552,6 +548,9 @@ export async function syncFromSettings(desired) {
         })
       }
       if (!target) {
+        // Drop the persisted approval — if the user re-adds this server
+        // later, they should be re-prompted in case the new command differs.
+        await revokeMcpApproval(id).catch(() => undefined)
         _instances.delete(id)
       }
     }

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseArgsString } from '../electron/services/mcpHost.js'
+import { parseArgsString } from '../electron/services/mcpHostUtils.js'
 import { hashCommand, isPluginCommandTrusted } from '../electron/services/pluginHostUtils.js'
 
 // ── parseArgsString ─────────────────────────────────────────────────────
