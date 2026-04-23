@@ -17,6 +17,7 @@ import {
   createDefaultSubDimensions,
   decaySubDimensions,
 } from '../../features/autonomy/relationshipDimensions.ts'
+import { captureRelationshipSample } from '../../features/autonomy/stateTimeline.ts'
 import {
   AUTONOMY_RELATIONSHIP_STORAGE_KEY,
   readJson,
@@ -68,6 +69,7 @@ export function useRelationshipState() {
       if (milestone) pendingMilestoneRef.current = milestone
       relationshipRef.current = next
       writeJson(AUTONOMY_RELATIONSHIP_STORAGE_KEY, next)
+      captureRelationshipSample(next)
     }
   }, [])
 

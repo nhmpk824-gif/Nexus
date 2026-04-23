@@ -8,6 +8,7 @@ import {
   emotionToPetMood,
   formatEmotionForPrompt,
 } from '../../features/autonomy/emotionModel'
+import { captureEmotionSample } from '../../features/autonomy/stateTimeline.ts'
 import { AUTONOMY_EMOTION_STORAGE_KEY, readJson, writeJson } from '../../lib/storage'
 
 // Persist after every mutation. Emotion state was previously memory-only — an
@@ -23,6 +24,10 @@ export function useEmotionState() {
 
   const persist = () => {
     writeJson(AUTONOMY_EMOTION_STORAGE_KEY, emotionStateRef.current)
+    // Sample the emotion history for the diagnostics timeline. The helper
+    // enforces its own dedup / heartbeat policy — calling on every persist
+    // is fine, it writes a new sample only when the shape has moved.
+    captureEmotionSample(emotionStateRef.current)
   }
 
   const decayOnTick = useCallback((idleSeconds: number) => {
