@@ -187,3 +187,17 @@ test('PerformanceTagStreamFilter releases a non-performance bracket like [NOTE]'
   const out = filter.push('查看[NOTE] 细节') + filter.flush()
   assert.equal(out, '查看[NOTE] 细节')
 })
+
+test('motion cues can be shaped into PetPerformancePlan with gestureName for the queue', () => {
+  const result = extractPerformanceTags('看这里[motion:point]！')
+  assert.equal(result.motionCues.length, 1)
+  const plan = {
+    gestureName: result.motionCues[0].gestureName,
+    durationMs: 1_600,
+    stageDirection: result.motionCues[0].stageDirection,
+  }
+  assert.equal(plan.gestureName, 'point')
+  assert.equal(plan.stageDirection, '(motion:point)')
+  // expressionSlot absent on pure motion cues — mood engine keeps the face.
+  assert.equal('expressionSlot' in plan, false)
+})

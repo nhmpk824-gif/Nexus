@@ -78,3 +78,10 @@ export function resolveMotionGroup(
       return undefined
   }
 }
+
+export function resolveGestureGroup(
+  modelDefinition: PetModelDefinition,
+  gestureName: string,
+): string | undefined {
+  return modelDefinition.motionGroups.gestures?.[gestureName.toLowerCase()]
+}

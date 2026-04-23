@@ -12,8 +12,12 @@ export type PetPerformanceAccent =
   | 'shy'
 
 export type PetPerformancePlan = {
-  expressionSlot: PetExpressionSlot
+  expressionSlot?: PetExpressionSlot
   motionSlot?: PetExpressionSlot
+  // Model-defined gesture name (e.g. 'wave', 'nod'). Looked up in
+  // motionGroups.gestures at apply time; unknown names are silent no-ops
+  // so personas on gesture-poor models don't break.
+  gestureName?: string
   accentStyle?: PetPerformanceAccent
   durationMs: number
   stageDirection: string

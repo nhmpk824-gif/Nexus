@@ -14,9 +14,10 @@ import {
 import { buildMemoryRecallContext } from '../../features/memory/recall'
 import { loadRelevantSkills, shouldGenerateSkill, generateAndSaveSkill } from '../../features/skills/autoSkillGenerator'
 import { matchCoreSkills } from '../../lib/coreRuntime'
+import { PUBLIC_GESTURE_NAMES } from '../../features/pet/models'
 import {
-  ExpressionOverrideStreamFilter,
-  extractExpressionOverrides,
+  PerformanceTagStreamFilter,
+  extractPerformanceTags,
   parseAssistantPerformanceContent,
 } from '../../features/pet/performance'
 import { buildBuiltInToolDescriptors } from '../../features/tools/builtInToolSchemas'
@@ -272,10 +273,11 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
       const promptModeStreamFilter = selectToolDeliveryMode(currentSettings) === 'prompt'
         ? new PromptModeStreamFilter()
         : null
-      // Inline `[expr:name]` override tags also get scrubbed from the final
-      // reply, but without this streaming twin they'd flash in the bubble
-      // and get pronounced character-by-character over the TTS channel.
-      const expressionOverrideStreamFilter = new ExpressionOverrideStreamFilter()
+      // Inline `[expr|motion|tts:name]` performance tags also get scrubbed
+      // from the final reply, but without this streaming twin they'd flash
+      // in the bubble and get pronounced character-by-character over the
+      // TTS channel.
+      const expressionOverrideStreamFilter = new PerformanceTagStreamFilter()
       const request = bindStreamingAbort(
         requestAssistantReplyStreaming(
         currentSettings,
@@ -390,14 +392,26 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
         response.response.content,
         currentSettings.chatOutputTransforms,
       )
-      // Inline [expr:name] overrides — ephemeral per-reply expression cues.
+      // Inline [expr|motion|tts:name] overrides — ephemeral per-reply cues.
       // Tags are stripped here so they never leak into displayContent /
       // spokenContent, and the collected cues get queued alongside whatever
       // the stage-direction parser emits (see queuePetPerformanceCue below).
+      // tts cues are parsed but discarded until an emotion-aware TTS adapter
+      // lands.
       const {
         content: rawAssistantText,
-        cues: inlineExpressionOverrideCues,
-      } = extractExpressionOverrides(transformedAssistantText)
+        exprCues: inlineExpressionOverrideCues,
+        motionCues: inlineMotionCues,
+      } = extractPerformanceTags(transformedAssistantText)
+      const GESTURE_CUE_DURATION_MS = 1_600
+      const PUBLIC_GESTURE_SET = new Set<string>(PUBLIC_GESTURE_NAMES)
+      const inlineGestureCues = inlineMotionCues
+        .filter((motion) => PUBLIC_GESTURE_SET.has(motion.gestureName))
+        .map((motion) => ({
+          gestureName: motion.gestureName,
+          durationMs: GESTURE_CUE_DURATION_MS,
+          stageDirection: motion.stageDirection,
+        }))
       const assistantPerformance = parseAssistantPerformanceContent(rawAssistantText)
       const assistantMessageContent = assistantPerformance.displayContent
         || (assistantPerformance.stageDirections.length ? t('chat.assistant.stage_direction_fallback') : t('chat.assistant.empty_speech_fallback'))
@@ -444,6 +458,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
       dependencies.ctx.queuePetPerformanceCue([
         ...assistantPerformance.cues,
         ...inlineExpressionOverrideCues,
+        ...inlineGestureCues,
       ])
       dependencies.ctx.setMood('happy')
 

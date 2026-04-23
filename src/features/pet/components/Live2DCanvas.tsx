@@ -9,7 +9,7 @@ import {
 } from '../models'
 import type { PetPerformanceCue } from '../performance'
 import { createBlinkState } from './live2d/blink'
-import { resolveExpressionSlot, resolveMotionGroup } from './live2d/expressions'
+import { resolveExpressionSlot, resolveGestureGroup, resolveMotionGroup } from './live2d/expressions'
 import { applyLive2DFrame, type FrameRenderState } from './live2d/frameRender'
 import { layoutLive2DModel, MIN_CANVAS_HEIGHT, MIN_CANVAS_WIDTH } from './live2d/layout'
 import { clamp } from '../../../lib/common'
@@ -221,6 +221,24 @@ export function Live2DCanvas({
 
   useEffect(() => {
     if (!modelReady || !performanceCue) return
+
+    // Inline [motion:wave] tags: look up the model-declared gesture group
+    // and fire it directly. Unknown gesture name → silent no-op so personas
+    // targeting richer models don't break on gesture-poor models.
+    const gestureName = performanceCue.gestureName
+    if (gestureName) {
+      const model = modelRef.current
+      const gestureGroup = resolveGestureGroup(activeModelDefinitionRef.current, gestureName)
+      if (model && gestureGroup) {
+        void model.motion(gestureGroup).catch((caught) => {
+          console.warn('[Live2D] gesture-trigger-failed', {
+            gestureName,
+            gestureGroup,
+            error: caught instanceof Error ? caught.message : String(caught),
+          })
+        })
+      }
+    }
 
     // Let syncVisualState handle expression; only force-trigger if motionSlot
     // differs from the expression slot to avoid double-triggering the same motion.

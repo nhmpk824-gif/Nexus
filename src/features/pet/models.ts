@@ -65,6 +65,11 @@ export interface PetModelDefinition {
     listeningStart?: string
     speakingStart?: string
     hit?: string
+    // Named gesture → motion group for inline [motion:name] tags. Values
+    // are Live2D motion group names declared on the model. Only names in
+    // PUBLIC_GESTURE_NAMES are exposed to LLMs; per-model coverage may
+    // vary — unknown names are silent no-ops at apply time.
+    gestures?: Record<string, string>
   }
   expressionMap: Partial<Record<PetExpressionSlot, string>>
   mouthParams?: {
@@ -161,6 +166,11 @@ const DEFAULT_RIG_PARAMS = {
 
 export const DEFAULT_PET_MODEL_ID = 'mao'
 
+// Gesture names surfaced to the LLM via system prompt. Per-model coverage
+// lives in motionGroups.gestures; unknown names fall through to no-op.
+export const PUBLIC_GESTURE_NAMES = ['wave', 'nod', 'shake', 'tilt', 'point'] as const
+export type PublicGestureName = (typeof PUBLIC_GESTURE_NAMES)[number]
+
 export const PET_MODEL_PRESETS: PetModelDefinition[] = [
   {
     id: 'mao',
@@ -174,6 +184,17 @@ export const PET_MODEL_PRESETS: PetModelDefinition[] = [
       listeningStart: 'TapBody',
       speakingStart: 'TapBody',
       hit: 'TapBody',
+      // Mao ships only Idle + TapBody, so every gesture fires TapBody —
+      // the expression overlay plus breath/rig animation carries the
+      // distinction between e.g. wave vs nod. Imported models with richer
+      // motion libraries can point each gesture at a dedicated group.
+      gestures: {
+        wave: 'TapBody',
+        nod: 'TapBody',
+        shake: 'TapBody',
+        tilt: 'Idle',
+        point: 'TapBody',
+      },
     },
     expressionMap: {
       idle: 'exp_01',
@@ -278,6 +299,7 @@ export function buildRuntimePetModelDefinition(
         ?? pickMotionGroup(motions, ['TapBody', 'Tap', 'Touch']),
       hit: modelDefinition.motionGroups.hit ?? modelDefinition.motionGroups.interaction
         ?? pickMotionGroup(motions, ['TapBody', 'Tap', 'Touch']),
+      gestures: modelDefinition.motionGroups.gestures,
     },
     expressionMap: {
       idle: pickExpression(expressions, 0, modelDefinition.expressionMap.idle),
