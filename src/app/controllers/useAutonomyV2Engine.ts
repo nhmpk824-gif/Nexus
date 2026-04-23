@@ -43,8 +43,8 @@ import type { ChatCaller } from '../../features/autonomy/v2/decisionEngine.ts'
 import { runAutonomyDecision } from '../../features/autonomy/v2/orchestrator.ts'
 import type { LoadedPersona } from '../../features/autonomy/v2/personaTypes.ts'
 import {
+  computeConsiderationCadence,
   resolveAutonomyV2Config,
-  ticksBetweenConsiderations,
 } from '../../features/autonomy/v2/providerResolution.ts'
 import {
   createSubagentDispatcher,
@@ -186,11 +186,21 @@ export function useAutonomyV2Engine(opts: UseAutonomyV2EngineOptions) {
     const cfg = resolveAutonomyV2Config(settings)
     if (!cfg.enabled) return
 
-    // Tick-rate gate. Even on level=high we only consider every 3 ticks
-    // (~90s at default tick interval). Silent responses still burn one
-    // LLM call, so this is the main cost knob.
+    // Tick-rate gate. Base cadence comes from the user-set level (high=3,
+    // med=8, low=20 ticks). computeConsiderationCadence scales that by the
+    // current mood / phase / idle / relationship signals so an engaged
+    // user gets faster responses and a sleeping companion doesn't burn
+    // LLM calls. Clamped to [2, 3*base] so cost limits still hold.
     considerCounterRef.current += 1
-    const cadence = ticksBetweenConsiderations(cfg.level)
+    const emotionForCadence = opts.emotionStateRef.current
+    const relationshipForCadence = opts.relationshipRef.current
+    const cadence = computeConsiderationCadence(cfg.level, {
+      phase: tickState.phase,
+      energy: emotionForCadence?.energy ?? 0.5,
+      curiosity: emotionForCadence?.curiosity ?? 0.5,
+      idleSeconds: tickState.idleSeconds,
+      relationshipScore: relationshipForCadence?.score ?? 50,
+    })
     if (considerCounterRef.current < cadence) return
     considerCounterRef.current = 0
 

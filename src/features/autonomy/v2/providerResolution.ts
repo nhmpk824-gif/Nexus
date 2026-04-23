@@ -96,3 +96,67 @@ export function ticksBetweenConsiderations(level: AutonomyLevelV2): number {
     default:     return 8
   }
 }
+
+// ── Dynamic cadence (ProactiveAgent "Sleep" step) ─────────────────────────
+//
+// ticksBetweenConsiderations returns a per-level baseline. The companion
+// shouldn't tick on that baseline mechanically — when the user is engaged
+// and the mood is high-arousal, we want to check more often; when the pet
+// is drowsy / sleeping, less often. This function scales the baseline by
+// a small bounded multiplier so cost limits still hold.
+//
+// Borrowed from leomariga/ProactiveAgent's Wake/Decide/Respond/Sleep
+// contract — their Sleep step outputs a dynamic next-interval based on
+// engagement signals. Here we fold that into the existing counter-gate
+// instead of restructuring the tick loop.
+
+export interface ConsiderationSignals {
+  /** Current phase reported by the tick state. */
+  phase: 'awake' | 'drowsy' | 'sleeping' | 'dreaming'
+  /** 0–1 scalars from EmotionState — see emotionModel.ts. */
+  energy: number
+  curiosity: number
+  /** Seconds since the user last interacted. */
+  idleSeconds: number
+  /** Relationship score 0–100. */
+  relationshipScore: number
+}
+
+export function computeConsiderationCadence(
+  level: AutonomyLevelV2,
+  signals: ConsiderationSignals,
+): number {
+  const base = ticksBetweenConsiderations(level)
+  if (!Number.isFinite(base)) return base
+
+  let multiplier = 1
+
+  // Phase: sleeping/dreaming/drowsy attenuate. sleeping + dreaming stack
+  // the biggest penalty so the tick's LLM call is a rare event when the
+  // companion is meant to be inactive.
+  if (signals.phase === 'sleeping' || signals.phase === 'dreaming') {
+    multiplier *= 3
+  } else if (signals.phase === 'drowsy') {
+    multiplier *= 1.5
+  }
+
+  // Activation: high energy + curiosity → faster check (user is engaging,
+  // companion should be responsive). Baseline around 0.45 maps to 1.0.
+  const activation = (signals.energy + signals.curiosity) / 2
+  const activationMult = 1 - (activation - 0.45) * 0.6
+  multiplier *= Math.max(0.7, Math.min(1.3, activationMult))
+
+  // Idle decay: more than 5 min since user input → up to 1.5× slower.
+  const idleMult = 1 + Math.min(signals.idleSeconds / 300, 1) * 0.5
+  multiplier *= idleMult
+
+  // Relationship: closer companions bias slightly toward engaging. At
+  // score 100 this is 0.9; at score ≤50 it's 1.0.
+  const relMult = 1 - Math.max(0, signals.relationshipScore - 50) / 500
+  multiplier *= relMult
+
+  const scaled = Math.round(base * multiplier)
+  // Clamp both sides. Floor of 2 protects cost limits; ceiling of 3×base
+  // prevents a low-energy state from silencing the companion forever.
+  return Math.max(2, Math.min(scaled, base * 3))
+}

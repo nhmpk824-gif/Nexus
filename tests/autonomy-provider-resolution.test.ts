@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  computeConsiderationCadence,
   resolveAutonomyV2Config,
   ticksBetweenConsiderations,
 } from '../src/features/autonomy/v2/providerResolution.ts'
@@ -103,4 +104,70 @@ test('ticksBetweenConsiderations: all tiers return finite positive integers', ()
     assert.ok(n > 0)
     assert.ok(Number.isInteger(n))
   }
+})
+
+// ── computeConsiderationCadence ─────────────────────────────────────────
+
+const neutralSignals = {
+  phase: 'awake' as const,
+  energy: 0.45,
+  curiosity: 0.45,
+  idleSeconds: 0,
+  relationshipScore: 50,
+}
+
+test('computeConsiderationCadence: neutral signals ≈ base cadence', () => {
+  assert.equal(computeConsiderationCadence('med', neutralSignals), 8)
+  assert.equal(computeConsiderationCadence('high', neutralSignals), 3)
+  assert.equal(computeConsiderationCadence('low', neutralSignals), 20)
+})
+
+test('computeConsiderationCadence: level=off stays +Infinity regardless of signals', () => {
+  const n = computeConsiderationCadence('off', {
+    ...neutralSignals,
+    phase: 'awake',
+    energy: 1,
+    curiosity: 1,
+  })
+  assert.equal(n, Number.POSITIVE_INFINITY)
+})
+
+test('computeConsiderationCadence: sleeping/dreaming stretches cadence toward ceiling', () => {
+  const sleeping = computeConsiderationCadence('med', { ...neutralSignals, phase: 'sleeping' })
+  const dreaming = computeConsiderationCadence('med', { ...neutralSignals, phase: 'dreaming' })
+  assert.ok(sleeping > 8, `sleeping cadence (${sleeping}) should exceed base 8`)
+  assert.ok(dreaming > 8, `dreaming cadence (${dreaming}) should exceed base 8`)
+  // Ceiling clamp = 3*base = 24
+  assert.ok(sleeping <= 24)
+})
+
+test('computeConsiderationCadence: high arousal + engaged user shortens cadence', () => {
+  const engaged = computeConsiderationCadence('med', {
+    ...neutralSignals,
+    energy: 0.9,
+    curiosity: 0.9,
+    relationshipScore: 100,
+  })
+  assert.ok(engaged < 8, `engaged cadence (${engaged}) should be below base 8`)
+  // Floor clamp = 2
+  assert.ok(engaged >= 2)
+})
+
+test('computeConsiderationCadence: never drops below floor of 2 even at extremes', () => {
+  const extreme = computeConsiderationCadence('high', {
+    ...neutralSignals,
+    energy: 1,
+    curiosity: 1,
+    relationshipScore: 100,
+  })
+  assert.ok(extreme >= 2, `floor violated: ${extreme}`)
+})
+
+test('computeConsiderationCadence: long idle stretches cadence but stays bounded', () => {
+  const idle = computeConsiderationCadence('med', {
+    ...neutralSignals,
+    idleSeconds: 900, // 15 min
+  })
+  assert.ok(idle > 8, `idle cadence (${idle}) should exceed base 8`)
+  assert.ok(idle <= 24, `idle cadence (${idle}) should honor 3×base ceiling`)
 })
