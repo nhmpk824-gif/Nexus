@@ -5,6 +5,7 @@ import {
   WEB_SEARCH_PROVIDER_PRESETS,
 } from '../../lib/webSearchProviders'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
+import { ToggleField } from '../settingsFields'
 import type { AppSettings } from '../../types'
 import { UrlInput } from './UrlInput'
 
@@ -47,71 +48,43 @@ export const ToolsSection = memo(function ToolsSection({
         </div>
       </div>
 
-      <label className="settings-toggle">
-        <span>{ti('settings.tools.web_search')}</span>
-        <input
-          type="checkbox"
-          checked={draft.toolWebSearchEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolWebSearchEnabled: event.target.checked,
-            }))
-          }
-        />
-      </label>
+      <ToggleField
+        label={ti('settings.tools.web_search')}
+        field="toolWebSearchEnabled"
+        draft={draft}
+        setDraft={setDraft}
+      />
       <p className="settings-drawer__hint">
         {ti('settings.tools.web_search_hint')}
       </p>
 
-      <label className="settings-toggle">
-        <span>{ti('settings.tools.weather')}</span>
-        <input
-          type="checkbox"
-          checked={draft.toolWeatherEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolWeatherEnabled: event.target.checked,
-            }))
-          }
-        />
-      </label>
+      <ToggleField
+        label={ti('settings.tools.weather')}
+        field="toolWeatherEnabled"
+        draft={draft}
+        setDraft={setDraft}
+      />
       <p className="settings-drawer__hint">
         {ti('settings.tools.weather_hint')}
       </p>
 
-      <label className="settings-toggle">
-        <span>{ti('settings.tools.open_external')}</span>
-        <input
-          type="checkbox"
-          checked={draft.toolOpenExternalEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolOpenExternalEnabled: event.target.checked,
-            }))
-          }
-        />
-      </label>
+      <ToggleField
+        label={ti('settings.tools.open_external')}
+        field="toolOpenExternalEnabled"
+        draft={draft}
+        setDraft={setDraft}
+      />
       <p className="settings-drawer__hint">
         {ti('settings.tools.open_external_hint')}
       </p>
 
-      <label className="settings-toggle">
-        <span>{ti('settings.tools.confirm_before_open')}</span>
-        <input
-          type="checkbox"
-          checked={draft.toolOpenExternalRequiresConfirmation}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              toolOpenExternalRequiresConfirmation: event.target.checked,
-            }))
-          }
-          disabled={!draft.toolOpenExternalEnabled}
-        />
-      </label>
+      <ToggleField
+        label={ti('settings.tools.confirm_before_open')}
+        field="toolOpenExternalRequiresConfirmation"
+        disabled={!draft.toolOpenExternalEnabled}
+        draft={draft}
+        setDraft={setDraft}
+      />
 
       <div className="settings-section__title-row">
         <div>

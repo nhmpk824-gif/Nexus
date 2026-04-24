@@ -1,5 +1,6 @@
 import { memo, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { parseNumberInput } from '../settingsDrawerSupport'
+import { TextField, ToggleField } from '../settingsFields'
 import {
   getInspectableIntegrationModules,
   getRoadmapIntegrationModules,
@@ -513,42 +514,37 @@ export const IntegrationsSection = memo(function IntegrationsSection({
             </div>
           </div>
 
-          <label className="settings-toggle">
-            <span>{ti('settings.integrations.telegram.enable')}</span>
-            <input
-              type="checkbox"
-              checked={draft.telegramIntegrationEnabled}
-              onChange={(event) => setDraft((prev) => ({ ...prev, telegramIntegrationEnabled: event.target.checked }))}
-            />
-          </label>
+          <ToggleField
+            label={ti('settings.integrations.telegram.enable')}
+            field="telegramIntegrationEnabled"
+            draft={draft}
+            setDraft={setDraft}
+          />
 
-          <label>
-            <span>{ti('settings.integrations.telegram.bot_token')}</span>
-            <input
-              type="password"
-              value={draft.telegramBotToken}
-              placeholder={ti('settings.integrations.telegram.bot_token_placeholder')}
-              onChange={(event) => setDraft((prev) => ({ ...prev, telegramBotToken: event.target.value }))}
-            />
-          </label>
+          <TextField
+            label={ti('settings.integrations.telegram.bot_token')}
+            field="telegramBotToken"
+            type="password"
+            placeholder={ti('settings.integrations.telegram.bot_token_placeholder')}
+            draft={draft}
+            setDraft={setDraft}
+          />
 
-          <label>
-            <span>{ti('settings.integrations.telegram.allowed_chats')}</span>
-            <input
-              value={draft.telegramAllowedChatIds}
-              placeholder="123456789, -100123456"
-              onChange={(event) => setDraft((prev) => ({ ...prev, telegramAllowedChatIds: event.target.value }))}
-            />
-          </label>
+          <TextField
+            label={ti('settings.integrations.telegram.allowed_chats')}
+            field="telegramAllowedChatIds"
+            placeholder="123456789, -100123456"
+            draft={draft}
+            setDraft={setDraft}
+          />
 
-          <label>
-            <span>{ti('settings.integrations.telegram.owner_chats')}</span>
-            <input
-              value={draft.ownerTelegramChatIds}
-              placeholder="123456789"
-              onChange={(event) => setDraft((prev) => ({ ...prev, ownerTelegramChatIds: event.target.value }))}
-            />
-          </label>
+          <TextField
+            label={ti('settings.integrations.telegram.owner_chats')}
+            field="ownerTelegramChatIds"
+            placeholder="123456789"
+            draft={draft}
+            setDraft={setDraft}
+          />
 
           <p className="settings-inline-note">
             {ti('settings.integrations.telegram.help')}
@@ -576,42 +572,37 @@ export const IntegrationsSection = memo(function IntegrationsSection({
             </div>
           </div>
 
-          <label className="settings-toggle">
-            <span>{ti('settings.integrations.discord.enable')}</span>
-            <input
-              type="checkbox"
-              checked={draft.discordIntegrationEnabled}
-              onChange={(event) => setDraft((prev) => ({ ...prev, discordIntegrationEnabled: event.target.checked }))}
-            />
-          </label>
+          <ToggleField
+            label={ti('settings.integrations.discord.enable')}
+            field="discordIntegrationEnabled"
+            draft={draft}
+            setDraft={setDraft}
+          />
 
-          <label>
-            <span>{ti('settings.integrations.discord.bot_token')}</span>
-            <input
-              type="password"
-              value={draft.discordBotToken}
-              placeholder={ti('settings.integrations.discord.bot_token_placeholder')}
-              onChange={(event) => setDraft((prev) => ({ ...prev, discordBotToken: event.target.value }))}
-            />
-          </label>
+          <TextField
+            label={ti('settings.integrations.discord.bot_token')}
+            field="discordBotToken"
+            type="password"
+            placeholder={ti('settings.integrations.discord.bot_token_placeholder')}
+            draft={draft}
+            setDraft={setDraft}
+          />
 
-          <label>
-            <span>{ti('settings.integrations.discord.allowed_channels')}</span>
-            <input
-              value={draft.discordAllowedChannelIds}
-              placeholder="1234567890123456789, 9876543210123456789"
-              onChange={(event) => setDraft((prev) => ({ ...prev, discordAllowedChannelIds: event.target.value }))}
-            />
-          </label>
+          <TextField
+            label={ti('settings.integrations.discord.allowed_channels')}
+            field="discordAllowedChannelIds"
+            placeholder="1234567890123456789, 9876543210123456789"
+            draft={draft}
+            setDraft={setDraft}
+          />
 
-          <label>
-            <span>{ti('settings.integrations.discord.owner_users')}</span>
-            <input
-              value={draft.ownerDiscordUserIds}
-              placeholder="1234567890123456789"
-              onChange={(event) => setDraft((prev) => ({ ...prev, ownerDiscordUserIds: event.target.value }))}
-            />
-          </label>
+          <TextField
+            label={ti('settings.integrations.discord.owner_users')}
+            field="ownerDiscordUserIds"
+            placeholder="1234567890123456789"
+            draft={draft}
+            setDraft={setDraft}
+          />
 
           <p className="settings-inline-note">
             {ti('settings.integrations.discord.help')}
