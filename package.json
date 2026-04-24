@@ -1,7 +1,7 @@
 {
   "name": "nexus",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1-beta.1",
   "description": "Nexus desktop AI companion built with Electron, React, and TypeScript.",
   "author": {
     "name": "FanyinLiu",
@@ -115,7 +115,16 @@
           "filter": [
             "**/*",
             "!_download.tar.bz2",
-            "!**/*.tar.bz2"
+            "!**/*.tar.bz2",
+            "!**/model.onnx",
+            "!**/.git",
+            "!**/.git/**",
+            "!**/.gitattributes",
+            "!**/test_wavs",
+            "!**/test_wavs/**",
+            "!**/export-onnx.py",
+            "!**/README.md",
+            "!**/LICENSE"
           ]
         },
         {
@@ -148,7 +157,16 @@
           "filter": [
             "**/*",
             "!_download.tar.bz2",
-            "!**/*.tar.bz2"
+            "!**/*.tar.bz2",
+            "!**/model.onnx",
+            "!**/.git",
+            "!**/.git/**",
+            "!**/.gitattributes",
+            "!**/test_wavs",
+            "!**/test_wavs/**",
+            "!**/export-onnx.py",
+            "!**/README.md",
+            "!**/LICENSE"
           ]
         },
         {
@@ -172,7 +190,16 @@
           "filter": [
             "**/*",
             "!_download.tar.bz2",
-            "!**/*.tar.bz2"
+            "!**/*.tar.bz2",
+            "!**/model.onnx",
+            "!**/.git",
+            "!**/.git/**",
+            "!**/.gitattributes",
+            "!**/test_wavs",
+            "!**/test_wavs/**",
+            "!**/export-onnx.py",
+            "!**/README.md",
+            "!**/LICENSE"
           ]
         },
         {
