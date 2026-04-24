@@ -9,7 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react'
-import { getLiveTranscriptLabel, getTimeGreeting, getVoiceStateLabel } from '../appSupport'
+import { getLiveTranscriptLabel, getTimeGreeting, getTimeGreetingEmoji, getVoiceStateLabel } from '../appSupport'
 import { ActivePlanStrip, MessageBubble, SubagentTaskStrip } from '../../components'
 import { resolveCharacterPreset } from '../../features/character/presets'
 import { useAmbientWeather } from '../../hooks/useAmbientWeather'
@@ -54,6 +54,7 @@ export function PanelView({
   ) => pickTranslatedUiText(settings.uiLanguage, key, params)
   const characterPreset = useMemo(() => resolveCharacterPreset(), [])
   const timeGreeting = getTimeGreeting(ti)
+  const timeGreetingEmoji = getTimeGreetingEmoji()
 
   const ambientWeather = useAmbientWeather(
     settings.toolWeatherDefaultLocation,
@@ -391,8 +392,13 @@ export function PanelView({
                 ) : (
                   <div className="empty-chat empty-chat--nexus">
                     <div className="empty-chat__copy">
-                      <strong>{welcomeTitle}</strong>
-                      <p>{welcomeBody}</p>
+                      <strong>
+                        <span className="empty-chat__greeting-emoji" aria-hidden="true">
+                          {timeGreetingEmoji}
+                        </span>
+                        {welcomeTitle}
+                      </strong>
+                      <p>{welcomeBody} <span className="empty-chat__sparkle" aria-hidden="true">✨</span></p>
                       <div className="empty-chat__prompt-grid">
                         {panelQuickPrompts.map((item) => (
                           <button

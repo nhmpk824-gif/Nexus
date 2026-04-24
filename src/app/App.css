@@ -930,6 +930,33 @@
   align-content: start;
 }
 
+.empty-chat__greeting-emoji {
+  display: inline-block;
+  margin-right: 10px;
+  font-size: 1.15em;
+  line-height: 1;
+  /* Subtle drift — feels alive without being distracting. */
+  animation: greeting-emoji-drift 3.6s ease-in-out infinite;
+  transform-origin: 50% 70%;
+}
+
+@keyframes greeting-emoji-drift {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-3px) rotate(-6deg); }
+}
+
+.empty-chat__sparkle {
+  display: inline-block;
+  margin-left: 4px;
+  opacity: 0.85;
+  animation: greeting-sparkle 2.4s ease-in-out infinite;
+}
+
+@keyframes greeting-sparkle {
+  0%, 100% { opacity: 0.45; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.05); }
+}
+
 .empty-chat__prompt-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
