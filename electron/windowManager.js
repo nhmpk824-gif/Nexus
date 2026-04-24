@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getPreloadPath, getRendererEntry } from './rendererServer.js'
 import { clampWindowPosition, getPanelWindowPosition, PANEL_WINDOW_GAP_PX } from './windowManagerHelpers.js'
+import { getSavedBounds, trackWindow } from './services/windowBoundsStore.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -16,10 +17,10 @@ const RUNTIME_CLIENT_TTL_MS = 25_000
 // workArea bounds. Use a larger bottom margin on macOS to keep the pet's
 // action buttons (mic, menu) above the Dock hit region.
 const PET_WINDOW_SCREEN_MARGIN_PX = process.platform === 'darwin' ? 80 : 24
-const PANEL_WINDOW_DEFAULT_WIDTH = 540
-const PANEL_WINDOW_DEFAULT_HEIGHT = 780
-const PANEL_WINDOW_MIN_WIDTH = 500
-const PANEL_WINDOW_MIN_HEIGHT = 720
+const PANEL_WINDOW_DEFAULT_WIDTH = 460
+const PANEL_WINDOW_DEFAULT_HEIGHT = 660
+const PANEL_WINDOW_MIN_WIDTH = 400
+const PANEL_WINDOW_MIN_HEIGHT = 540
 const PANEL_WINDOW_COLLAPSED_WIDTH = 380
 const PANEL_WINDOW_COLLAPSED_HEIGHT = 92
 
@@ -422,15 +423,18 @@ export function dragWindowBy(event, delta) {
 
 export function createMainWindow() {
   const { workArea } = screen.getPrimaryDisplay()
-  const width = 420
-  const height = 620
-  const { x, y } = clampWindowPosition(
-    width,
-    height,
-    workArea.x + workArea.width - width - PET_WINDOW_SCREEN_MARGIN_PX,
-    workArea.y + workArea.height - height - PET_WINDOW_SCREEN_MARGIN_PX,
-    workArea,
-  )
+  const saved = getSavedBounds('pet')
+  const width = saved?.width ?? 420
+  const height = saved?.height ?? 620
+  const { x, y } = saved
+    ? clampWindowPosition(width, height, saved.x, saved.y, workArea)
+    : clampWindowPosition(
+        width,
+        height,
+        workArea.x + workArea.width - width - PET_WINDOW_SCREEN_MARGIN_PX,
+        workArea.y + workArea.height - height - PET_WINDOW_SCREEN_MARGIN_PX,
+        workArea,
+      )
 
   const win = new BrowserWindow({
     width,
@@ -544,6 +548,7 @@ export function createMainWindow() {
   }
 
   mainWindow = win
+  trackWindow(win, 'pet')
   return win
 }
 
@@ -553,8 +558,13 @@ export function createPanelWindow() {
   }
 
   const ownerBounds = mainWindow?.getBounds()
-  const width = panelWindowState.collapsed ? PANEL_WINDOW_COLLAPSED_WIDTH : PANEL_WINDOW_DEFAULT_WIDTH
-  const height = panelWindowState.collapsed ? PANEL_WINDOW_COLLAPSED_HEIGHT : PANEL_WINDOW_DEFAULT_HEIGHT
+  const savedPanel = panelWindowState.collapsed ? null : getSavedBounds('panel')
+  const width = panelWindowState.collapsed
+    ? PANEL_WINDOW_COLLAPSED_WIDTH
+    : (savedPanel?.width ?? PANEL_WINDOW_DEFAULT_WIDTH)
+  const height = panelWindowState.collapsed
+    ? PANEL_WINDOW_COLLAPSED_HEIGHT
+    : (savedPanel?.height ?? PANEL_WINDOW_DEFAULT_HEIGHT)
   const { workArea } = ownerBounds
     ? screen.getDisplayMatching(ownerBounds)
     : screen.getPrimaryDisplay()
@@ -566,7 +576,9 @@ export function createPanelWindow() {
         (panelWindowExpandedBounds?.y ?? ownerBounds?.y ?? workArea.y + 72) + Math.max((panelWindowExpandedBounds?.height ?? height) - height, 0),
         workArea,
       )
-    : getPanelWindowPosition(width, height, ownerBounds, workArea)
+    : savedPanel
+      ? clampWindowPosition(width, height, savedPanel.x, savedPanel.y, workArea)
+      : getPanelWindowPosition(width, height, ownerBounds, workArea)
 
   const win = new BrowserWindow({
     width,
@@ -689,6 +701,7 @@ export function createPanelWindow() {
   win.loadURL(getRendererEntry('panel'))
 
   panelWindow = win
+  trackWindow(win, 'panel', { isTrackable: () => !panelWindowState.collapsed })
   return win
 }
 
