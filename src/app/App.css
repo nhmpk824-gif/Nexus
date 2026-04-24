@@ -13,16 +13,16 @@
   --panel-shadow: rgba(0, 0, 0, 0.3);
   --panel-shadow-strong: rgba(0, 0, 0, 0.5);
 
-  /* Liquid Glass night tokens (adopted from standalone design mock).
-   * Accent shifts from blue to violet; user-message bubble now uses a
-   * soft gradient on dark text (iOS-26-style) and assistant bubble
-   * leans on backdrop-filter glass. */
+  /* Liquid Glass tokens — violet kept ONLY as accent (user bubble, primary
+   * button, link, scrollbar). Surface colours stay neutral dark so the
+   * panel doesn't read as "everything is purple" — that gets tiring fast.
+   * Accent palette: #A88BFF (primary), #C8A6FF (hover/lighter). */
   --nx-accent:            #A88BFF;
   --nx-accent-soft:       rgba(168, 139, 255, 0.2);
   --nx-accent-ghost:      rgba(168, 139, 255, 0.1);
   --nx-me-gradient:       linear-gradient(135deg, #C8A6FF 0%, #A88BFF 100%);
-  --nx-assistant-bg:      rgba(60, 45, 82, 0.68);
-  --nx-assistant-text:    #F4EEFB;
+  --nx-assistant-bg:      rgba(255, 255, 255, 0.05);
+  --nx-assistant-text:    rgba(255, 255, 255, 0.92);
   --nx-user-bg:           var(--nx-me-gradient);
   --nx-user-text:         #1A1226;
   --nx-user-border:       transparent;
@@ -562,11 +562,11 @@
 .message-bubble.assistant {
   align-self: flex-start;
   border-radius: 20px 20px 20px 8px;
-  background: var(--nx-assistant-bg, rgba(60, 45, 82, 0.68));
-  color: var(--nx-assistant-text, #F4EEFB);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  box-shadow: var(--nx-shadow-them, 0 1px 2px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.2));
+  background: var(--nx-assistant-bg, rgba(255, 255, 255, 0.05));
+  color: var(--nx-assistant-text, rgba(255, 255, 255, 0.92));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
 .message-bubble.user {
@@ -1008,13 +1008,11 @@
   width: 100%;
   box-sizing: border-box;
   resize: none;
-  border-radius: 20px;
-  border: 0.5px solid rgba(255, 255, 255, 0.14);
-  background: rgba(55, 42, 75, 0.38);
-  backdrop-filter: blur(30px) saturate(160%);
-  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
   padding: 14px 16px;
-  color: rgba(244, 238, 251, 0.95);
+  color: rgba(255, 255, 255, 0.9);
   font: inherit;
   font-size: 14px;
   transition: all 0.2s ease-in-out;
@@ -1023,7 +1021,7 @@
 .composer textarea:focus {
   outline: none;
   border-color: rgba(168, 139, 255, 0.45);
-  background: rgba(55, 42, 75, 0.58);
+  background: rgba(255, 255, 255, 0.06);
   box-shadow: 0 0 0 3px rgba(168, 139, 255, 0.14);
 }
 

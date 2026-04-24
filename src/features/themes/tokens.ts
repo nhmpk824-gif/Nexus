@@ -1,39 +1,40 @@
 import type { ThemeTokens } from '../../types/theme'
 
-// Liquid Glass day values — adopted from the standalone UI mock. Accent
-// is iOS-26 violet; surface tokens stay light so the settings drawer and
-// panel overlays still read correctly on light wallpapers.
+// Default theme — neutral surfaces, violet accent ONLY. The previous
+// pass tinted everything violet which read as "purple-saturated" and
+// strained eyes; surface tokens are back to neutral so the violet only
+// shows up where it earns its weight (primary button, link, scrollbar).
 export const defaultThemeTokens: ThemeTokens = {
   surface: 'rgba(255, 255, 255, 0.95)',
   surfaceMuted: 'rgba(248, 248, 248, 0.92)',
   surfaceGlass: 'rgba(255, 255, 255, 0.72)',
   surfaceElevated: 'rgba(255, 255, 255, 0.96)',
-  textPrimary: '#1C1428',
-  textMuted: '#4A3F52',
-  textSoft: '#7A6F82',
+  textPrimary: '#1a1a1a',
+  textMuted: '#6b6b6b',
+  textSoft: '#a0a0a0',
   accent: '#A88BFF',
   accentSoft: 'rgba(168, 139, 255, 0.2)',
   accentHover: '#C8A6FF',
-  border: 'rgba(28, 20, 40, 0.08)',
-  borderStrong: 'rgba(28, 20, 40, 0.14)',
-  shadow: 'rgba(28, 20, 40, 0.06)',
+  border: 'rgba(200, 200, 200, 0.3)',
+  borderStrong: 'rgba(180, 180, 180, 0.45)',
+  shadow: 'rgba(0, 0, 0, 0.08)',
   shadowAccent: 'rgba(168, 139, 255, 0.14)',
 }
 
-// Liquid Glass night values — same accent, deep-violet surfaces.
+// system-dark — neutral dark surfaces, same violet accent.
 export const systemDarkThemeTokens: ThemeTokens = {
-  surface: 'rgba(40, 30, 55, 0.58)',
-  surfaceMuted: 'rgba(40, 30, 55, 0.38)',
-  surfaceGlass: 'rgba(55, 42, 75, 0.78)',
-  surfaceElevated: 'rgba(55, 42, 75, 0.88)',
-  textPrimary: '#F4EEFB',
-  textMuted: '#C8BBD8',
-  textSoft: '#8E82A3',
+  surface: 'rgba(30, 24, 34, 0.96)',
+  surfaceMuted: 'rgba(40, 32, 44, 0.94)',
+  surfaceGlass: 'rgba(36, 28, 40, 0.78)',
+  surfaceElevated: 'rgba(48, 38, 52, 0.96)',
+  textPrimary: '#ede4ef',
+  textMuted: '#9a8e9e',
+  textSoft: '#6e626e',
   accent: '#A88BFF',
   accentSoft: 'rgba(168, 139, 255, 0.2)',
   accentHover: '#C8A6FF',
-  border: 'rgba(255, 255, 255, 0.08)',
-  borderStrong: 'rgba(255, 255, 255, 0.14)',
-  shadow: 'rgba(0, 0, 0, 0.3)',
-  shadowAccent: 'rgba(168, 139, 255, 0.2)',
+  border: 'rgba(100, 100, 100, 0.35)',
+  borderStrong: 'rgba(140, 140, 140, 0.4)',
+  shadow: 'rgba(0, 0, 0, 0.2)',
+  shadowAccent: 'rgba(168, 139, 255, 0.14)',
 }
