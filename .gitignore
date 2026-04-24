@@ -46,3 +46,8 @@ __pycache__/
 
 # Large vendor binaries (download via npm postinstall or manually)
 public/vendor/
+
+# Design-source PNGs (downsampled into public/ tray + dock icons; the
+# downsampled outputs are committed, the source is kept locally only)
+jimeng-*.png
+ChatGPT Image*.png
