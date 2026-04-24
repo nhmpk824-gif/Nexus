@@ -23,7 +23,15 @@ function getVaultPath() {
   return path.join(app.getPath('userData'), VAULT_FILE_NAME)
 }
 
+// Dev-mode plaintext path: skip safeStorage entirely so unsigned dev binaries
+// don't trigger a Keychain password prompt on every rebuild. Hard-gated on
+// !app.isPackaged so packaged installers can never fall through to plaintext.
+function isDevPlaintextMode() {
+  return !app.isPackaged
+}
+
 function isEncryptionAvailable() {
+  if (isDevPlaintextMode()) return true
   try {
     return safeStorage.isEncryptionAvailable()
   } catch {
@@ -66,6 +74,12 @@ async function _vaultStore(slot, plaintext) {
     return
   }
 
+  if (isDevPlaintextMode()) {
+    vault[slot] = { p: value, v: 0 }
+    await persistVault()
+    return
+  }
+
   if (!isEncryptionAvailable()) {
     throw new Error(
       '系统加密服务不可用，无法安全存储密钥。'
@@ -86,6 +100,13 @@ export async function vaultRetrieve(slot) {
   if (!entry) return ''
 
   if (entry.v === 1 && entry.e) {
+    if (isDevPlaintextMode()) {
+      // Pre-existing encrypted entry from a packaged install — decrypting would
+      // trigger the Keychain prompt we're trying to avoid in dev. Drop it; user
+      // re-enters the key once and it gets re-stored as plaintext (v=0).
+      return ''
+    }
+
     if (!isEncryptionAvailable()) {
       console.warn(`[KeyVault] Encryption unavailable, cannot decrypt slot: ${slot}`)
       return ''
@@ -137,6 +158,11 @@ async function _vaultStoreMany(entries) {
     const plaintext = String(value ?? '')
     if (!plaintext) {
       operations.push({ slot, delete: true })
+      continue
+    }
+
+    if (isDevPlaintextMode()) {
+      operations.push({ slot, entry: { p: plaintext, v: 0 } })
       continue
     }
 
