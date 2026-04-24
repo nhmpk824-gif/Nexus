@@ -1,19 +1,5 @@
-import { app, Notification } from 'electron'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { panelWindow, mainWindow, createPanelWindow } from '../windowManager.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
-function resolveIconPath() {
-  const ext = process.platform === 'win32' ? 'ico' : 'png'
-  const name = ext === 'png' ? 'nexus-256' : 'nexus'
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'public', `${name}.${ext}`)
-  }
-  return path.join(__dirname, '..', '..', 'public', `${name}.${ext}`)
-}
+import { Notification } from 'electron'
+import { panelWindow, mainWindow, createPanelWindow, getPetIconPath } from '../windowManager.js'
 
 /**
  * Fire an OS-level notification with title + body. Clicking it focuses the
@@ -29,7 +15,7 @@ export function showProactiveNotification({ title, body }) {
     title: title.trim(),
     body: body.trim(),
     silent: false,
-    icon: resolveIconPath(),
+    icon: getPetIconPath(),
   })
 
   notification.on('click', () => {

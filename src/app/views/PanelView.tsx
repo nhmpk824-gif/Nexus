@@ -302,7 +302,7 @@ export function PanelView({
     if (!visionEnabled && chat.pendingImage) {
       chat.setPendingImage(null)
     }
-  }, [visionEnabled, chat])
+  }, [visionEnabled, chat.pendingImage, chat.setPendingImage])
 
   return (
     <div className={`desktop-pet-root desktop-pet-root--panel ${characterPreset.themeClassName} ${panelCollapsed ? 'desktop-pet-root--panel-collapsed' : ''}`}>

@@ -1,5 +1,6 @@
 import { app, screen } from 'electron'
 import fs from 'node:fs'
+import fsp from 'node:fs/promises'
 import path from 'node:path'
 
 const FILE_NAME = 'window-bounds.json'
@@ -11,6 +12,9 @@ function getStorePath() {
   return path.join(app.getPath('userData'), FILE_NAME)
 }
 
+// Initial load is sync because it runs once at window-creation time before
+// any UI has a chance to block, and BrowserWindow constructors expect bounds
+// synchronously. All subsequent persists are async.
 function load() {
   if (cache !== null) return cache
   try {
@@ -27,11 +31,10 @@ function persistDebounced() {
   if (writeTimer) clearTimeout(writeTimer)
   writeTimer = setTimeout(() => {
     writeTimer = null
-    try {
-      fs.writeFileSync(getStorePath(), JSON.stringify(cache, null, 2), 'utf8')
-    } catch (err) {
-      console.warn('[windowBounds] persist failed:', err?.message ?? err)
-    }
+    fsp.writeFile(getStorePath(), JSON.stringify(cache, null, 2), 'utf8')
+      .catch((err) => {
+        console.warn('[windowBounds] persist failed:', err?.message ?? err)
+      })
   }, 400)
 }
 

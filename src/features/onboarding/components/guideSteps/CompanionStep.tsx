@@ -1,20 +1,8 @@
+import { RELATIONSHIP_OPTIONS } from '../../../../lib/relationshipTypes'
 import { pickTranslatedUiText } from '../../../../lib/uiLanguage'
-import type { AppSettings, CompanionRelationshipType } from '../../../../types'
+import type { AppSettings } from '../../../../types'
 import type { PetModelDefinition } from '../../../pet'
 import type { OnboardingDraftSetter } from './types'
-
-const RELATIONSHIP_OPTIONS: ReadonlyArray<{
-  value: CompanionRelationshipType
-  labelKey: 'onboarding.companion.relationship_open_ended'
-    | 'onboarding.companion.relationship_friend'
-    | 'onboarding.companion.relationship_mentor'
-    | 'onboarding.companion.relationship_quiet_companion'
-}> = [
-  { value: 'open_ended', labelKey: 'onboarding.companion.relationship_open_ended' },
-  { value: 'friend', labelKey: 'onboarding.companion.relationship_friend' },
-  { value: 'mentor', labelKey: 'onboarding.companion.relationship_mentor' },
-  { value: 'quiet_companion', labelKey: 'onboarding.companion.relationship_quiet_companion' },
-]
 
 type CompanionStepProps = {
   draft: AppSettings

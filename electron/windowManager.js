@@ -70,7 +70,7 @@ export let petWindowState = {
 
 export let panelSection = 'chat'
 
-function getPetIconPath() {
+export function getPetIconPath() {
   const ext = process.platform === 'win32' ? 'ico' : 'png'
   const name = ext === 'png' ? 'nexus-256' : 'nexus'
   return isDev

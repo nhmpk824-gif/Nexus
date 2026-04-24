@@ -38,15 +38,12 @@ export function useAwayNotificationScheduler({
   messages,
   panelOpen,
 }: UseAwayNotificationSchedulerOptions) {
-  // Stable refs so the interval handler always sees the latest values without
+  // Stable ref so the interval handler always sees the latest values without
   // tearing the timer down on every chat-message change.
-  const settingsRef = useRef(settings)
-  const messagesRef = useRef(messages)
-  const panelOpenRef = useRef(panelOpen)
-
-  useEffect(() => { settingsRef.current = settings }, [settings])
-  useEffect(() => { messagesRef.current = messages }, [messages])
-  useEffect(() => { panelOpenRef.current = panelOpen }, [panelOpen])
+  const liveRef = useRef({ settings, messages, panelOpen })
+  useEffect(() => {
+    liveRef.current = { settings, messages, panelOpen }
+  }, [settings, messages, panelOpen])
 
   useEffect(() => {
     if (!settings.proactiveAwayNotificationsEnabled) return
@@ -54,12 +51,12 @@ export function useAwayNotificationScheduler({
     if (!window.desktopPet?.showProactiveNotification) return
 
     const tick = async () => {
-      // Read latest values via refs so the closure isn't stale.
-      const s = settingsRef.current
+      // Read latest values via ref so the closure isn't stale.
+      const { settings: s, messages: msgs, panelOpen: open } = liveRef.current
       if (!s.proactiveAwayNotificationsEnabled) return
-      if (panelOpenRef.current) return
+      if (open) return
 
-      const lastUserActivityMs = findLastUserMessageMs(messagesRef.current)
+      const lastUserActivityMs = findLastUserMessageMs(msgs)
       const lastFiredMs = readJson<number | null>(PROACTIVE_AWAY_LAST_FIRED_STORAGE_KEY, null)
       const decision = decideAwayNotification({
         enabled: true,
