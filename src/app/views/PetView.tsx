@@ -15,6 +15,7 @@ import { resolveCharacterPreset } from '../../features/character/presets'
 import {
   classifyWeatherCondition,
   getTimeOfDayBand,
+  getTimeOfDayBlend,
   PET_TIME_PREVIEW_BANDS,
   SceneBackdrop,
   SunlightTint,
@@ -106,14 +107,21 @@ export function PetView({
     [ambientWeather, settings.petWeatherPreview],
   )
   const [autoTimeBand, setAutoTimeBand] = useState(() => getTimeOfDayBand())
+  const [autoTimeBlend, setAutoTimeBlend] = useState(() => getTimeOfDayBlend())
   useEffect(() => {
-    const update = () => setAutoTimeBand(getTimeOfDayBand())
-    const intervalId = window.setInterval(update, 5 * 60 * 1000)
+    const update = () => {
+      setAutoTimeBand(getTimeOfDayBand())
+      setAutoTimeBlend(getTimeOfDayBlend())
+    }
+    // 1-minute cadence so the 2-hour blend windows render smoothly
+    // instead of stair-stepping every 5 minutes.
+    const intervalId = window.setInterval(update, 60 * 1000)
     return () => window.clearInterval(intervalId)
   }, [])
   const timeBand = settings.petTimePreview !== 'auto'
     ? PET_TIME_PREVIEW_BANDS[settings.petTimePreview]
     : autoTimeBand
+  const timeBlend = settings.petTimePreview !== 'auto' ? undefined : autoTimeBlend
   const voiceStateLabel = getVoiceStateLabel(voice.voiceState, ti)
   const petSignalLabel = voice.voiceState !== 'idle'
     ? voiceStateLabel
@@ -334,7 +342,7 @@ export function PetView({
           <div className="pet-window__stage-shell">
             <div className="pet-window__stage-backdrop" aria-hidden="true" />
             <SunlightTint timePreview={settings.petTimePreview}>
-              <SceneBackdrop location={settings.petSceneLocation} timeBand={timeBand} />
+              <SceneBackdrop location={settings.petSceneLocation} timeBand={timeBand} timeBlend={timeBlend} />
               <WeatherAmbient condition={weatherCondition} />
             </SunlightTint>
             <div className="pet-window__stage-orbit pet-window__stage-orbit--large" aria-hidden="true" />

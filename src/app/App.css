@@ -6101,8 +6101,10 @@
   -webkit-user-drag: none;
   user-select: none;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 2.4s ease;
+  /* Inline-styled opacity ramps via the 1-minute blend sampler; this
+     transition smooths the steps between samples (≤60s) so even slow
+     transitions render perceptibly continuous. */
+  transition: opacity 60s linear;
 }
 
 .scene-backdrop__art.is-active {

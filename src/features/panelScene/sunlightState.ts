@@ -26,22 +26,22 @@ export interface SunlightTone {
  * (rather than aggressive) color shifts.
  */
 const KEYFRAMES: ReadonlyArray<readonly [hour: number, tone: SunlightTone]> = [
-  [0,    { brightness: 0.9,  saturation: 1.0,  hueRotate: 0 }],   // deep night — art is already dark
-  [4,    { brightness: 0.95, saturation: 1.0,  hueRotate: 0 }],
-  [5,    { brightness: 1.0,  saturation: 1.0,  hueRotate: 0 }],
-  [6,    { brightness: 0.95, saturation: 1.0,  hueRotate: 0 }],   // dawn (dusk art shows)
-  [7,    { brightness: 0.98, saturation: 1.02, hueRotate: 0 }],
-  [8,    { brightness: 1.0,  saturation: 1.0,  hueRotate: 0 }],   // day art begins
+  [0,    { brightness: 0.88, saturation: 0.92, hueRotate: -8 }],  // deep night — slight cool desat
+  [4,    { brightness: 0.92, saturation: 0.94, hueRotate: -6 }],
+  [5,    { brightness: 0.96, saturation: 1.02, hueRotate: -4 }],  // predawn cool blue
+  [6,    { brightness: 1.0,  saturation: 1.08, hueRotate: 4 }],   // dawn — first warm blush
+  [7,    { brightness: 1.02, saturation: 1.10, hueRotate: 6 }],   // sunrise warm
+  [8,    { brightness: 1.0,  saturation: 1.04, hueRotate: 2 }],
   [10,   { brightness: 1.04, saturation: 1.02, hueRotate: 0 }],
-  [12,   { brightness: 1.08, saturation: 1.04, hueRotate: 0 }],   // noon peak
+  [12,   { brightness: 1.08, saturation: 1.04, hueRotate: 0 }],   // noon peak — neutral
   [14,   { brightness: 1.06, saturation: 1.03, hueRotate: 0 }],
-  [16,   { brightness: 1.0,  saturation: 1.02, hueRotate: 0 }],
-  [17,   { brightness: 0.98, saturation: 1.04, hueRotate: 0 }],   // just before dusk
-  [18,   { brightness: 1.0,  saturation: 1.05, hueRotate: 0 }],   // dusk art takes over
-  [19,   { brightness: 0.95, saturation: 1.02, hueRotate: 0 }],
-  [20,   { brightness: 0.92, saturation: 1.0,  hueRotate: 0 }],   // night art takes over
-  [22,   { brightness: 0.9,  saturation: 1.0,  hueRotate: 0 }],
-  [24,   { brightness: 0.9,  saturation: 1.0,  hueRotate: 0 }],
+  [16,   { brightness: 1.02, saturation: 1.06, hueRotate: 4 }],   // afternoon warming
+  [17,   { brightness: 1.0,  saturation: 1.12, hueRotate: 10 }],  // golden hour — strong warm
+  [18,   { brightness: 0.98, saturation: 1.14, hueRotate: 12 }],  // sunset peak
+  [19,   { brightness: 0.95, saturation: 1.06, hueRotate: 6 }],   // dusk fading
+  [20,   { brightness: 0.92, saturation: 0.98, hueRotate: -4 }],  // early night cool
+  [22,   { brightness: 0.9,  saturation: 0.94, hueRotate: -8 }],
+  [24,   { brightness: 0.88, saturation: 0.92, hueRotate: -8 }],
 ]
 
 export function resolveSunlightTone(date: Date = new Date()): SunlightTone {

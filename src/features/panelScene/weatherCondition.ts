@@ -89,3 +89,45 @@ export function getTimeOfDayBand(date: Date = new Date()): TimeOfDayBand {
   if (hour >= 17 && hour < 20) return 'dusk'
   return 'night'
 }
+
+export type TimeOfDayBlend = {
+  day: number
+  dusk: number
+  night: number
+}
+
+/**
+ * Continuous opacity weights for the three backdrop variants. Weights sum
+ * to 1; the renderer paints all three stacked at these opacities so the
+ * scene gradually mixes through transition windows instead of snapping.
+ *
+ * Transition windows (2 hours each, centered on the legacy band edges):
+ *   05:00-07:00 — night → day
+ *   16:00-18:00 — day → dusk
+ *   19:00-21:00 — dusk → night
+ *
+ * Within a window, weight ramps with smoothstep so the rate-of-change
+ * tapers near both endpoints — feels like a sunrise/sunset arc rather
+ * than a linear fade.
+ */
+export function getTimeOfDayBlend(date: Date = new Date()): TimeOfDayBlend {
+  const t = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600
+
+  const dawnMix = smoothBand(t, 5, 7)         // 0 (night) → 1 (day)
+  const duskInMix = smoothBand(t, 16, 18)     // 0 (day) → 1 (dusk)
+  const duskOutMix = smoothBand(t, 19, 21)    // 0 (dusk) → 1 (night)
+
+  if (t < 5 || t >= 21) return { day: 0, dusk: 0, night: 1 }
+  if (t < 7) return { day: dawnMix, dusk: 0, night: 1 - dawnMix }
+  if (t < 16) return { day: 1, dusk: 0, night: 0 }
+  if (t < 18) return { day: 1 - duskInMix, dusk: duskInMix, night: 0 }
+  if (t < 19) return { day: 0, dusk: 1, night: 0 }
+  return { day: 0, dusk: 1 - duskOutMix, night: duskOutMix }
+}
+
+function smoothBand(t: number, start: number, end: number): number {
+  if (t <= start) return 0
+  if (t >= end) return 1
+  const x = (t - start) / (end - start)
+  return x * x * (3 - 2 * x) // smoothstep
+}
