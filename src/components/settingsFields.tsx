@@ -22,15 +22,17 @@ type BooleanField = { [K in keyof AppSettings]: AppSettings[K] extends boolean ?
 
 type ToggleFieldProps = FieldShared & {
   field: BooleanField
+  disabled?: boolean
 }
 
-export function ToggleField({ label, field, draft, setDraft }: ToggleFieldProps) {
+export function ToggleField({ label, field, disabled, draft, setDraft }: ToggleFieldProps) {
   return (
     <label className="settings-toggle">
       <span>{label}</span>
       <input
         type="checkbox"
         checked={draft[field] as boolean}
+        disabled={disabled}
         onChange={(e) => setDraft((prev) => ({ ...prev, [field]: e.target.checked }))}
       />
     </label>

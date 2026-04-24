@@ -11,6 +11,7 @@ import {
 import { RELATIONSHIP_OPTIONS } from '../../lib/relationshipTypes'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import { loadLorebookEntries, saveLorebookEntries } from '../../lib/storage/lorebooks'
+import { TextField, TextareaField } from '../settingsFields'
 import type { AppSettings, CharacterProfile } from '../../types'
 import type { TranslationKey } from '../../types/i18n'
 
@@ -205,25 +206,19 @@ export const ChatSection = memo(function ChatSection({
         </div>
       ) : null}
 
-      <label>
-        <span>{ti('settings.chat.companion_name')}</span>
-        <input
-          value={draft.companionName}
-          onChange={(event) =>
-            setDraft((prev) => ({ ...prev, companionName: event.target.value }))
-          }
-        />
-      </label>
+      <TextField
+        label={ti('settings.chat.companion_name')}
+        field="companionName"
+        draft={draft}
+        setDraft={setDraft}
+      />
 
-      <label>
-        <span>{ti('settings.chat.user_name')}</span>
-        <input
-          value={draft.userName}
-          onChange={(event) =>
-            setDraft((prev) => ({ ...prev, userName: event.target.value }))
-          }
-        />
-      </label>
+      <TextField
+        label={ti('settings.chat.user_name')}
+        field="userName"
+        draft={draft}
+        setDraft={setDraft}
+      />
 
       <div className="onboarding-relationship">
         <span className="onboarding-relationship__label">
@@ -252,16 +247,13 @@ export const ChatSection = memo(function ChatSection({
         </small>
       </div>
 
-      <label>
-        <span>{ti('settings.chat.system_prompt')}</span>
-        <textarea
-          rows={6}
-          value={draft.systemPrompt}
-          onChange={(event) =>
-            setDraft((prev) => ({ ...prev, systemPrompt: event.target.value }))
-          }
-        />
-      </label>
+      <TextareaField
+        label={ti('settings.chat.system_prompt')}
+        field="systemPrompt"
+        rows={6}
+        draft={draft}
+        setDraft={setDraft}
+      />
 
       <p className="settings-drawer__hint">
         {ti('settings.chat.system_prompt_hint')}

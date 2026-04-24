@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { MemoryPanel } from '../../features/memory/components'
 import { MEMORY_EMBEDDING_MODEL_OPTIONS, SCREEN_VLM_MODEL_OPTIONS } from '../../features/memory/constants'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
-import { parseNumberInput } from '../settingsDrawerSupport'
+import { NumberField, TextField, ToggleField } from '../settingsFields'
 import type {
   AppSettings,
   DailyMemoryEntry,
@@ -93,94 +93,50 @@ export const MemorySection = memo(function MemorySection({
         </div>
       </div>
 
-      <label className="settings-toggle">
-        <span>{ti('settings.memory.context.enable')}</span>
-        <input
-          type="checkbox"
-          checked={draft.contextAwarenessEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              contextAwarenessEnabled: event.target.checked,
-            }))
-          }
-        />
-      </label>
-
-      <label className="settings-toggle">
-        <span>{ti('settings.memory.context.clipboard')}</span>
-        <input
-          type="checkbox"
-          checked={draft.clipboardContextEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              clipboardContextEnabled: event.target.checked,
-            }))
-          }
-          disabled={!draft.contextAwarenessEnabled}
-        />
-      </label>
-
-      <label className="settings-toggle">
-        <span>{ti('settings.memory.context.active_window')}</span>
-        <input
-          type="checkbox"
-          checked={draft.activeWindowContextEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              activeWindowContextEnabled: event.target.checked,
-            }))
-          }
-          disabled={!draft.contextAwarenessEnabled}
-        />
-      </label>
-
-      <label className="settings-toggle">
-        <span>{ti('settings.memory.context.screen_ocr')}</span>
-        <input
-          type="checkbox"
-          checked={draft.screenContextEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              screenContextEnabled: event.target.checked,
-            }))
-          }
-          disabled={!draft.contextAwarenessEnabled}
-        />
-      </label>
+      <ToggleField
+        label={ti('settings.memory.context.enable')}
+        field="contextAwarenessEnabled"
+        draft={draft}
+        setDraft={setDraft}
+      />
+      <ToggleField
+        label={ti('settings.memory.context.clipboard')}
+        field="clipboardContextEnabled"
+        disabled={!draft.contextAwarenessEnabled}
+        draft={draft}
+        setDraft={setDraft}
+      />
+      <ToggleField
+        label={ti('settings.memory.context.active_window')}
+        field="activeWindowContextEnabled"
+        disabled={!draft.contextAwarenessEnabled}
+        draft={draft}
+        setDraft={setDraft}
+      />
+      <ToggleField
+        label={ti('settings.memory.context.screen_ocr')}
+        field="screenContextEnabled"
+        disabled={!draft.contextAwarenessEnabled}
+        draft={draft}
+        setDraft={setDraft}
+      />
 
       {draft.contextAwarenessEnabled && draft.screenContextEnabled ? (
         <>
-          <label>
-            <span>{ti('settings.memory.context.ocr_language')}</span>
-            <input
-              value={draft.screenOcrLanguage}
-              onChange={(event) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  screenOcrLanguage: event.target.value,
-                }))
-              }
-              placeholder="chi_sim+eng"
-            />
-          </label>
+          <TextField
+            label={ti('settings.memory.context.ocr_language')}
+            field="screenOcrLanguage"
+            placeholder="chi_sim+eng"
+            draft={draft}
+            setDraft={setDraft}
+          />
 
-          <label className="settings-toggle">
-            <span>{ti('settings.memory.context.vlm_enable')}</span>
-            <input
-              type="checkbox"
-              checked={draft.screenVlmEnabled}
-              onChange={(event) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  screenVlmEnabled: event.target.checked,
-                }))
-              }
-            />
-          </label>
+          <ToggleField
+            label={ti('settings.memory.context.vlm_enable')}
+            field="screenVlmEnabled"
+            draft={draft}
+            setDraft={setDraft}
+          />
 
           <p className="settings-drawer__hint">
             {ti('settings.memory.context.vlm_note')}
@@ -188,34 +144,22 @@ export const MemorySection = memo(function MemorySection({
 
           {draft.screenVlmEnabled ? (
             <>
-              <label>
-                <span>{ti('settings.memory.context.vlm_base_url')}</span>
-                <input
-                  value={draft.screenVlmBaseUrl}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      screenVlmBaseUrl: event.target.value,
-                    }))
-                  }
-                  placeholder="https://api.openai.com/v1"
-                />
-              </label>
+              <TextField
+                label={ti('settings.memory.context.vlm_base_url')}
+                field="screenVlmBaseUrl"
+                placeholder="https://api.openai.com/v1"
+                draft={draft}
+                setDraft={setDraft}
+              />
 
-              <label>
-                <span>{ti('settings.memory.context.vlm_api_key')}</span>
-                <input
-                  type="password"
-                  value={draft.screenVlmApiKey}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      screenVlmApiKey: event.target.value,
-                    }))
-                  }
-                  placeholder={ti('settings.memory.context.vlm_api_key_placeholder')}
-                />
-              </label>
+              <TextField
+                label={ti('settings.memory.context.vlm_api_key')}
+                field="screenVlmApiKey"
+                type="password"
+                placeholder={ti('settings.memory.context.vlm_api_key_placeholder')}
+                draft={draft}
+                setDraft={setDraft}
+              />
 
               <label>
                 <span>{ti('settings.memory.context.vlm_model_preset')}</span>
@@ -247,19 +191,13 @@ export const MemorySection = memo(function MemorySection({
                 })()}
               </p>
 
-              <label>
-                <span>{ti('settings.memory.context.vlm_custom_model')}</span>
-                <input
-                  value={draft.screenVlmModel}
-                  onChange={(event) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      screenVlmModel: event.target.value,
-                    }))
-                  }
-                  placeholder="gpt-4o-mini"
-                />
-              </label>
+              <TextField
+                label={ti('settings.memory.context.vlm_custom_model')}
+                field="screenVlmModel"
+                placeholder="gpt-4o-mini"
+                draft={draft}
+                setDraft={setDraft}
+              />
             </>
           ) : null}
         </>
@@ -325,88 +263,44 @@ export const MemorySection = memo(function MemorySection({
           : ti('settings.memory.long_term.embedding_custom_hint')}
       </p>
 
-      <label>
-        <span>{ti('settings.memory.long_term.embedding_custom_model')}</span>
-        <input
-          value={draft.memoryEmbeddingModel}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              memoryEmbeddingModel: event.target.value,
-            }))
-          }
-        />
-      </label>
+      <TextField
+        label={ti('settings.memory.long_term.embedding_custom_model')}
+        field="memoryEmbeddingModel"
+        draft={draft}
+        setDraft={setDraft}
+      />
 
       <div className="settings-grid">
-        <label>
-          <span>{ti('settings.memory.long_term.recall_long_term')}</span>
-          <input
-            type="number"
-            min="1"
-            max="8"
-            step="1"
-            value={draft.memoryLongTermRecallCount}
-            onChange={(event) =>
-              setDraft((prev) => ({
-                ...prev,
-                memoryLongTermRecallCount: parseNumberInput(event.target.value, prev.memoryLongTermRecallCount),
-              }))
-            }
-          />
-        </label>
-
-        <label>
-          <span>{ti('settings.memory.long_term.recall_diary')}</span>
-          <input
-            type="number"
-            min="1"
-            max="8"
-            step="1"
-            value={draft.memoryDailyRecallCount}
-            onChange={(event) =>
-              setDraft((prev) => ({
-                ...prev,
-                memoryDailyRecallCount: parseNumberInput(event.target.value, prev.memoryDailyRecallCount),
-              }))
-            }
-          />
-        </label>
-
-        <label>
-          <span>{ti('settings.memory.long_term.recall_semantic')}</span>
-          <input
-            type="number"
-            min="1"
-            max="8"
-            step="1"
-            value={draft.memorySemanticRecallCount}
-            onChange={(event) =>
-              setDraft((prev) => ({
-                ...prev,
-                memorySemanticRecallCount: parseNumberInput(event.target.value, prev.memorySemanticRecallCount),
-              }))
-            }
-          />
-        </label>
+        <NumberField
+          label={ti('settings.memory.long_term.recall_long_term')}
+          field="memoryLongTermRecallCount"
+          min={1} max={8} step={1}
+          draft={draft}
+          setDraft={setDraft}
+        />
+        <NumberField
+          label={ti('settings.memory.long_term.recall_diary')}
+          field="memoryDailyRecallCount"
+          min={1} max={8} step={1}
+          draft={draft}
+          setDraft={setDraft}
+        />
+        <NumberField
+          label={ti('settings.memory.long_term.recall_semantic')}
+          field="memorySemanticRecallCount"
+          min={1} max={8} step={1}
+          draft={draft}
+          setDraft={setDraft}
+        />
       </div>
 
-      <label>
-        <span>{ti('settings.memory.long_term.diary_retention')}</span>
-        <input
-          type="number"
-          min="1"
-          max="30"
-          step="1"
-          value={draft.memoryDiaryRetentionDays}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              memoryDiaryRetentionDays: parseNumberInput(event.target.value, prev.memoryDiaryRetentionDays),
-            }))
-          }
-        />
-      </label>
+      <NumberField
+        label={ti('settings.memory.long_term.diary_retention')}
+        field="memoryDiaryRetentionDays"
+        min={1} max={30} step={1}
+        draft={draft}
+        setDraft={setDraft}
+      />
 
       <p className="settings-drawer__hint">
         {ti('settings.memory.long_term.archive_note')}

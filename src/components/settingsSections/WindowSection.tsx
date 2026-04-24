@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
+import { TextField, ToggleField } from '../settingsFields'
 import type {
   AppSettings,
   PetSceneLocation,
@@ -91,19 +92,12 @@ export const WindowSection = memo(function WindowSection({
         ) : null}
       </div>
 
-      <label className="settings-toggle">
-        <span>{ti('settings.window.launch_on_startup')}</span>
-        <input
-          type="checkbox"
-          checked={draft.launchOnStartup}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              launchOnStartup: event.target.checked,
-            }))
-          }
-        />
-      </label>
+      <ToggleField
+        label={ti('settings.window.launch_on_startup')}
+        field="launchOnStartup"
+        draft={draft}
+        setDraft={setDraft}
+      />
 
       <p className="settings-drawer__hint">{ti('settings.window.launch_note')}</p>
 
@@ -192,34 +186,21 @@ export const WindowSection = memo(function WindowSection({
 
       <p className="settings-drawer__hint">{ti('settings.window.pet_time_hint')}</p>
 
-      <label className="settings-toggle">
-        <span>{ti('settings.window.ambient_weather_toggle')}</span>
-        <input
-          type="checkbox"
-          checked={draft.ambientWeatherEnabled}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              ambientWeatherEnabled: event.target.checked,
-            }))
-          }
-        />
-      </label>
+      <ToggleField
+        label={ti('settings.window.ambient_weather_toggle')}
+        field="ambientWeatherEnabled"
+        draft={draft}
+        setDraft={setDraft}
+      />
 
       {draft.ambientWeatherEnabled ? (
-        <label>
-          <span>{ti('settings.window.ambient_weather_location_label')}</span>
-          <input
-            value={draft.toolWeatherDefaultLocation}
-            placeholder={ti('settings.window.ambient_weather_location_placeholder')}
-            onChange={(event) =>
-              setDraft((prev) => ({
-                ...prev,
-                toolWeatherDefaultLocation: event.target.value,
-              }))
-            }
-          />
-        </label>
+        <TextField
+          label={ti('settings.window.ambient_weather_location_label')}
+          field="toolWeatherDefaultLocation"
+          placeholder={ti('settings.window.ambient_weather_location_placeholder')}
+          draft={draft}
+          setDraft={setDraft}
+        />
       ) : null}
 
       <p className="settings-drawer__hint">{ti('settings.window.ambient_weather_hint')}</p>
