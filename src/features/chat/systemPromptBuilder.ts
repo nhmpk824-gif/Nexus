@@ -88,6 +88,13 @@ export type AssistantReplyRequestOptions = {
    */
   milestonePromptText?: string
   /**
+   * One-shot anniversary hint (days-30 / 100 / 365). Distinct from
+   * milestonePromptText so a level transition and a time-anniversary can
+   * coexist without overwriting each other. Empty string when nothing
+   * is pending.
+   */
+  anniversaryPromptText?: string
+  /**
    * 用户作息节奏总结（来自 rhythmLearner.formatRhythmSummary）。
    * 互动次数 < 10 时该函数自动返回空字符串，避免噪声。
    */
@@ -206,6 +213,8 @@ export async function buildSystemPrompt(
   // 升级里程碑：仅在刚跨越关系等级的那一轮注入，紧贴 relationship，让模型
   // 在读到"你们现在是什么关系"之后立刻看到"这一刻刚刚发生了什么变化"。
   const milestoneSection = options.milestonePromptText ?? ''
+  // 周年里程碑：仅在跨越 30/100/365 天那一轮注入。与 milestone 并列。
+  const anniversarySection = options.anniversaryPromptText ?? ''
   // 当前情绪状态：紧贴 header 的 tone 指令，让模型先读到"她现在感觉如何"。
   const emotionSection = options.emotionPromptText ?? ''
   // 用户作息感知：紧贴 emotion，让模型自然对比 header 里的 currentDateTime
@@ -233,6 +242,7 @@ export async function buildSystemPrompt(
     narrativeSection,
     relationshipSection,
     milestoneSection,
+    anniversarySection,
     headerText,
     emotionSection,
     rhythmSection,

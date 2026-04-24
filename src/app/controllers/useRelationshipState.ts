@@ -17,6 +17,10 @@ import {
   createDefaultSubDimensions,
   decaySubDimensions,
 } from '../../features/autonomy/relationshipDimensions.ts'
+import {
+  detectAnniversaryMilestones,
+  markMilestoneFired,
+} from '../../features/autonomy/milestones.ts'
 import { captureRelationshipSample } from '../../features/autonomy/stateTimeline.ts'
 import {
   AUTONOMY_RELATIONSHIP_STORAGE_KEY,
@@ -87,6 +91,24 @@ export function useRelationshipState() {
     return formatMilestoneForPrompt(milestone)
   }, [])
 
+  /**
+   * Anniversary milestone (days-30/100/365) — checked at chat-turn time
+   * rather than buffered in a ref because the threshold is a state-derived
+   * predicate (totalDaysInteracted ≥ N) that any caller can recompute
+   * deterministically. When fired we persist the key on the state so it
+   * doesn't fire again next turn.
+   */
+  const consumeAnniversaryPromptText = useCallback((uiLanguage: string) => {
+    const trigger = detectAnniversaryMilestones(relationshipRef.current, uiLanguage)
+    if (!trigger) return ''
+    const next = markMilestoneFired(relationshipRef.current, trigger.key)
+    if (next !== relationshipRef.current) {
+      relationshipRef.current = next
+      writeJson(AUTONOMY_RELATIONSHIP_STORAGE_KEY, next)
+    }
+    return trigger.promptHint
+  }, [])
+
   const getRelationshipPrompt = useCallback(() => {
     const state = relationshipRef.current
     const base = formatRelationshipForPrompt(state)
@@ -106,6 +128,7 @@ export function useRelationshipState() {
     decayOnTick,
     markInteraction,
     consumePendingMilestoneText,
+    consumeAnniversaryPromptText,
     processMessage,
     getRelationshipPrompt,
     updateSessionContext,

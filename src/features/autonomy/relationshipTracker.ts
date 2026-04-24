@@ -35,6 +35,13 @@ export interface RelationshipState {
    * Optional for backward compatibility with pre-v0.3 stored state.
    */
   subDimensions?: SubDimensions
+  /**
+   * Anniversary-style milestones already fired (one-shot keys like
+   * `days-30`, `days-100`, `days-365`). See features/autonomy/milestones.ts
+   * for the detector. Absent on pre-existing state — treated as empty,
+   * so first crossing post-upgrade fires correctly.
+   */
+  firedMilestoneKeys?: string[]
 }
 
 export function createDefaultRelationshipState(): RelationshipState {

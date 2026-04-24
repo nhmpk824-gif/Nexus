@@ -105,6 +105,13 @@ export type UseChatContext = {
    * is pending; the call also clears any pending milestone.
    */
   consumeMilestonePromptText?: () => string
+  /**
+   * Consume a one-shot anniversary instruction (days-30/100/365). Caller
+   * supplies the active uiLanguage so the formatter picks the right copy.
+   * Returns empty string when no anniversary is pending; the call also
+   * marks the milestone fired so it doesn't repeat.
+   */
+  consumeAnniversaryPromptText?: (uiLanguage: string) => string
   reminderTasksRef: RefObject<ReminderTask[]>
   addReminderTask: (input: {
     title: string

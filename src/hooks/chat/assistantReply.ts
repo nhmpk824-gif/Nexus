@@ -130,6 +130,7 @@ type AssistantReplyRunnerDependencies = {
     | 'busEmit'
     | 'clearPendingVoiceRestart'
     | 'consumeMilestonePromptText'
+    | 'consumeAnniversaryPromptText'
     | 'getEmotionPromptText'
     | 'getEmotionSnapshot'
     | 'getRelationshipPromptText'
@@ -393,6 +394,7 @@ export function createAssistantReplyRunner(dependencies: AssistantReplyRunnerDep
           relationshipPromptText: dependencies.ctx.getRelationshipPromptText?.(),
           rhythmPromptText: dependencies.ctx.getRhythmPromptText?.(),
           milestonePromptText: dependencies.ctx.consumeMilestonePromptText?.(),
+          anniversaryPromptText: dependencies.ctx.consumeAnniversaryPromptText?.(currentSettings.uiLanguage),
           pendingCallbacks: pendingCallbackHints,
           // First-impression hint — fires only on the upcoming 2nd or 3rd
           // assistant reply ever. Counts existing assistant messages in
