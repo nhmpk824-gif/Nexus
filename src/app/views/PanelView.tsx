@@ -330,12 +330,6 @@ export function PanelView({
 
             <div className="companion-chat__toolbar">
               <div className="companion-chat__toolbar-left">
-                <span
-                  className={`connection-dot ${runtimeSnapshot.petOnline || runtimeSnapshot.panelOnline ? 'is-online' : ''}`}
-                  title={liveStatusLine || companionStatusChipLabel}
-                />
-              </div>
-              <div className="panel-window__header-actions panel-window__header-actions--hero">
                 {ambientWeather ? (
                   <span
                     className="ambient-weather-chip"
@@ -352,6 +346,8 @@ export function PanelView({
                     <span className="ambient-weather-chip__place">{ambientWeather.resolvedName}</span>
                   </span>
                 ) : null}
+              </div>
+              <div className="panel-window__header-actions panel-window__header-actions--hero">
                 <button className="ghost-button" type="button" onClick={openSettingsPanel}>
                   {ti('panel.button.settings')}
                 </button>
