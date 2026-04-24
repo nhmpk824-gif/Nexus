@@ -330,8 +330,10 @@ export function PanelView({
 
             <div className="companion-chat__toolbar">
               <div className="companion-chat__toolbar-left">
-                <span className={`connection-dot ${runtimeSnapshot.petOnline || runtimeSnapshot.panelOnline ? 'is-online' : ''}`} title={companionStatusChipLabel} />
-                <span className="companion-chat__toolbar-status">{liveStatusLine || companionStatusChipLabel}</span>
+                <span
+                  className={`connection-dot ${runtimeSnapshot.petOnline || runtimeSnapshot.panelOnline ? 'is-online' : ''}`}
+                  title={liveStatusLine || companionStatusChipLabel}
+                />
               </div>
               <div className="panel-window__header-actions panel-window__header-actions--hero">
                 {ambientWeather ? (
