@@ -970,6 +970,8 @@ export const koMessages: TranslationDictionary = {
   'settings.chat.delete_profile': 'Delete this profile',
   'settings.chat.companion_name': 'Companion name',
   'settings.chat.user_name': 'Your name',
+  'settings.chat.relationship_type_label': '관계 유형',
+  'settings.chat.relationship_type_hint': '부드러운 방향만 잡아 말투와 거리감이 달라집니다.',
   'settings.chat.system_prompt': 'System prompt',
   'settings.chat.system_prompt_hint': 'Define the character\'s tone and relationship.',
   'settings.chat.live2d_model': 'Live2D model',

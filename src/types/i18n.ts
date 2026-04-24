@@ -920,6 +920,8 @@ export type TranslationKey =
   | 'settings.chat.delete_profile'
   | 'settings.chat.companion_name'
   | 'settings.chat.user_name'
+  | 'settings.chat.relationship_type_label'
+  | 'settings.chat.relationship_type_hint'
   | 'settings.chat.system_prompt'
   | 'settings.chat.system_prompt_hint'
   | 'settings.chat.live2d_model'

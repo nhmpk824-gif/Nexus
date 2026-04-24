@@ -970,6 +970,8 @@ export const zhTWMessages: TranslationDictionary = {
   'settings.chat.delete_profile': '刪除此角色',
   'settings.chat.companion_name': '角色名字',
   'settings.chat.user_name': '你的名字',
+  'settings.chat.relationship_type_label': '關係類型',
+  'settings.chat.relationship_type_hint': '只是一個柔和的偏好，影響她的語氣與主動性。',
   'settings.chat.system_prompt': '系統提示詞',
   'settings.chat.system_prompt_hint': '定義角色語氣和關係感。',
   'settings.chat.live2d_model': '角色模型',

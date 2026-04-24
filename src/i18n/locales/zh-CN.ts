@@ -847,6 +847,8 @@ export const zhCNMessages: TranslationDictionary = {
   'settings.chat.delete_profile': '删除此角色',
   'settings.chat.companion_name': '角色名字',
   'settings.chat.user_name': '你的名字',
+  'settings.chat.relationship_type_label': '关系类型',
+  'settings.chat.relationship_type_hint': '只是一个柔和的偏置，影响她的语气和主动性。',
   'settings.chat.system_prompt': '系统提示词',
   'settings.chat.system_prompt_hint': '定义角色语气和关系感。',
   'settings.chat.live2d_model': '角色模型',

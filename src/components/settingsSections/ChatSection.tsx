@@ -10,8 +10,18 @@ import {
 } from '../../features/character/profiles'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import { loadLorebookEntries, saveLorebookEntries } from '../../lib/storage/lorebooks'
-import type { AppSettings, CharacterProfile } from '../../types'
+import type { AppSettings, CharacterProfile, CompanionRelationshipType } from '../../types'
 import type { TranslationKey } from '../../types/i18n'
+
+const RELATIONSHIP_OPTIONS: ReadonlyArray<{
+  value: CompanionRelationshipType
+  labelKey: TranslationKey
+}> = [
+  { value: 'open_ended', labelKey: 'onboarding.companion.relationship_open_ended' },
+  { value: 'friend', labelKey: 'onboarding.companion.relationship_friend' },
+  { value: 'mentor', labelKey: 'onboarding.companion.relationship_mentor' },
+  { value: 'quiet_companion', labelKey: 'onboarding.companion.relationship_quiet_companion' },
+]
 
 type StatusMessage = {
   ok: boolean
@@ -223,6 +233,33 @@ export const ChatSection = memo(function ChatSection({
           }
         />
       </label>
+
+      <div className="onboarding-relationship">
+        <span className="onboarding-relationship__label">
+          {ti('settings.chat.relationship_type_label')}
+        </span>
+        <div className="onboarding-relationship__options">
+          {RELATIONSHIP_OPTIONS.map((opt) => {
+            const isActive = draft.companionRelationshipType === opt.value
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                className={`onboarding-relationship__chip${isActive ? ' is-active' : ''}`}
+                onClick={() => setDraft((prev) => ({
+                  ...prev,
+                  companionRelationshipType: opt.value,
+                }))}
+              >
+                {ti(opt.labelKey)}
+              </button>
+            )
+          })}
+        </div>
+        <small className="onboarding-relationship__hint">
+          {ti('settings.chat.relationship_type_hint')}
+        </small>
+      </div>
 
       <label>
         <span>{ti('settings.chat.system_prompt')}</span>
