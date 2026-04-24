@@ -14,6 +14,7 @@ import { ActivePlanStrip, MessageBubble, SubagentTaskStrip } from '../../compone
 import { resolveCharacterPreset } from '../../features/character/presets'
 import { useAmbientWeather } from '../../hooks/useAmbientWeather'
 import { shorten } from '../../lib'
+import { modelSupportsVision } from '../../lib/modelCapabilities'
 import { pickTranslatedUiText } from '../../lib/uiLanguage'
 import type { UseAppControllerResult } from '../controllers/useAppController'
 
@@ -55,6 +56,7 @@ export function PanelView({
   const characterPreset = useMemo(() => resolveCharacterPreset(), [])
   const timeGreeting = getTimeGreeting(ti)
   const timeGreetingEmoji = getTimeGreetingEmoji()
+  const visionEnabled = modelSupportsVision(settings.model)
 
   const ambientWeather = useAmbientWeather(
     settings.toolWeatherDefaultLocation,
@@ -225,6 +227,7 @@ export function PanelView({
   }
 
   function handleComposerPaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+    if (!visionEnabled) return
     const items = event.clipboardData?.items
     if (!items || !items.length) return
     for (const item of items) {
@@ -240,12 +243,14 @@ export function PanelView({
   }
 
   function handleComposerDragOver(event: ReactDragEvent<HTMLTextAreaElement>) {
+    if (!visionEnabled) return
     if (event.dataTransfer?.types?.includes('Files')) {
       event.preventDefault()
     }
   }
 
   function handleComposerDrop(event: ReactDragEvent<HTMLTextAreaElement>) {
+    if (!visionEnabled) return
     const files = event.dataTransfer?.files
     if (!files || !files.length) return
     const file = files[0]
@@ -292,6 +297,12 @@ export function PanelView({
 
     return () => window.cancelAnimationFrame(frameId)
   }, [visibleMessages])
+
+  useEffect(() => {
+    if (!visionEnabled && chat.pendingImage) {
+      chat.setPendingImage(null)
+    }
+  }, [visionEnabled, chat])
 
   return (
     <div className={`desktop-pet-root desktop-pet-root--panel ${characterPreset.themeClassName} ${panelCollapsed ? 'desktop-pet-root--panel-collapsed' : ''}`}>
@@ -420,7 +431,7 @@ export function PanelView({
               {chat.error ? <div className="error-banner">{chat.error}</div> : null}
 
               <div className="composer composer--minimal companion-chat__composer">
-                {chat.pendingImage ? (
+                {visionEnabled && chat.pendingImage ? (
                   <div className="composer__attachments">
                     <div className="composer__attachment-chip">
                       <img
@@ -453,13 +464,15 @@ export function PanelView({
                   onDrop={handleComposerDrop}
                 />
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  style={{ display: 'none' }}
-                  onChange={handleFilePickerChange}
-                />
+                {visionEnabled ? (
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    style={{ display: 'none' }}
+                    onChange={handleFilePickerChange}
+                  />
+                ) : null}
 
                 <div className="companion-chat__composer-meta">
                   <div className="composer__hint">
@@ -468,14 +481,16 @@ export function PanelView({
                 </div>
 
                 <div className="composer__actions">
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={openFilePicker}
-                    title={ti('panel.composer.attach_title')}
-                  >
-                    {ti('panel.composer.image_button')}
-                  </button>
+                  {visionEnabled ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={openFilePicker}
+                      title={ti('panel.composer.attach_title')}
+                    >
+                      {ti('panel.composer.image_button')}
+                    </button>
+                  ) : null}
                   <button
                     className="ghost-button"
                     type="button"
