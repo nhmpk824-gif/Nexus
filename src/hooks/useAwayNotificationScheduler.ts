@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { decideAwayNotification } from '../features/proactive/awayScheduler'
-import { pickAwayNotificationCopy } from '../features/proactive/awayNotificationCopy'
+import { decideAwayNotification } from '../features/proactive/awayScheduler.ts'
+import { pickAwayNotificationCopy } from '../features/proactive/awayNotificationCopy.ts'
 import {
   PROACTIVE_AWAY_LAST_FIRED_STORAGE_KEY,
   readJson,

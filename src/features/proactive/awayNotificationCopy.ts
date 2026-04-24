@@ -4,7 +4,7 @@
 // fires don't read the same line twice in a row.
 
 import type { CompanionRelationshipType, UiLanguage } from '../../types'
-import { normalizeUiLanguage } from '../../lib/uiLanguage'
+import { normalizeUiLanguage } from '../../lib/uiLanguage.ts'
 
 type Template = {
   title: string
