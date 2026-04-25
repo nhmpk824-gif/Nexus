@@ -23,6 +23,7 @@ import {
   parseVolcengineSpeechCredentials,
   resolveSpeechOutputBaseUrl,
 } from '../services/ttsService.js'
+import { checkChatBaseUrlSafety } from '../services/urlSafety.js'
 import {
   runSpeechInputConnectionSmokeTest,
   runSpeechOutputConnectionSmokeTest,
@@ -35,6 +36,10 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
     expectString(payload?.baseUrl, 'payload.baseUrl')
     assertArray(payload?.messages, 'payload.messages')
     const baseUrl = normalizeBaseUrl(payload.baseUrl)
+    const safety = checkChatBaseUrlSafety(baseUrl)
+    if (!safety.ok) {
+      throw new Error(`API Base URL 被拒绝（${safety.reason}）。请使用合法的 https/http 模型接口地址。`)
+    }
     const providerId = normalizeChatProviderId(payload.providerId, baseUrl)
     const requestSpec = buildChatRequest(payload, { stream: false })
 
@@ -127,6 +132,10 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
     assertArray(payload?.messages, 'payload.messages')
     const { requestId, ...chatPayload } = payload
     const baseUrl = normalizeBaseUrl(chatPayload.baseUrl)
+    const safety = checkChatBaseUrlSafety(baseUrl)
+    if (!safety.ok) {
+      throw new Error(`API Base URL 被拒绝（${safety.reason}）。请使用合法的 https/http 模型接口地址。`)
+    }
     const providerId = normalizeChatProviderId(chatPayload.providerId, baseUrl)
     const requestSpec = buildChatRequest(chatPayload, { stream: true })
 
@@ -354,6 +363,14 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
       }
     }
 
+    const safety = checkChatBaseUrlSafety(baseUrl)
+    if (!safety.ok) {
+      return {
+        ok: false,
+        message: `API Base URL 被拒绝（${safety.reason}）。`,
+      }
+    }
+
     const requestSpec = buildChatConnectionTestRequest({
       providerId,
       baseUrl,
@@ -425,6 +442,14 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
       return {
         ok: false,
         message: '请先填写 API Base URL。',
+      }
+    }
+
+    const safety = checkChatBaseUrlSafety(baseUrl)
+    if (!safety.ok) {
+      return {
+        ok: false,
+        message: `API Base URL 被拒绝（${safety.reason}）。`,
       }
     }
 
