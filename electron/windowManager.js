@@ -948,10 +948,19 @@ function formatLocalServiceProbeError(error, host, port, timeoutMs) {
   return `${host}:${port} 连接失败：${error instanceof Error ? error.message : '未知错误'}`
 }
 
+// Host allowlist for local-service probes. The doctor panel's only legit use
+// case is "is Ollama / LM Studio / a local provider running on this loopback
+// port?", so anything outside loopback is renderer-driven LAN port scanning
+// and gets pinned back to 127.0.0.1 before any TCP connect happens. Without
+// this, a hostile renderer (XSS / plugin) could turn this IPC into a SSRF
+// timing oracle against the user's LAN.
+const LOCAL_PROBE_HOST_ALLOWLIST = new Set(['127.0.0.1', 'localhost', '::1'])
+
 function normalizeLocalServiceProbeTarget(target = {}) {
-  const host = typeof target.host === 'string' && target.host.trim()
-    ? target.host.trim()
+  const rawHost = typeof target.host === 'string' && target.host.trim()
+    ? target.host.trim().toLowerCase()
     : '127.0.0.1'
+  const host = LOCAL_PROBE_HOST_ALLOWLIST.has(rawHost) ? rawHost : '127.0.0.1'
   const parsedPort = Number(target.port)
   const port = Number.isFinite(parsedPort) ? Math.trunc(parsedPort) : NaN
   const timeoutMs = Math.min(

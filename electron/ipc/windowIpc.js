@@ -223,7 +223,11 @@ export function register() {
       return []
     }
 
-    return Promise.all(payload.map((target) => probeLocalServiceTarget(target)))
+    // Cap input size — legit doctor panel probes ≤8 ports; anything larger
+    // looks like a port-scan loop. Combined with the host allowlist in
+    // normalizeLocalServiceProbeTarget, this closes the H8 SSRF vector.
+    const targets = payload.slice(0, 16)
+    return Promise.all(targets.map((target) => probeLocalServiceTarget(target)))
   })
 
   ipcMain.handle('integrations:inspect', async (event, payload) => {
