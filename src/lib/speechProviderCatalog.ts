@@ -63,6 +63,7 @@ type SpeechInputProtocol =
   | 'elevenlabs'
   | 'volcengine'
   | 'tencent'
+  | 'xai'
 
 export type SpeechInputProviderEntry = {
   id: string
@@ -115,6 +116,19 @@ export const SPEECH_INPUT_PROVIDERS: SpeechInputProviderEntry[] = [
     hidden: false,
     modelOptions: [
       { value: 'bigmodel', label: 'provider.stt.volcengine-stt.model.bigmodel.label' },
+    ],
+  },
+  {
+    id: 'grok-stt',
+    label: 'provider.stt.grok-stt.label',
+    baseUrl: 'https://api.x.ai/v1',
+    defaultModel: 'grok-stt',
+    notes: 'provider.stt.grok-stt.notes',
+    protocol: 'xai',
+    kind: 'remote',
+    hidden: false,
+    modelOptions: [
+      { value: 'grok-stt', label: 'provider.stt.grok-stt.model.grok-stt.label' },
     ],
   },
   {
@@ -213,6 +227,7 @@ type SpeechOutputProtocol =
   | 'elevenlabs'
   | 'edge-tts'
   | 'local-vits'
+  | 'xai'
 
 export type SpeechOutputProviderEntry = {
   id: string
@@ -231,6 +246,14 @@ export type SpeechOutputProviderEntry = {
   styleOptions: SpeechStyleOption[]
   adjustmentSupport: SpeechOutputAdjustmentSupport
 }
+
+const GROK_TTS_VOICE_OPTIONS: SpeechVoiceOption[] = [
+  { id: 'eve', label: 'provider.tts.voice.grok.eve.label', description: 'provider.tts.voice.grok.eve.description' },
+  { id: 'ara', label: 'provider.tts.voice.grok.ara.label', description: 'provider.tts.voice.grok.ara.description' },
+  { id: 'leo', label: 'provider.tts.voice.grok.leo.label', description: 'provider.tts.voice.grok.leo.description' },
+  { id: 'rex', label: 'provider.tts.voice.grok.rex.label', description: 'provider.tts.voice.grok.rex.description' },
+  { id: 'sal', label: 'provider.tts.voice.grok.sal.label', description: 'provider.tts.voice.grok.sal.description' },
+]
 
 const OPENAI_TTS_VOICE_OPTIONS: SpeechVoiceOption[] = [
   { id: 'alloy', label: 'provider.tts.voice.openai.alloy.label', description: 'provider.tts.voice.openai.alloy.description' },
@@ -301,6 +324,25 @@ function buildVolcengineVoiceOptions(): SpeechVoiceOption[] {
 }
 
 export const SPEECH_OUTPUT_PROVIDERS: SpeechOutputProviderEntry[] = [
+  {
+    id: 'grok-tts',
+    label: 'provider.tts.grok-tts.label',
+    baseUrl: 'https://api.x.ai/v1',
+    defaultModel: 'grok-tts',
+    defaultVoice: 'eve',
+    notes: 'provider.tts.grok-tts.notes',
+    protocol: 'xai',
+    kind: 'remote',
+    hidden: false,
+    supportsStreaming: true,
+    supportsCustomVoiceId: true,
+    modelOptions: [
+      { value: 'grok-tts', label: 'provider.tts.grok-tts.model.grok-tts.label' },
+    ],
+    fallbackVoiceOptions: GROK_TTS_VOICE_OPTIONS,
+    styleOptions: [],
+    adjustmentSupport: { rate: true, pitch: false, volume: false, note: 'provider.tts.grok-tts.adjustment.note' },
+  },
   {
     id: 'openai-tts',
     label: 'provider.tts.openai-tts.label',

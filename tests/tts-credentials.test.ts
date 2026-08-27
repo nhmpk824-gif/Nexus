@@ -11,6 +11,7 @@ test('cloud TTS providers fail fast when API key is missing', () => {
   assert.match(getSpeechOutputCredentialError('dashscope-tts', '  '), /百炼/)
   assert.match(getSpeechOutputCredentialError('elevenlabs-tts', ''), /ElevenLabs/)
   assert.match(getSpeechOutputCredentialError('openai-tts', ''), /OpenAI/)
+  assert.match(getSpeechOutputCredentialError('grok-tts', ''), /Grok/)
   assert.throws(
     () => assertSpeechOutputCredentials('minimax-tts', ''),
     /MiniMax 语音合成请先填写 API Key/,

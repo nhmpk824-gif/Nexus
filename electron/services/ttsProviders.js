@@ -11,6 +11,8 @@ const SPEECH_PROVIDER_IDS = Object.freeze({
   customOpenaiSTT:'custom-openai-stt',
   openaiTTS:      'openai-tts',
   customOpenaiTTS:'custom-openai-tts',
+  grokSTT:        'grok-stt',
+  grokTTS:        'grok-tts',
 })
 
 export const isElevenLabsProvider             = (id) => String(id ?? '').startsWith('elevenlabs')
@@ -29,6 +31,8 @@ const OPENAI_COMPATIBLE_STT_IDS = new Set([
 ])
 export const isOpenAiCompatibleSpeechInputProvider = (id) => OPENAI_COMPATIBLE_STT_IDS.has(id)
 export const isZhipuSpeechInputProvider = (id) => id === SPEECH_PROVIDER_IDS.zhipuSTT
+export const isXaiSpeechInputProvider = (id) => id === SPEECH_PROVIDER_IDS.grokSTT
+export const isXaiSpeechOutputProvider = (id) => id === SPEECH_PROVIDER_IDS.grokTTS
 
 const OPENAI_COMPATIBLE_TTS_IDS = new Set([
   SPEECH_PROVIDER_IDS.openaiTTS,
@@ -100,6 +104,7 @@ export function getSpeechOutputCredentialError(providerId, apiKey) {
     if (isMiniMaxSpeechOutputProvider(providerId)) return 'MiniMax 语音合成请先填写 API Key。'
     if (isDashScopeSpeechOutputProvider(providerId)) return '百炼语音合成请先填写 API Key。'
     if (isElevenLabsProvider(providerId)) return 'ElevenLabs 语音合成请先填写 API Key。'
+    if (isXaiSpeechOutputProvider(providerId)) return 'Grok 语音合成请先填写 API Key。'
     if (isOpenAiCompatibleSpeechOutputProvider(providerId)) return 'OpenAI 语音合成请先填写 API Key。'
   }
 
