@@ -20,7 +20,7 @@ import {
   readJson,
   writeJson,
 } from '../../lib/storage/core.ts'
-import { isValidIsoTimestamp } from '../../lib/localDate.ts'
+import { isValidIsoTimestamp, localDayKey } from '../../lib/localDate.ts'
 
 type FutureCapsuleStatus = 'pending' | 'delivered'
 
@@ -133,7 +133,7 @@ export function enqueueFutureCapsule(input: EnqueueFutureCapsuleInput): FutureCa
 
   // Reject capsules scheduled in the past — there's nothing to deliver.
   // Today's date is allowed; the scheduler will pick it up next tick.
-  const todayLocal = formatLocalDate(new Date())
+  const todayLocal = localDayKey(Date.now())
   if (input.scheduledFor < todayLocal) return null
 
   const capsule: FutureCapsuleRecord = {
@@ -149,7 +149,7 @@ export function enqueueFutureCapsule(input: EnqueueFutureCapsuleInput): FutureCa
 }
 
 export function findDueCapsule(now: Date = new Date()): FutureCapsuleRecord | null {
-  const today = formatLocalDate(now)
+  const today = localDayKey(now.getTime())
   return loadFutureCapsules().find(
     (c) => c.status === 'pending' && c.scheduledFor <= today,
   ) ?? null
@@ -169,9 +169,4 @@ export function markDelivered(id: string, now: Date = new Date()): FutureCapsule
   return updated
 }
 
-function formatLocalDate(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
+

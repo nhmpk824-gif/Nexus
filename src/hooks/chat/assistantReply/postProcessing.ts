@@ -179,6 +179,9 @@ export async function postProcessAssistantReply(
       source,
       turnPresent: Boolean(turnId),
     })
+    if (streamingTtsController) {
+      try { streamingTtsController.abort() } catch { /* already torn down */ }
+    }
     return false
   }
   const assistantSpeechOutput = assistantPerformance.spokenContent || assistantMessageContent
@@ -354,17 +357,9 @@ export async function postProcessAssistantReply(
       })
     }
   } else if (handledByStreamingTts) {
-    // Streaming TTS handles playback via its own onEnd callback.
-    // But if we timed out waiting, the callback may not have fired yet —
-    // ensure voice state recovers so the user can keep talking.
-    if (ttsWaitTimedOut && shouldResumeContinuousVoice) {
-      // Bus drives voiceState → 'idle' + restart_voice effect
-      dependencies.ctx.busEmit({
-        type: 'tts:completed',
-        speechGeneration: 0,
-        shouldResumeContinuousVoice: true,
-      })
-    }
+    // Streaming TTS recovers voice via its own onEnd. Do not emit
+    // tts:completed on the 12s wait timeout — that reopened the mic
+    // while playback was still running.
   } else if (
     currentSettings.speechOutputEnabled
     && assistantSpeechOutput

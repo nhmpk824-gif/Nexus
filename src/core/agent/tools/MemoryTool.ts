@@ -1,3 +1,5 @@
+import type { CoreTime } from '../../time.ts'
+import { systemTime } from '../../time.ts'
 
 export type MemoryScope = 'global' | 'conversation' | 'user'
 
@@ -24,29 +26,45 @@ type MemoryBackend = {
   list(scope: MemoryScope, ownerId: string): Promise<MemoryEntry[]>
 }
 
+function cloneEntry(entry: MemoryEntry): MemoryEntry {
+  return {
+    ...entry,
+    ...(entry.tags ? { tags: [...entry.tags] } : {}),
+  }
+}
+
+/**
+ * Process-local note store used by `/note` slash commands.
+ * Not the long-term memory feature; this is the core-runtime scratch pad.
+ */
 export class InMemoryMemoryBackend implements MemoryBackend {
   private readonly entries = new Map<string, MemoryEntry>()
+  private readonly time: CoreTime
+
+  constructor(options?: { time?: CoreTime }) {
+    this.time = options?.time ?? systemTime()
+  }
 
   async write(
     entry: Omit<MemoryEntry, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<MemoryEntry> {
-    const now = Date.now()
+    const now = this.time.now()
     const id = composeKey(entry.scope, entry.ownerId, entry.key)
     const existing = this.entries.get(id)
     const stored: MemoryEntry = existing
-      ? { ...existing, value: entry.value, tags: entry.tags, updatedAt: now }
+      ? { ...existing, value: entry.value, tags: entry.tags ? [...entry.tags] : undefined, updatedAt: now }
       : {
           id,
           scope: entry.scope,
           ownerId: entry.ownerId,
           key: entry.key,
           value: entry.value,
-          tags: entry.tags,
+          tags: entry.tags ? [...entry.tags] : undefined,
           createdAt: now,
           updatedAt: now,
         }
     this.entries.set(id, stored)
-    return stored
+    return cloneEntry(stored)
   }
 
   async read(
@@ -54,7 +72,8 @@ export class InMemoryMemoryBackend implements MemoryBackend {
     ownerId: string,
     key: string,
   ): Promise<MemoryEntry | undefined> {
-    return this.entries.get(composeKey(scope, ownerId, key))
+    const entry = this.entries.get(composeKey(scope, ownerId, key))
+    return entry ? cloneEntry(entry) : undefined
   }
 
   async search(
@@ -72,7 +91,8 @@ export class InMemoryMemoryBackend implements MemoryBackend {
       )
     })
     all.sort((a, b) => b.updatedAt - a.updatedAt)
-    return options?.limit ? all.slice(0, options.limit) : all
+    const sliced = options?.limit ? all.slice(0, options.limit) : all
+    return sliced.map(cloneEntry)
   }
 
   async delete(scope: MemoryScope, ownerId: string, key: string): Promise<boolean> {
@@ -83,6 +103,7 @@ export class InMemoryMemoryBackend implements MemoryBackend {
     return Array.from(this.entries.values())
       .filter((e) => e.scope === scope && e.ownerId === ownerId)
       .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map(cloneEntry)
   }
 }
 

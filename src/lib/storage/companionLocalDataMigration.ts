@@ -14,6 +14,7 @@ import {
   USER_AFFECT_HISTORY_STORAGE_KEY,
 } from './core.ts'
 import type { CompanionLocalDataStorageKey } from './core.ts'
+import { nowIso } from '../localDate.ts'
 
 export const COMPANION_LOCAL_DATA_AUTHORITY_CHANGED_EVENT = 'nexus:companion-local-data-authority-changed'
 const COMPANION_MIGRATION_PACKAGE_SCHEMA_VERSION = 1 as const
@@ -124,7 +125,7 @@ export function buildCompanionLocalDataMigrationPackage(now = new Date()): Compa
   const taskKeysPresent = tasks.filter((dataset) => dataset.value != null).map((dataset) => dataset.storageKey)
   return {
     schemaVersion: COMPANION_MIGRATION_PACKAGE_SCHEMA_VERSION,
-    createdAt: now instanceof Date ? now.toISOString() : new Date(now).toISOString(),
+    createdAt: nowIso(now),
     source: { relationshipKeysPresent, taskKeysPresent, invalidKeys },
     relationship,
     tasks,

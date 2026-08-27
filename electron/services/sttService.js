@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 
+import { SPEECH_IPC_ERROR_CODES } from '../../shared/speechErrorCodes.js'
 import { performNetworkRequest, readJsonSafe, getVolcengineStatus, buildMultipartBody, normalizeLanguageCode } from '../net.js'
-import { isVolcengineSpeechInputProvider, isOpenAiCompatibleSpeechInputProvider, parseVolcengineSpeechCredentials, buildAuthorizationHeaders, createSilentWavBase64, synthesizeRemoteTts } from './ttsService.js'
+import { isVolcengineSpeechInputProvider, isOpenAiCompatibleSpeechInputProvider, isXaiSpeechInputProvider, parseVolcengineSpeechCredentials, buildAuthorizationHeaders, buildXaiSttMultipartParts, createSilentWavBase64, synthesizeRemoteTts } from './ttsService.js'
 import {
   SPEECH_CONNECTION_MESSAGE,
   buildSpeechConnectionEvidence,
@@ -68,16 +69,28 @@ async function runSpeechInputConnectionSmokeTest(payload, baseUrl) {
       'X-Api-Request-Id': randomUUID(),
       'X-Api-Sequence': '-1',
     }
-  } else if (payload.providerId === 'elevenlabs-stt' || isOpenAiCompatibleSpeechInputProvider(payload.providerId)) {
-    const multipartParts = [
-      {
-        type: 'file',
-        name: 'file',
-        data: Buffer.from(testAudioBase64, 'base64'),
-        fileName: 'nexus-connection-test.wav',
-        mimeType: 'audio/wav',
-      },
-    ]
+  } else if (
+    payload.providerId === 'elevenlabs-stt'
+    || isOpenAiCompatibleSpeechInputProvider(payload.providerId)
+    || isXaiSpeechInputProvider(payload.providerId)
+  ) {
+    const testAudioBuffer = Buffer.from(testAudioBase64, 'base64')
+    const multipartParts = isXaiSpeechInputProvider(payload.providerId)
+      ? buildXaiSttMultipartParts({
+          audioBuffer: testAudioBuffer,
+          fileName: 'nexus-connection-test.wav',
+          mimeType: 'audio/wav',
+          language: payload.language,
+        })
+      : [
+          {
+            type: 'file',
+            name: 'file',
+            data: testAudioBuffer,
+            fileName: 'nexus-connection-test.wav',
+            mimeType: 'audio/wav',
+          },
+        ]
 
     if (payload.providerId === 'elevenlabs-stt') {
       endpoint = `${baseUrl}/speech-to-text`
@@ -95,6 +108,8 @@ async function runSpeechInputConnectionSmokeTest(payload, baseUrl) {
           value: languageCode,
         })
       }
+    } else if (isXaiSpeechInputProvider(payload.providerId)) {
+      endpoint = `${baseUrl}/stt`
     } else {
       endpoint = `${baseUrl}/audio/transcriptions`
       multipartParts.push({
@@ -134,7 +149,7 @@ async function runSpeechInputConnectionSmokeTest(payload, baseUrl) {
     headers,
     body,
     timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
-    timeoutMessage: '连接测试等了好久，看看地址和网络对不对？',
+    timeoutMessage: SPEECH_IPC_ERROR_CODES.STT_TIMEOUT,
   })
   const data = await readJsonSafe(response)
   const observed = extractObservedSpeechInputIdentity(data)

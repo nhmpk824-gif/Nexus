@@ -5,6 +5,7 @@ import {
   isSameLocalDay,
   isSameLocalWeek,
   localDayKey,
+  nowIso,
   startOfLocalSunday,
 } from '../src/lib/localDate.ts'
 
@@ -53,6 +54,13 @@ test('isSameLocalWeek: Sat + next Sun cross weekly boundary', () => {
   const sat = new Date('2026-04-25T22:00:00').getTime()
   const nextSun = new Date('2026-04-26T01:00:00').getTime()
   assert.equal(isSameLocalWeek(sat, nextSun), false)
+})
+
+test('nowIso re-exports the shared ISO helper', () => {
+  const frozen = new Date('2026-08-27T04:30:00.000Z')
+  assert.equal(nowIso(frozen), '2026-08-27T04:30:00.000Z')
+  assert.equal(nowIso(frozen.getTime()), '2026-08-27T04:30:00.000Z')
+  assert.match(nowIso(), /^\d{4}-\d{2}-\d{2}T/)
 })
 
 test('isSameLocalWeek: same Sunday twice', () => {

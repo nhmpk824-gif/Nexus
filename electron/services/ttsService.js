@@ -1,3 +1,4 @@
+import { SPEECH_IPC_ERROR_CODES } from '../../shared/speechErrorCodes.js'
 import {
   performNetworkRequestWithRetry,
   readJsonSafe,
@@ -17,6 +18,8 @@ import {
   isEdgeTtsSpeechOutputProvider,
   isOpenAiCompatibleSpeechInputProvider,
   isZhipuSpeechInputProvider,
+  isXaiSpeechInputProvider,
+  isXaiSpeechOutputProvider,
   isOpenAiCompatibleSpeechOutputProvider,
   parseVolcengineSpeechCredentials,
   assertSpeechOutputCredentials,
@@ -38,6 +41,11 @@ import {
   synthesizeVolcengineSpeechOutputWithFallback,
 } from './ttsVolcengine.js'
 import { synthesizeLocalTts } from './localTts.js'
+import {
+  buildXaiSttMultipartParts,
+  buildXaiTtsRequestBody,
+  mapLanguageToXaiStt,
+} from './xaiSpeech.js'
 import { float32ToInt16PcmBuffer } from './audioEncoding.js'
 
 // FNV-1a 32-bit hash of the requestId, clamped to non-zero positive int32 so
@@ -72,7 +80,7 @@ function formatSpeechTextLogMeta(text) {
  * For OpenAI-compatible providers, requests raw PCM (int16 24kHz) for lower latency.
  * For others, returns the standard audioBase64/mimeType result.
  */
-async function synthesizeRemoteTts(sessionPayload, text) {
+async function synthesizeRemoteTts(sessionPayload, text, signal) {
   const payload = { ...sessionPayload, text }
   const content = text.trim()
   if (!content) throw new Error('没有可播报的文本内容。')
@@ -126,6 +134,7 @@ async function synthesizeRemoteTts(sessionPayload, text) {
       body: requestBody,
       timeoutMs: synthTimeoutMs,
       timeoutMessage: synthTimeoutMessage,
+      signal,
       onRetry: logTtsRetry,
     })
 
@@ -160,6 +169,7 @@ async function synthesizeRemoteTts(sessionPayload, text) {
       body: requestBody,
       timeoutMs: synthTimeoutMs,
       timeoutMessage: synthTimeoutMessage,
+      signal,
       onRetry: logTtsRetry,
     })
 
@@ -169,6 +179,36 @@ async function synthesizeRemoteTts(sessionPayload, text) {
 
     const pcmBuffer = await readResponseBufferWithLimit(response, { label: '语音音频' })
     return { pcmBuffer, pcmSampleRate: 16000 }
+  }
+
+  if (isXaiSpeechOutputProvider(payload.providerId)) {
+    const endpoint = `${baseUrl}/tts`
+    const requestBody = JSON.stringify(buildXaiTtsRequestBody(payload, content, {
+      codec: 'pcm',
+      sampleRate: 24000,
+    }))
+    const headers = {
+      'Content-Type': 'application/json',
+      ...buildAuthorizationHeaders(payload.providerId, payload.apiKey),
+    }
+
+    const response = await performNetworkRequestWithRetry(endpoint, {
+      allowPrivateNetwork: true,
+      method: 'POST',
+      headers,
+      body: requestBody,
+      timeoutMs: synthTimeoutMs,
+      timeoutMessage: synthTimeoutMessage,
+      signal,
+      onRetry: logTtsRetry,
+    })
+
+    if (!response.ok) {
+      throw new Error(await extractResponseErrorMessage(response, '语音播报那边回了个状态码 ' + response.status + '，不太确定哪里出了问题。'))
+    }
+
+    const pcmBuffer = await readResponseBufferWithLimit(response, { label: '语音音频' })
+    return { pcmBuffer, pcmSampleRate: 24000 }
   }
 
   // Volcengine
@@ -190,6 +230,7 @@ async function synthesizeRemoteTts(sessionPayload, text) {
       pitch,
       timeoutMs: synthTimeoutMs,
       timeoutMessage: synthTimeoutMessage,
+      signal,
     })
 
     if (!result.ok) throw new Error(result.errorMessage)
@@ -234,6 +275,7 @@ async function synthesizeRemoteTts(sessionPayload, text) {
       body: requestBody,
       timeoutMs: synthTimeoutMs,
       timeoutMessage: synthTimeoutMessage,
+      signal,
       onRetry: logTtsRetry,
     })
 
@@ -276,6 +318,7 @@ async function synthesizeRemoteTts(sessionPayload, text) {
       body: requestBody,
       timeoutMs: synthTimeoutMs,
       timeoutMessage: synthTimeoutMessage,
+      signal,
       onRetry: logTtsRetry,
     })
 
@@ -290,7 +333,8 @@ async function synthesizeRemoteTts(sessionPayload, text) {
     const audioResponse = await performNetworkRequestWithRetry(audioUrl, {
       method: 'GET',
       timeoutMs: synthTimeoutMs,
-      timeoutMessage: '语音文件下载有点久，看看网络或者稍后再试试？',
+      timeoutMessage: SPEECH_IPC_ERROR_CODES.TTS_TIMEOUT,
+      signal,
       onRetry: logTtsRetry,
     })
 
@@ -334,6 +378,8 @@ export {
   isVolcengineSpeechInputProvider,
   isOpenAiCompatibleSpeechInputProvider,
   isZhipuSpeechInputProvider,
+  isXaiSpeechInputProvider,
+  isXaiSpeechOutputProvider,
   assertSpeechOutputCredentials,
   resolveSpeechOutputBaseUrl,
   resolveSpeechOutputTimeoutMs,
@@ -341,6 +387,9 @@ export {
   toSpeechVoiceOption,
   extractMiniMaxVoiceOptions,
   buildOpenAiCompatibleSpeechRequestPayload,
+  buildXaiTtsRequestBody,
+  buildXaiSttMultipartParts,
+  mapLanguageToXaiStt,
   synthesizeVolcengineSpeechOutputWithFallback,
   formatVolcengineSpeechOutputCombo,
   createSilentWavBase64,

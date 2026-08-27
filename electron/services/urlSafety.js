@@ -240,10 +240,8 @@ export function checkChatBaseUrlSafety(input) {
   if (IMDS_BLOCK_HOSTS.has(host)) {
     return { ok: false, reason: `blocked metadata host: ${host}` }
   }
-  for (const pattern of IMDS_BLOCK_IPV4_PATTERNS) {
-    if (pattern.test(host)) {
-      return { ok: false, reason: `blocked metadata-range IP: ${host}` }
-    }
+  if (isLinkLocalOrImdsAddress(host)) {
+    return { ok: false, reason: `blocked metadata-range IP: ${host}` }
   }
 
   return { ok: true }
@@ -252,10 +250,28 @@ export function checkChatBaseUrlSafety(input) {
 // DNS re-check for the permissive chat/API path: only link-local and IMDS
 // ranges are rejected — RFC1918 / loopback resolutions stay allowed because
 // Ollama / LM Studio / LAN providers legitimately resolve there.
+function mappedIpv4FromHost(host) {
+  const dotted = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(host)
+  if (dotted) return dotted[1]
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(host)
+  if (!hex) return null
+  const high = Number.parseInt(hex[1], 16)
+  const low = Number.parseInt(hex[2], 16)
+  return `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`
+}
+
+function isAwsIpv6ImdsAddress(address) {
+  const host = normalizeHost(address)
+  return host === 'fd00:ec2::254' || host.startsWith('fd00:ec2:')
+}
+
 function isLinkLocalOrImdsAddress(address) {
-  if (IMDS_BLOCK_IPV4_PATTERNS.some((pattern) => pattern.test(address))) return true
-  // fe80::/10 (IPv6 link-local)
-  if (/^fe[89ab]/i.test(address)) return true
+  const host = normalizeHost(address)
+  const mappedIpv4 = mappedIpv4FromHost(host)
+  if (mappedIpv4 && IMDS_BLOCK_IPV4_PATTERNS.some((pattern) => pattern.test(mappedIpv4))) return true
+  if (IMDS_BLOCK_IPV4_PATTERNS.some((pattern) => pattern.test(host))) return true
+  if (/^fe[89ab]/i.test(host)) return true
+  if (isAwsIpv6ImdsAddress(host)) return true
   return false
 }
 

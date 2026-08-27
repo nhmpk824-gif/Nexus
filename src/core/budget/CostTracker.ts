@@ -1,4 +1,6 @@
 import type { ProviderId } from '../routing/types.ts'
+import type { CoreTime } from '../time.ts'
+import { systemTime } from '../time.ts'
 import type { BudgetConfig, BudgetStatus, CostEntry, CostEntryKind } from './types.ts'
 import { UsagePricingTable } from './UsagePricing.ts'
 import { normalizeNonNegativeInteger } from '../../lib/normalize.ts'
@@ -113,11 +115,13 @@ export function normalizeCostEntries(value: unknown): CostEntry[] {
 export class CostTracker {
   private readonly entries: CostEntry[] = []
   private readonly pricing: UsagePricingTable
+  private readonly time: CoreTime
   private config: BudgetConfig
 
-  constructor(options?: { pricing?: UsagePricingTable; config?: BudgetConfig }) {
+  constructor(options?: { pricing?: UsagePricingTable; config?: BudgetConfig; time?: CoreTime }) {
     this.pricing = options?.pricing ?? new UsagePricingTable()
     this.config = normalizeBudgetConfig(options?.config ?? {})
+    this.time = options?.time ?? systemTime()
   }
 
   setConfig(config: BudgetConfig): void {
@@ -144,8 +148,8 @@ export class CostTracker {
       outputTokens,
     )
     const entry: CostEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      timestamp: normalizeNonNegativeNumber(input.timestamp) ?? Date.now(),
+      id: this.time.id(''),
+      timestamp: normalizeNonNegativeNumber(input.timestamp) ?? this.time.now(),
       providerId,
       modelId,
       tier,
@@ -167,8 +171,8 @@ export class CostTracker {
       throw new Error('CostTracker.recordAuxiliary requires a non-chat kind, providerId and modelId')
     }
     const entry: CostEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      timestamp: normalizeNonNegativeNumber(input.timestamp) ?? Date.now(),
+      id: this.time.id(''),
+      timestamp: normalizeNonNegativeNumber(input.timestamp) ?? this.time.now(),
       providerId,
       modelId,
       tier: 'cheap',

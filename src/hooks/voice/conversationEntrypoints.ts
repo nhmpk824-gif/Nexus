@@ -190,6 +190,16 @@ export function startVoiceConversationEntrypoint(
   }
 
   if (isTencentAsrSpeechInputProvider(currentSettings.speechInputProviderId)) {
+    if (
+      params.busyRef.current
+      || params.vadSessionRef.current
+      || params.paraformerSessionRef.current
+      || params.sensevoiceSessionRef.current
+      || params.tencentAsrSessionRef.current
+      || params.voiceStateRef.current === 'processing'
+    ) {
+      return
+    }
     void params.startTencentAsrConversation(params.options)
     return
   }

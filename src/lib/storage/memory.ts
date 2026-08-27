@@ -15,6 +15,8 @@ import {
   writeJson,
   writeJsonDebounced,
 } from './core.ts'
+import { isObject } from '../guards.ts'
+import { normalizeBoundedText } from '../normalize.ts'
 
 const MAX_LONG_TERM_MEMORIES = 500
 const MAX_DAILY_ENTRIES_PER_DAY = 16
@@ -31,16 +33,6 @@ const VALID_CATEGORIES = new Set<MemoryCategory>([
 const VALID_IMPORTANCE = new Set<MemoryImportance>(['low', 'normal', 'high', 'pinned', 'reflection'])
 const VALID_KINDS = new Set<MemoryKind>(['preference', 'fact', 'relationship', 'knowledge'])
 const VALID_VALENCES = new Set<EmotionalValence>(['positive', 'negative', 'neutral', 'mixed'])
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function normalizeText(value: unknown, limit: number): string {
-  return typeof value === 'string'
-    ? value.replace(/\s+/g, ' ').trim().slice(0, limit).trim()
-    : ''
-}
 
 function normalizeIsoTimestamp(value: unknown, fallbackIndex?: number): string | null {
   if (typeof value === 'string') {
@@ -85,7 +77,7 @@ function normalizeRelatedIds(value: unknown): string[] | undefined {
   const seen = new Set<string>()
   const ids: string[] = []
   for (const item of value) {
-    const id = normalizeText(item, 120)
+    const id = normalizeBoundedText(item, 120, true)
     if (!id || seen.has(id)) continue
     seen.add(id)
     ids.push(id)
@@ -96,14 +88,14 @@ function normalizeRelatedIds(value: unknown): string[] | undefined {
 
 export function normalizeMemoryItem(value: unknown, index: number): MemoryItem | null {
   if (!isObject(value)) return null
-  const content = normalizeText(value.content, 2_000)
+  const content = normalizeBoundedText(value.content, 2_000, true)
   if (!content) return null
 
   const createdAt = normalizeIsoTimestamp(value.createdAt, index)
   if (!createdAt) return null
 
-  const id = normalizeText(value.id, 120) || `memory-recovered-${index}-${Date.parse(createdAt)}`
-  const source = normalizeText(value.source, 120) || 'storage'
+  const id = normalizeBoundedText(value.id, 120, true) || `memory-recovered-${index}-${Date.parse(createdAt)}`
+  const source = normalizeBoundedText(value.source, 120, true) || 'storage'
   const category = typeof value.category === 'string' && VALID_CATEGORIES.has(value.category as MemoryCategory)
     ? value.category as MemoryCategory
     : 'manual'
@@ -118,7 +110,7 @@ export function normalizeMemoryItem(value: unknown, index: number): MemoryItem |
     : undefined
   const lastUsedAt = normalizeIsoTimestamp(value.lastUsedAt)
   const lastRecalledAt = normalizeIsoTimestamp(value.lastRecalledAt)
-  const sourceRef = normalizeText(value.sourceRef, 240)
+  const sourceRef = normalizeBoundedText(value.sourceRef, 240, true)
   const relatedIds = normalizeRelatedIds(value.relatedIds)
   const emotionSnapshot = normalizeEmotionSnapshot(value.emotionSnapshot)
   // importanceScore ceiling matches markRecalled's cap in decay.ts (1.5) —
@@ -127,9 +119,9 @@ export function normalizeMemoryItem(value: unknown, index: number): MemoryItem |
   const importanceScore = normalizeScore(value.importanceScore, 1.5)
   const significance = normalizeScore(value.significance, 1)
   const recallCount = normalizeNonNegativeInteger(value.recallCount)
-  const reflectionTopic = normalizeText(value.reflectionTopic, 120)
+  const reflectionTopic = normalizeBoundedText(value.reflectionTopic, 120, true)
   const reflectionConfidence = normalizeScore(value.reflectionConfidence, 1)
-  const supersededBy = normalizeText(value.supersededBy, 120)
+  const supersededBy = normalizeBoundedText(value.supersededBy, 120, true)
   const supersededAt = normalizeIsoTimestamp(value.supersededAt)
   const supersededPending = typeof value.supersededPending === 'boolean'
     ? value.supersededPending
@@ -192,12 +184,12 @@ export function normalizeDailyMemoryEntry(
   if (!isObject(value)) return null
   const role = value.role === 'user' || value.role === 'assistant' ? value.role : null
   if (!role) return null
-  const content = normalizeText(value.content, 200)
+  const content = normalizeBoundedText(value.content, 200, true)
   if (!content) return null
   const createdAt = normalizeIsoTimestamp(value.createdAt, index)
   if (!createdAt) return null
   const day = isValidDayKey(dayHint) ? dayHint : dayKeyFromTimestamp(createdAt)
-  const id = normalizeText(value.id, 120) || `daily-memory-recovered-${index}-${Date.parse(createdAt)}`
+  const id = normalizeBoundedText(value.id, 120, true) || `daily-memory-recovered-${index}-${Date.parse(createdAt)}`
   return {
     id,
     day,

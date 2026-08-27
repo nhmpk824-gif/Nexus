@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
+import { SPEECH_IPC_ERROR_CODES } from '../../shared/speechErrorCodes.js'
 import {
   normalizeBaseUrl,
   performNetworkRequest,
@@ -21,6 +22,8 @@ import {
   isVolcengineSpeechInputProvider,
   isOpenAiCompatibleSpeechInputProvider,
   isZhipuSpeechInputProvider,
+  isXaiSpeechInputProvider,
+  isXaiSpeechOutputProvider,
   resolveSpeechOutputBaseUrl,
   resolveSpeechOutputTimeoutMs,
   resolveSpeechOutputTimeoutMessage,
@@ -28,6 +31,8 @@ import {
   toSpeechVoiceOption,
   extractMiniMaxVoiceOptions,
   buildOpenAiCompatibleSpeechRequestPayload,
+  buildXaiSttMultipartParts,
+  buildXaiTtsRequestBody,
   synthesizeVolcengineSpeechOutputWithFallback,
   formatVolcengineSpeechOutputCombo,
   mapLanguageToMiniMaxBoost,
@@ -59,6 +64,7 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT
     if (
       !isMiniMaxSpeechOutputProvider(payload.providerId)
       && payload.providerId !== 'elevenlabs-tts'
+      && !isXaiSpeechOutputProvider(payload.providerId)
     ) {
       return {
         voices: [],
@@ -79,12 +85,19 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT
             voice_type: 'all',
           }),
         }
-      : {
-          url: `${baseUrl}/voices`,
-          method: 'GET',
-          headers: buildAuthorizationHeaders(payload.providerId, payload.apiKey),
-          body: undefined,
-        }
+      : isXaiSpeechOutputProvider(payload.providerId)
+        ? {
+            url: `${baseUrl}/tts/voices`,
+            method: 'GET',
+            headers: buildAuthorizationHeaders(payload.providerId, payload.apiKey),
+            body: undefined,
+          }
+        : {
+            url: `${baseUrl}/voices`,
+            method: 'GET',
+            headers: buildAuthorizationHeaders(payload.providerId, payload.apiKey),
+            body: undefined,
+          }
 
     let response
     try {
@@ -92,11 +105,12 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT
         method: request.method,
         headers: request.headers,
         ...(request.body ? { body: request.body } : {}),
+        allowPrivateNetwork: true,
         // Re-check every redirect hop (see chat:* GET probes) — non-streaming
         // voice-list, safe to follow with per-hop SSRF revalidation.
         followRedirectsSafely: true,
         timeoutMs: AUDIO_VOICE_LIST_TIMEOUT_MS,
-        timeoutMessage: '音色列表拉了好久都没回来，看看网络对不对？',
+        timeoutMessage: SPEECH_IPC_ERROR_CODES.TTS_TIMEOUT,
       })
     } catch (error) {
       const reason = getRedactedErrorMessage(error)
@@ -228,6 +242,15 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT
             value: languageCode,
           })
         }
+      } else if (isXaiSpeechInputProvider(payload.providerId)) {
+        endpoint = `${baseUrl}/stt`
+        multipartParts.length = 0
+        multipartParts.push(...buildXaiSttMultipartParts({
+          audioBuffer: Buffer.from(payload.audioBase64, 'base64'),
+          fileName: createAudioFileName(payload.fileName, payload.mimeType),
+          mimeType: payload.mimeType,
+          language: payload.language,
+        }))
       } else if (isOpenAiCompatibleSpeechInputProvider(payload.providerId)) {
         endpoint = `${baseUrl}/audio/transcriptions`
         multipartParts.push({
@@ -278,11 +301,12 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT
         method: 'POST',
         headers,
         body,
+        allowPrivateNetwork: true,
         // Validate every redirect target so a public provider cannot bounce
         // an audio upload into metadata or a private-network endpoint.
         followRedirectsSafely: true,
         timeoutMs: AUDIO_TRANSCRIBE_TIMEOUT_MS,
-        timeoutMessage: '语音识别那边等了好久都没回应，看看网络和代理对不对？',
+        timeoutMessage: SPEECH_IPC_ERROR_CODES.STT_TIMEOUT,
       })
     } catch (error) {
       const reason = getRedactedErrorMessage(error)
@@ -469,6 +493,13 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT
         'Content-Type': 'application/json',
         ...buildAuthorizationHeaders(payload.providerId, payload.apiKey),
       }
+    } else if (isXaiSpeechOutputProvider(payload.providerId)) {
+      endpoint = `${baseUrl}/tts`
+      requestBody = JSON.stringify(buildXaiTtsRequestBody(payload, content))
+      headers = {
+        'Content-Type': 'application/json',
+        ...buildAuthorizationHeaders(payload.providerId, payload.apiKey),
+      }
     } else if (isOpenAiCompatibleSpeechOutputProvider(payload.providerId)) {
       endpoint = `${baseUrl}/audio/speech`
       requestBody = JSON.stringify(buildOpenAiCompatibleSpeechRequestPayload(payload, content))
@@ -486,6 +517,7 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT
         method: 'POST',
         headers,
         body: requestBody,
+        allowPrivateNetwork: true,
         followRedirectsSafely: true,
         timeoutMs: synthTimeoutMs,
         timeoutMessage: synthTimeoutMessage,
@@ -536,7 +568,7 @@ export function register({ AUDIO_TRANSCRIBE_TIMEOUT_MS, AUDIO_VOICE_LIST_TIMEOUT
           method: 'GET',
           followRedirectsSafely: true,
           timeoutMs: synthTimeoutMs,
-          timeoutMessage: '语音文件下载有点久，看看网络或者稍后再试试？',
+          timeoutMessage: SPEECH_IPC_ERROR_CODES.TTS_TIMEOUT,
         })
       } catch (error) {
         const reason = getRedactedErrorMessage(error)

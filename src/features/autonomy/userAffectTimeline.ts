@@ -3,11 +3,9 @@
  *
  * Distinct from `stateTimeline.ts` which captures the **companion's**
  * emotion state. This module captures what we infer about the **user's**
- * affect from their messages and voice prosody. The two together let
- * downstream features (Sunday letter, monthly mood map, annual yearbook,
- * co-regulation report) say things like "your baseline lifted from 0.42
- * to 0.55 over March" or "the two of you synchronized hardest on the
- * mornings she did the bracket."
+ * affect from their messages and voice prosody. Downstream features
+ * (Sunday letter, affect-dynamics snapshot) can then say things like
+ * "your baseline lifted from 0.42 to 0.55 over March".
  *
  * Sources of user affect:
  *  - SenseVoice prosody label  → mapped to a VAD-style sample
@@ -29,6 +27,7 @@ import {
   writeJson,
   writeJsonDebounced,
 } from '../../lib/storage/core.ts'
+import { clamp } from '../../lib/common.ts'
 import type { VoiceEmotionLabel } from '../../types'
 
 const RETENTION_MS = 365 * 24 * 60 * 60 * 1000  // 1-year window
@@ -52,7 +51,7 @@ export interface UserAffectSample {
    */
   confidence: number
   /** Optional small label for "what triggered this sample" — used by the
-   *  diagnostics panel and yearbook annotations. */
+   *  diagnostics panel. */
   note?: string
 }
 
@@ -84,9 +83,15 @@ function normalizeSample(value: unknown): UserAffectSample | null {
   const obj = value as Record<string, unknown>
   if (typeof obj.ts !== 'string' || !Number.isFinite(Date.parse(obj.ts))) return null
   if (!isValidSource(obj.source)) return null
-  const valence = typeof obj.valence === 'number' ? clamp(obj.valence, -1, 1) : null
-  const arousal = typeof obj.arousal === 'number' ? clamp(obj.arousal, 0, 1) : null
-  const confidence = typeof obj.confidence === 'number' ? clamp(obj.confidence, 0, 1) : null
+  const valence = typeof obj.valence === 'number' && Number.isFinite(obj.valence)
+    ? clamp(obj.valence, -1, 1)
+    : null
+  const arousal = typeof obj.arousal === 'number' && Number.isFinite(obj.arousal)
+    ? clamp(obj.arousal, 0, 1)
+    : null
+  const confidence = typeof obj.confidence === 'number' && Number.isFinite(obj.confidence)
+    ? clamp(obj.confidence, 0, 1)
+    : null
   if (valence === null || arousal === null || confidence === null) return null
   const note = normalizeOptionalText(obj.note)
   return {
@@ -185,21 +190,16 @@ export function captureUserAffectSample(
   }
   const next: UserAffectSample = {
     ts: now.toISOString(),
-    valence: clamp(sample.valence, -1, 1),
-    arousal: clamp(sample.arousal, 0, 1),
+    valence: clamp(Number.isFinite(sample.valence) ? sample.valence : 0, -1, 1),
+    arousal: clamp(Number.isFinite(sample.arousal) ? sample.arousal : 0, 0, 1),
     source: sample.source,
-    confidence: clamp(sample.confidence, 0, 1),
+    confidence: clamp(Number.isFinite(sample.confidence) ? sample.confidence : 0, 0, 1),
     ...(sample.note ? { note: sample.note } : {}),
   }
   history.push(next)
   pruneByAge(history, nowMs)
   writeJsonDebounced(USER_AFFECT_HISTORY_STORAGE_KEY, history)
   return next
-}
-
-function clamp(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min
-  return Math.max(min, Math.min(max, value))
 }
 
 // ── Read (public) ─────────────────────────────────────────────────────────
@@ -209,9 +209,8 @@ export function loadUserAffectHistory(): UserAffectSample[] {
 }
 
 /**
- * Slice within a time window — used by the monthly mood map / annual
- * yearbook readers. `windowDays` is inclusive of today. Returns the
- * samples in chronological order.
+ * Slice within a time window — used by affect-dynamics snapshots.
+ * `windowDays` is inclusive of today. Returns the samples in chronological order.
  */
 export function loadUserAffectWindow(windowDays: number, now: Date = new Date()): UserAffectSample[] {
   const cutoff = now.getTime() - windowDays * 24 * 60 * 60 * 1000

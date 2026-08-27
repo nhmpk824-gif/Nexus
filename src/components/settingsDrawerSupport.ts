@@ -1,3 +1,4 @@
+import { clamp } from '../lib/common.ts'
 import {
   pickTranslatedUiText,
 } from '../lib/uiLanguage.ts'
@@ -108,20 +109,12 @@ export function parseNumberInput(value: string, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-export function clampNumber(value: number, min: number, max: number) {
-  if (!Number.isFinite(value)) {
-    return min
-  }
-
-  return Math.min(max, Math.max(min, value))
-}
-
 export function formatTtsAdjustmentValue(kind: 'rate' | 'pitch' | 'volume', value: number) {
   if (kind === 'volume') {
-    return `${Math.round(clampNumber(value, 0, 1) * 100)}%`
+    return `${Math.round(clamp(value, 0, 1) * 100)}%`
   }
 
-  return `${clampNumber(value, 0.5, 2).toFixed(2)}x`
+  return `${clamp(value, 0.5, 2).toFixed(2)}x`
 }
 
 function toDatetimeLocalValue(value: string | null | undefined) {

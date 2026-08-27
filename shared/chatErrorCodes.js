@@ -44,7 +44,48 @@ export function buildChatIpcError(code, detail, { cause } = {}) {
  * method" prefix or by failover's "candidateId: message" aggregation.
  */
 export function extractChatIpcErrorCode(error) {
+  if (error && typeof error === 'object' && typeof error.code === 'string' && CODE_PATTERN.test(error.code)) {
+    return error.code
+  }
   const message = error instanceof Error ? error.message : String(error ?? '')
   const match = CODE_PATTERN.exec(message)
   return match ? match[0] : null
+}
+
+const CONNECTION_CODE_TO_IPC = Object.freeze({
+  missing_api_key: CHAT_IPC_ERROR_CODES.MISSING_API_KEY,
+  api_key_header_unsafe: CHAT_IPC_ERROR_CODES.API_KEY_HEADER_UNSAFE,
+  api_key_contains_cjk: CHAT_IPC_ERROR_CODES.API_KEY_HEADER_UNSAFE,
+  api_key_contains_whitespace: CHAT_IPC_ERROR_CODES.API_KEY_HEADER_UNSAFE,
+  request_timeout: CHAT_IPC_ERROR_CODES.TIMEOUT,
+  provider_unreachable: CHAT_IPC_ERROR_CODES.UNREACHABLE,
+})
+
+/**
+ * Map renderer/main short connection codes onto the IPC failure class.
+ * CJK/whitespace keys share API_KEY_HEADER_UNSAFE with other header-unsafe keys.
+ */
+export function chatIpcErrorCodeFromConnectionCode(code) {
+  if (typeof code !== 'string' || !code) return null
+  if (CODE_PATTERN.test(code)) return code
+  return CONNECTION_CODE_TO_IPC[code] ?? null
+}
+
+/**
+ * Classify a transport-level chat failure as TIMEOUT vs UNREACHABLE.
+ * net.js tags wall-clock aborts with `request_timeout`; chat IPC passes
+ * CHAT_IPC_ERROR_CODES.TIMEOUT as the timeoutMessage so the token is in
+ * the Error even before the handler wraps it.
+ */
+export function classifyChatTransportFailure(error) {
+  const code = error && typeof error === 'object' ? error.code : undefined
+  const extracted = extractChatIpcErrorCode(error)
+  if (
+    code === CHAT_IPC_ERROR_CODES.TIMEOUT
+    || extracted === CHAT_IPC_ERROR_CODES.TIMEOUT
+    || code === 'request_timeout'
+  ) {
+    return CHAT_IPC_ERROR_CODES.TIMEOUT
+  }
+  return CHAT_IPC_ERROR_CODES.UNREACHABLE
 }

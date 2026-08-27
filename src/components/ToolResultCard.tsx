@@ -9,6 +9,7 @@ import type {
 } from '../types'
 import { stripLocalizedWeatherPeriodPrefix } from '../features/tools/weatherText.ts'
 import { useTranslation } from '../i18n/useTranslation.ts'
+import { normalizeWhitespace } from '../lib/normalize.ts'
 type TranslateFn = ReturnType<typeof useTranslation>['t']
 
 function isSafeUrl(url: string): boolean {
@@ -19,12 +20,6 @@ function isSafeUrl(url: string): boolean {
 type ToolResultCardProps = {
   toolResult: ChatToolResult
   variant?: 'chat' | 'pet'
-}
-
-function normalizeText(text: string) {
-  return String(text ?? '')
-    .replace(/\s+/g, ' ')
-    .trim()
 }
 
 function truncateText(text: string, maxLength: number) {
@@ -66,7 +61,7 @@ function isLyricsSearchQuery(query: string) {
 }
 
 function cleanPreviewText(text: string, maxLength: number) {
-  const normalized = normalizeText(
+  const normalized = normalizeWhitespace(
     String(text ?? '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/(?:展开全部|阅读全文|更多内容|网页链接|查看原文|查看详情)/giu, ' ')
@@ -134,7 +129,7 @@ function buildSearchPreviewPanels(result: WebSearchResponse, maxPanels: number) 
     }
 
     panels.push({
-      title: truncateText(normalizeText(item.title), 42),
+      title: truncateText(normalizeWhitespace(item.title), 42),
       body,
       host: formatUrlHost(item.url),
       url: item.url,
@@ -282,7 +277,7 @@ function renderPetSearchBody(result: WebSearchResponse, locale: string) {
   const panels = buildSearchPreviewPanels(result, 2)
   if (panels.length) {
     const previewLines = panels
-      .map((panel) => normalizeText(panel.body))
+      .map((panel) => normalizeWhitespace(panel.body))
       .filter(Boolean)
 
     if (previewLines.length) {
@@ -348,7 +343,7 @@ function getSearchEyebrow(result: WebSearchResponse, t: TranslateFn) {
 }
 
 function getSearchTitle(result: WebSearchResponse) {
-  const structuredTitle = normalizeText(result.display?.title ?? '')
+  const structuredTitle = normalizeWhitespace(result.display?.title ?? '')
   if (structuredTitle) {
     return structuredTitle
   }

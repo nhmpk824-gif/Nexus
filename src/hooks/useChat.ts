@@ -20,6 +20,7 @@ import {
   type PendingReminderDraftInput,
   type UseChatContext,
 } from './chat/index.ts'
+import { loadChatMessages } from '../lib/storage/chat.ts'
 import { useChatPersistence } from './chat/useChatPersistence.ts'
 import { createSendMessageHandler } from './chat/sendMessage.ts'
 import { usePetDialogBubbles } from './chat/usePetDialogBubbles.ts'
@@ -37,7 +38,7 @@ const MAX_CHAT_MESSAGES = 500
 
 export function useChat(ctx: UseChatContext) {
   const { t } = useTranslation()
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadChatMessages())
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setErrorRaw] = useState<string | null>(null)

@@ -348,7 +348,7 @@ export function createTtsStreamService({ synthesizeRemote }) {
   async function synthesizeAndEmitRemote(session, text) {
     await warmupRemoteSession(session)
     if (session.closed) return
-    const result = await synthesizeRemote(session.payload, text)
+    const result = await synthesizeRemote(session.payload, text, session.abortController?.signal)
     if (session.closed) return
     // Pin the resolved voice/cluster after the first chunk so subsequent
     // chunks reuse the exact same combo instead of re-walking the fallback
@@ -400,6 +400,7 @@ export function createTtsStreamService({ synthesizeRemote }) {
         closed: false,
         hasEmittedAudio: false,
         remoteWarmup: Promise.resolve(),
+        abortController: new AbortController(),
       }
 
       // If the renderer tears down mid-stream, mark the session closed and
@@ -408,6 +409,7 @@ export function createTtsStreamService({ synthesizeRemote }) {
       // PCM streams on the next boundary, releasing the socket.
       const onSenderDestroyed = () => {
         session.closed = true
+        session.abortController?.abort()
         sessions.delete(requestId)
       }
       sender.once('destroyed', onSenderDestroyed)
@@ -477,6 +479,7 @@ export function createTtsStreamService({ synthesizeRemote }) {
       }
 
       session.closed = true
+      session.abortController?.abort()
       detachSenderListener(session)
       clearSession(session.requestId)
       return { ok: true }

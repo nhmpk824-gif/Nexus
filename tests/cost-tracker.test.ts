@@ -94,6 +94,24 @@ test('CostTracker normalizes inputs and returns immutable snapshots', () => {
   assert.notEqual(tracker.listEntries()[0].costUsd, 999)
 })
 
+test('CostTracker uses the injected clock for ids and default timestamps', () => {
+  const tracker = new CostTracker({
+    time: {
+      now: () => 42_000,
+      id: (prefix) => `${prefix}cost-frozen`,
+    },
+  })
+  const entry = tracker.record({
+    providerId: 'openai',
+    modelId: 'gpt-4o-mini',
+    tier: 'cheap',
+    inputTokens: 1,
+    outputTokens: 1,
+  })
+  assert.equal(entry.id, 'cost-frozen')
+  assert.equal(entry.timestamp, 42_000)
+})
+
 test('CostTracker restore preserves auxiliary entries and filters corrupt records', () => {
   const tracker = new CostTracker()
   tracker.restore([

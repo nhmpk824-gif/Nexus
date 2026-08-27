@@ -189,6 +189,13 @@ describe('checkChatBaseUrlSafety (permissive — allows local LLM URLs)', () => 
     assert.match(r.reason ?? '', /metadata-range/)
   })
 
+  test('blocks IPv6-mapped and unique-local IMDS on the chat path', () => {
+    assert.equal(checkChatBaseUrlSafety('http://[::ffff:169.254.169.254]/latest/meta-data/').ok, false)
+    assert.equal(checkChatBaseUrlSafety('http://[fd00:ec2::254]/latest/meta-data/').ok, false)
+    assert.equal(checkChatBaseUrlSafety('http://[fe80::1]/v1').ok, false)
+    assert.equal(checkChatBaseUrlSafety('http://127.0.0.1:11434/v1').ok, true)
+  })
+
   test('blocks GCP metadata host', () => {
     assert.equal(checkChatBaseUrlSafety('http://metadata.google.internal/').ok, false)
   })

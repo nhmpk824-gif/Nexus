@@ -12,6 +12,7 @@ import type {
   VoiceSessionTransport,
 } from '../../features/voice/sessionMachine.ts'
 import { clamp } from '../../lib/common.ts'
+import { humanizeIfSpeechIpcError } from '../../lib/humanizeError.ts'
 import { createId } from '../../lib/index.ts'
 import { mapSpeechError } from '../../lib/voice.ts'
 import type {
@@ -219,7 +220,8 @@ export async function startTencentConversation(
       } catch (error) {
         params.tencentAsrSessionRef.current = null
         params.handleVoiceListeningFailure(
-          error instanceof Error ? error.message : params.ti('voice.provider.tencent.failed_retry'),
+          humanizeIfSpeechIpcError(error, 'stt')
+            ?? (error instanceof Error ? error.message : params.ti('voice.provider.tencent.failed_retry')),
         )
       }
     }

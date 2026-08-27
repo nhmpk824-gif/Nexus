@@ -5,6 +5,18 @@ import {
   CHAT_IPC_ERROR_CODES,
   extractChatIpcErrorCode,
 } from '../../shared/chatErrorCodes.js'
+import {
+  PET_IPC_ERROR_CODES,
+  extractPetIpcErrorCode,
+} from '../../shared/petErrorCodes.js'
+import {
+  SPEECH_IPC_ERROR_CODES,
+  extractSpeechIpcErrorCode,
+} from '../../shared/speechErrorCodes.js'
+import {
+  NET_IPC_ERROR_CODES,
+  extractNetIpcErrorCode,
+} from '../../shared/netErrorCodes.js'
 
 /**
  * humanizeError — translate raw runtime errors into companion-voice
@@ -34,6 +46,7 @@ export type HumanizeContext =
   | 'stt'       // STT-specific (recognizer init, mic stream)
   | 'model'     // model download / inventory error
   | 'memory'    // memory store IO error
+  | 'pet'       // Live2D / sprite pet import
   | 'generic'   // anything else
 
 interface KnownPattern {
@@ -69,6 +82,32 @@ const CHAT_IPC_CODE_KEYS: Record<string, { key: TranslationKey; withDetail?: boo
   [CHAT_IPC_ERROR_CODES.PROVIDER_STATUS]: { key: 'humanize.fallback', withDetail: true },
 }
 
+const PET_IPC_CODE_KEYS: Record<string, { key: TranslationKey }> = {
+  [PET_IPC_ERROR_CODES.ALREADY_IMPORTED]: { key: 'settings.pet.error.already_imported' },
+  [PET_IPC_ERROR_CODES.IMPORT_INCOMPLETE]: { key: 'settings.pet.error.import_incomplete' },
+  [PET_IPC_ERROR_CODES.UNSUPPORTED_FILE]: { key: 'settings.pet.error.unsupported_file' },
+  [PET_IPC_ERROR_CODES.GALLERY_INPUT]: { key: 'settings.pet.error.gallery_input' },
+  [PET_IPC_ERROR_CODES.GALLERY_FAILED]: { key: 'settings.pet.error.gallery_failed' },
+  [PET_IPC_ERROR_CODES.KIT_PATH]: { key: 'settings.pet.error.kit_path' },
+  [PET_IPC_ERROR_CODES.NETWORK]: { key: 'settings.pet.error.network' },
+}
+
+const SPEECH_IPC_CODE_KEYS: Record<string, { key: TranslationKey }> = {
+  [SPEECH_IPC_ERROR_CODES.TTS_TIMEOUT]: { key: 'humanize.timeout' },
+  [SPEECH_IPC_ERROR_CODES.STT_TIMEOUT]: { key: 'humanize.timeout' },
+}
+
+const NET_IPC_CODE_KEYS: Record<string, { key: TranslationKey }> = {
+  [NET_IPC_ERROR_CODES.TIMEOUT]: { key: 'humanize.timeout' },
+}
+
+const IPC_CODE_KEYS: Record<string, { key: TranslationKey; withDetail?: boolean }> = {
+  ...CHAT_IPC_CODE_KEYS,
+  ...PET_IPC_CODE_KEYS,
+  ...SPEECH_IPC_CODE_KEYS,
+  ...NET_IPC_CODE_KEYS,
+}
+
 // Patterns are checked in order, first match wins. More specific patterns
 // MUST come before more generic ones (e.g. "401" before "fetch failed").
 const COMMON_PATTERNS: KnownPattern[] = [
@@ -77,9 +116,9 @@ const COMMON_PATTERNS: KnownPattern[] = [
   { match: /\b(404|not\s*found)/i, key: 'humanize.not_found' },
   { match: /\b(429|rate.?limit|quota.?exceed)/i, key: 'humanize.rate_limited' },
   { match: /\b5\d{2}\b|server.?error|internal.?error/i, key: 'humanize.server_error' },
-  // 等了好久 stays: it is net.js's default timeoutMessage for non-chat fetch
-  // paths (model downloads, tools), which still arrive as plain text.
-  { match: /ETIMEDOUT|timeout|timed out|超时|等了好久|逾時/i, key: 'humanize.timeout' },
+  // Chat/speech/net IPC classify timeouts via NEXUS_ERR_*_TIMEOUT before
+  // this regex. ASCII/CJK timeout tokens still cover leftover tool copy.
+  { match: /ETIMEDOUT|timeout|timed out|超时|逾時/i, key: 'humanize.timeout' },
   { match: /ECONNREFUSED|connection refused/i, key: 'humanize.connection_refused' },
   { match: /ENOTFOUND|getaddrinfo|dns/i, key: 'humanize.dns_failed' },
   // 'terminated' / 'other side closed' are undici's wording for a connection
@@ -114,6 +153,7 @@ const CONTEXT_PATTERNS: Record<HumanizeContext, KnownPattern[]> = {
     { match: /huggingface|HF_HOME/i, key: 'humanize.model.hf_unreachable' },
   ],
   memory: [],
+  pet: [],
   generic: [],
 }
 
@@ -210,12 +250,20 @@ export function humanizeError(error: unknown, context: HumanizeContext = 'generi
   // the token rides inside the message (shared/chatErrorCodes.js), so the
   // first line is scanned for it.
   const codeProperty = (error as { code?: unknown } | null)?.code
-  const ipcCode = (typeof codeProperty === 'string' && codeProperty in CHAT_IPC_CODE_KEYS
+  const ipcCode = (typeof codeProperty === 'string' && codeProperty in IPC_CODE_KEYS
     ? codeProperty
-    : null) ?? extractChatIpcErrorCode(classifyTarget)
-  const codeMapping = ipcCode ? CHAT_IPC_CODE_KEYS[ipcCode] : undefined
+    : null)
+    ?? extractChatIpcErrorCode(classifyTarget)
+    ?? extractPetIpcErrorCode(classifyTarget)
+    ?? extractSpeechIpcErrorCode(classifyTarget)
+    ?? extractNetIpcErrorCode(classifyTarget)
+  const codeMapping = ipcCode ? IPC_CODE_KEYS[ipcCode] : undefined
   if (codeMapping) {
     return lookupTranslation(codeMapping.key, codeMapping.withDetail ? redactSensitive(raw) : undefined)
+  }
+
+  if (context === 'pet') {
+    return lookupTranslation('settings.pet.import_error')
   }
 
   // Context-specific patterns first (more specific), then common.
@@ -229,4 +277,15 @@ export function humanizeError(error: unknown, context: HumanizeContext = 'generi
   // No pattern matched — generic wrapper that still includes the raw
   // text so power users / developers can debug, but framed friendly.
   return lookupTranslation('humanize.fallback', redactSensitive(raw))
+}
+
+/**
+ * Humanize only when a speech IPC timeout token is present. Other speech
+ * errors keep the main-process companion-voice copy at the UI boundary.
+ */
+export function humanizeIfSpeechIpcError(
+  error: unknown,
+  context: Extract<HumanizeContext, 'tts' | 'stt' | 'voice'>,
+): string | null {
+  return extractSpeechIpcErrorCode(error) ? humanizeError(error, context) : null
 }

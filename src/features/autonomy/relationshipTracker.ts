@@ -15,6 +15,7 @@ import {
   formatSubDimensionsForPrompt,
   normalizeSubDimensions,
 } from './relationshipDimensions.ts'
+import { clamp } from '../../lib/common.ts'
 import { normalizeEmotionState } from './emotionModel.ts'
 
 export interface RelationshipState {
@@ -162,7 +163,7 @@ function daysBetween(dateA: string, dateB: string): number {
 }
 
 function clampScore(value: number): number {
-  return Math.max(MIN_SCORE, Math.min(MAX_SCORE, value))
+  return clamp(value, MIN_SCORE, MAX_SCORE)
 }
 
 /**

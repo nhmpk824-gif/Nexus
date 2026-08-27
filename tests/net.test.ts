@@ -87,6 +87,10 @@ test('shouldLabelAsConnectionFailure recognises common network failure strings',
   assert.equal(shouldLabelAsConnectionFailure('net::ERR_CONNECTION_REFUSED'), true)
   assert.equal(shouldLabelAsConnectionFailure('socket hang up'), true)
   assert.equal(shouldLabelAsConnectionFailure('Proxy Authentication Required'), true)
+  assert.equal(shouldLabelAsConnectionFailure('NEXUS_ERR_CHAT_TIMEOUT'), true)
+  assert.equal(shouldLabelAsConnectionFailure('NEXUS_ERR_TTS_TIMEOUT'), true)
+  assert.equal(shouldLabelAsConnectionFailure('NEXUS_ERR_STT_TIMEOUT'), true)
+  assert.equal(shouldLabelAsConnectionFailure('NEXUS_ERR_NET_TIMEOUT'), true)
   // HTTP-level errors are not connection failures
   assert.equal(shouldLabelAsConnectionFailure('HTTP 401 Unauthorized'), false)
   assert.equal(shouldLabelAsConnectionFailure('invalid api key'), false)

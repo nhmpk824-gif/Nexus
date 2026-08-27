@@ -12,6 +12,7 @@ import type { EmotionState } from '../autonomy/emotionModel.ts'
 import { computeMemorySignificance } from './decay.ts'
 import { getSupersededRecallPenalty } from './contradictionDetector.ts'
 import { createId } from '../../lib/index.ts'
+import { localDayKey } from '../../lib/localDate.ts'
 
 const longTermDuplicateThreshold = 0.72
 const dailyDuplicateThreshold = 0.88
@@ -259,10 +260,7 @@ export function rankMemories(memories: MemoryItem[], query: string) {
 
 export function getLocalDayKey(dateLike: string | Date) {
   const date = dateLike instanceof Date ? dateLike : new Date(dateLike)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return localDayKey(date.getTime())
 }
 
 function summarizeDailyContent(content: string, maxLength = 120) {

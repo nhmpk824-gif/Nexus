@@ -14,6 +14,8 @@
 
 import { Readable } from 'node:stream'
 import { randomUUID } from 'node:crypto'
+import { SPEECH_IPC_ERROR_CODES } from '../../shared/speechErrorCodes.js'
+import { escapeXml } from '../textNormalize.js'
 
 const TRUSTED_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4'
 const WS_BASE_URL = 'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1'
@@ -63,13 +65,6 @@ function buildSsmlMessage(text, voice, rate, pitch, volume) {
   const pitchStr = pitch != null ? `${(pitch - 1) * 50 >= 0 ? '+' : ''}${Math.round((pitch - 1) * 50)}Hz` : '+0Hz'
   // volume: Nexus 0-1.0 → SSML 0-100
   const volumeStr = volume != null ? `${Math.round(volume * 100)}` : '100'
-
-  const escapeXml = (s) => String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/'/g, '&apos;')
-    .replace(/"/g, '&quot;')
 
   const escapedText = escapeXml(text)
   const escapedVoice = escapeXml(voice)
@@ -133,7 +128,7 @@ export async function synthesizeEdgeTts(text, options = {}) {
       if (!resolved) {
         resolved = true
         try { ws?.close() } catch {}
-        reject(new Error('Edge TTS 连接超时'))
+        reject(new Error(SPEECH_IPC_ERROR_CODES.TTS_TIMEOUT))
       }
     }, CONNECT_TIMEOUT_MS)
 

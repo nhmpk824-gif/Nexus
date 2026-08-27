@@ -23,6 +23,7 @@ import {
   WEBHOOK_MAX_BODY_BYTES,
 } from './notificationBridgeUtils.js'
 import { getRedactedErrorMessage } from './errorRedaction.js'
+import { decodeHtmlEntities, stripHtml } from '../textNormalize.js'
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -201,7 +202,7 @@ function extractTag(xml, tag) {
   // Plain text content
   const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i')
   const m = re.exec(xml)
-  return m ? decodeXmlEntities(m[1].trim()) : ''
+  return m ? decodeHtmlEntities(m[1].trim()) : ''
 }
 
 /**
@@ -220,26 +221,6 @@ function extractAtomLink(xml) {
  * @param {string} str
  * @returns {string}
  */
-function decodeXmlEntities(str) {
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-}
-
-/**
- * Strip HTML tags for a cleaner notification body.
- * @param {string} html
- * @returns {string}
- */
-function stripHtml(html) {
-  return html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
-}
-
 // ── RSS polling ──────────────────────────────────────────────────────────────
 
 /**

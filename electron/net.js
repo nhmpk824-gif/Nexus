@@ -1,5 +1,6 @@
 import { net } from 'electron'
 import { randomUUID } from 'node:crypto'
+import { NET_IPC_ERROR_CODES } from '../shared/netErrorCodes.js'
 import {
   canonicalizeLoopbackUrl,
   buildSafeRedirectRequestOptions,
@@ -63,15 +64,22 @@ export async function performNetworkRequest(url, options = {}) {
     allowPrivateNetwork = false,
     body,
     timeoutMs = CONNECTION_TEST_TIMEOUT_MS,
-    timeoutMessage = '等了好久都没回应，看看网络和代理对不对？',
+    timeoutMessage = NET_IPC_ERROR_CODES.TIMEOUT,
     signal,
     forceNativeFetch = false,
     followRedirectsSafely = false,
     ...rest
   } = options
 
-  const abortController = signal ? null : new AbortController()
-  const requestSignal = signal ?? abortController?.signal
+  const abortController = new AbortController()
+  const requestSignal = abortController.signal
+  if (signal) {
+    if (signal.aborted) {
+      abortController.abort()
+    } else {
+      signal.addEventListener('abort', () => abortController.abort(), { once: true })
+    }
+  }
 
   // Validate one hop's URL against the SSRF guard, then fetch it. Strict by
   // default for tools, provider-returned download URLs, and other main-process

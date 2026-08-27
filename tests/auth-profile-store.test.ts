@@ -171,6 +171,25 @@ test('AuthProfileStore list revives expired cooldown profiles', () => {
   assert.equal(profiles.find((profile) => profile.id === 'future')?.status, 'cooldown')
 })
 
+test('AuthProfileStore cooldown expiry follows the injected clock', () => {
+  let now = 10_000
+  const store = new AuthProfileStore({
+    cooldownMs: 1_000,
+    time: { now: () => now, id: (prefix) => prefix },
+  })
+  store.register({ id: 'deepseek-a', providerId: 'deepseek', apiKey: 'key-a' })
+  store.recordFailure('deepseek-a', 'rate_limit')
+
+  assert.equal(store.get('deepseek-a')?.status, 'cooldown')
+  assert.equal(store.get('deepseek-a')?.cooldownUntil, 11_000)
+  assert.equal(store.pickNextActive('deepseek'), undefined)
+
+  now = 11_000
+  const picked = store.pickNextActive('deepseek')
+  assert.equal(picked?.id, 'deepseek-a')
+  assert.equal(store.get('deepseek-a')?.status, 'active')
+})
+
 test('AuthProfileStore register rejects unusable credentials before they enter failover', () => {
   const store = new AuthProfileStore()
 

@@ -4,14 +4,27 @@ import { getApiProviderPreset } from './providerCatalog.ts'
 import type { UiLanguage } from '../../types/i18n.ts'
 import type { ModelConnectionErrorCode, ProviderHealthStatus } from '../../types/model.ts'
 import { pickTranslatedUiText } from '../../lib/uiLanguage.ts'
+import {
+  chatIpcErrorCodeFromConnectionCode,
+  type ChatIpcErrorCode,
+} from '../../../shared/chatErrorCodes.js'
 
 export type PreflightResult = {
   ok: boolean
   status: ProviderHealthStatus
   code: ModelConnectionErrorCode
+  /** Same machine-readable class complete/stream throw across IPC. */
+  ipcCode?: ChatIpcErrorCode
   message: string
   recommendation?: string
   repair?: ConnectionPreflightRepair
+}
+
+function withIpcClass(
+  result: Omit<PreflightResult, 'ipcCode'>,
+): PreflightResult {
+  const ipcCode = chatIpcErrorCodeFromConnectionCode(result.code)
+  return ipcCode ? { ...result, ipcCode } : result
 }
 
 export type ConnectionPreflightRepair = {
@@ -75,7 +88,7 @@ export function runConnectionPreflight(input: PreflightInput): PreflightResult |
   const defaultModel = preset.defaultModel.trim()
 
   if (preset.requiresApiKey && !input.apiKey.trim() && !input.skipMissingApiKey) {
-    return {
+    return withIpcClass({
       ok: false,
       status: 'needs_key',
       code: 'missing_api_key',
@@ -83,37 +96,37 @@ export function runConnectionPreflight(input: PreflightInput): PreflightResult |
       recommendation: isDeepSeek
         ? t('settings.preflight.no_key_rec_deepseek')
         : t('settings.preflight.no_key_rec_provider', { provider: providerLabel }),
-    }
+    })
   }
 
   if (input.apiKey && !isVaultRefString(input.apiKey)) {
     const trimmed = input.apiKey.trim()
     if (HAS_CJK.test(trimmed)) {
-      return {
+      return withIpcClass({
         ok: false,
         status: 'misconfigured',
         code: 'api_key_contains_cjk',
         message: t('settings.preflight.cjk_key'),
         recommendation: t('settings.preflight.cjk_key_rec'),
-      }
+      })
     }
     if (HAS_WHITESPACE.test(trimmed)) {
-      return {
+      return withIpcClass({
         ok: false,
         status: 'misconfigured',
         code: 'api_key_contains_whitespace',
         message: t('settings.preflight.whitespace_key'),
         recommendation: t('settings.preflight.whitespace_key_rec'),
-      }
+      })
     }
     if (!isHttpHeaderSafeCredential(trimmed)) {
-      return {
+      return withIpcClass({
         ok: false,
         status: 'misconfigured',
         code: 'api_key_header_unsafe',
         message: t('settings.preflight.invalid_key'),
         recommendation: t('settings.preflight.invalid_key_rec'),
-      }
+      })
     }
   }
 

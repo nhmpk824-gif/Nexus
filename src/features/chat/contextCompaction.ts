@@ -6,23 +6,12 @@
  */
 
 import type { AppSettings, ChatMessage, ChatMessageContent } from '../../types'
+import { estimateModelContextWindowTokens } from '../../lib/modelCapabilities.ts'
+import { estimateTokensFromMessages } from './tokenEstimate.ts'
 
 // ── Token estimation ──
 
 const SAFETY_MARGIN = 1.2
-
-/**
- * Rough token estimate: 1 CJK char ≈ 2 tokens, 1 English word ≈ 1.3 tokens.
- * Not exact, but sufficient for budget decisions.
- */
-function estimateTokenCount(text: string): number {
-  const cjkPattern = /[\u3400-\u9fff\uf900-\ufaff]/g
-  const cjkChars = (text.match(cjkPattern) || []).length
-  const nonCjkText = text.replace(cjkPattern, '')
-  const englishWords = nonCjkText.trim().split(/\s+/).filter(Boolean).length
-
-  return Math.ceil(cjkChars * 2 + englishWords * 1.3)
-}
 
 /**
  * Extract just the text portion of a multimodal content value. Image parts are
@@ -34,12 +23,6 @@ export function getMessageText(content: ChatMessageContent): string {
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
     .join(' ')
-}
-
-function estimateMessagesTokenCount(
-  messages: Array<{ role: string; content: ChatMessageContent }>,
-): number {
-  return messages.reduce((sum, msg) => sum + estimateTokenCount(getMessageText(msg.content)) + 4, 0)
 }
 
 /**
@@ -164,8 +147,14 @@ export function compactMessagesForRequest(
   // Filter out system messages and get recent history
   const userAssistantMessages = allMessages.filter((m) => m.role !== 'system')
 
-  // If within limits, no compaction needed
-  if (userAssistantMessages.length <= maxMessages) {
+  const estimateChatTokens = (messages: ChatMessage[]) => (
+    estimateTokensFromMessages(messages.map((message) => ({ content: buildLlmContent(message) })))
+  )
+
+  const keepCount = Math.max(Math.floor(maxMessages * 0.6), 4)
+  const fitsMessageCount = userAssistantMessages.length <= maxMessages
+  const fullTokens = estimateChatTokens(userAssistantMessages)
+  if (fitsMessageCount && fullTokens * SAFETY_MARGIN <= tokenBudget) {
     return {
       messages: stripStaleLastAssistantWithoutReasoning(userAssistantMessages.map(toLlmMessage)),
       compacted: false,
@@ -174,42 +163,40 @@ export function compactMessagesForRequest(
   }
 
   // Split: older messages to summarize, recent messages to keep
-  const keepCount = Math.max(Math.floor(maxMessages * 0.6), 4)
   const recentMessages = userAssistantMessages.slice(-keepCount)
-  const olderMessages = userAssistantMessages.slice(0, -keepCount)
+  let olderMessages = userAssistantMessages.slice(0, -keepCount)
 
   // Estimate if recent messages alone fit the budget
-  const recentTokens = estimateMessagesTokenCount(
-    recentMessages.map((m) => ({ role: m.role, content: buildLlmContent(m) })),
-  )
+  const recentTokens = estimateChatTokens(recentMessages)
 
   if (recentTokens * SAFETY_MARGIN > tokenBudget) {
-    // Even recent messages exceed budget — take fewer
     const trimmedCount = Math.max(3, Math.floor(keepCount / 2))
     const trimmed = userAssistantMessages.slice(-trimmedCount)
+    olderMessages = userAssistantMessages.slice(0, -trimmedCount)
     return {
       messages: stripStaleLastAssistantWithoutReasoning(trimmed.map(toLlmMessage)),
       compacted: true,
-      olderMessagesText: null,
+      olderMessagesText: olderMessages.length
+        ? truncateOlderConversationText(olderMessages)
+        : null,
     }
   }
-
-  // Build summary of older messages — text-only, images are dropped from the
-  // summarization input (they don't help the text summarizer anyway).
-  const olderText = olderMessages
-    .map((m) => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`)
-    .join('\n')
-
-  // Truncate older text if it's extremely long (avoid sending huge prompts for summarization)
-  const truncatedOlderText = olderText.length > 6000
-    ? olderText.slice(0, 6000) + '\n...(earlier conversation omitted)'
-    : olderText
 
   return {
     messages: stripStaleLastAssistantWithoutReasoning(recentMessages.map(toLlmMessage)),
     compacted: true,
-    olderMessagesText: truncatedOlderText,
+    olderMessagesText: olderMessages.length
+      ? truncateOlderConversationText(olderMessages)
+      : null,
   }
+}
+
+function truncateOlderConversationText(olderMessages: ChatMessage[]): string {
+  const olderText = olderMessages
+    .map((message) => `${message.role === 'user' ? 'User' : 'AI'}: ${message.content}`)
+    .join('\n')
+  if (olderText.length <= 6000) return olderText
+  return `...(earlier conversation omitted)\n${olderText.slice(-6000)}`
 }
 
 /**
@@ -295,31 +282,33 @@ export function clearCompactionCache() {
 // ── Budget configuration ──
 
 /**
- * Get the effective token budget for a given model.
- * Conservative defaults to avoid overflow.
+ * How much of a conversation we keep before summarizing.
+ *
+ * This is not the model's advertised context window. It is a conservative
+ * working budget so compaction kicks in before a 1M-window request blows
+ * up latency or cost. Window sizes come from the shared capability
+ * heuristic; unknown ids stay tiny so we never pretend a local 8k model
+ * can hold a novel.
  */
 export function getModelTokenBudget(model: string): number {
   const normalized = model.toLowerCase()
 
-  if (normalized.includes('gpt-5')) return 500_000
   if (normalized.includes('gpt-4o') || normalized.includes('gpt-4-turbo')) return 60_000
   if (normalized.includes('gpt-4')) return 6_000
   if (normalized.includes('gpt-3.5')) return 12_000
-  if (normalized.includes('claude-3-5') || normalized.includes('claude-3.5')) return 80_000
-  if (normalized.includes('claude-3') || normalized.includes('claude-4')) return 80_000
-  if (normalized.includes('claude')) return 60_000
-  if (normalized.includes('deepseek-v4') || normalized.includes('deepseek-chat') || normalized.includes('deepseek-reasoner')) return 200_000
-  if (normalized.includes('grok-4.3') || normalized.includes('grok-4.20')) return 200_000
-  if (normalized.includes('gemini-3') || normalized.includes('gemini-2.5')) return 200_000
-  if (normalized.includes('qwen3.6') || normalized.includes('qwen3.5') || normalized.includes('qwen3-coder')) return 200_000
-  if (normalized.includes('kimi-k2') || normalized.includes('mistral-medium-3-5') || normalized.includes('magistral') || normalized.includes('devstral')) return 200_000
-  if (normalized.includes('minimax-m3')) return 500_000
-  if (normalized.includes('minimax-m2') || normalized.includes('glm-5') || normalized.includes('glm-4.7') || normalized.includes('seed-2')) return 200_000
-  if (normalized.includes('deepseek')) return 28_000
-  if (normalized.includes('qwen')) return 28_000
   if (normalized.includes('gemma') || normalized.includes('llama')) return 6_000
 
-  // Conservative default
+  const windowTokens = estimateModelContextWindowTokens(model)
+  if (windowTokens && windowTokens >= 1_000_000) return 500_000
+  if (windowTokens && windowTokens >= 500_000) return 250_000
+  if (windowTokens && windowTokens >= 256_000) return 200_000
+  if (windowTokens && windowTokens >= 200_000) return 160_000
+  if (windowTokens && windowTokens >= 128_000) return 80_000
+  if (windowTokens && windowTokens >= 64_000) return 48_000
+  if (windowTokens) return Math.max(8_000, Math.floor(windowTokens / 2))
+
+  if (normalized.includes('deepseek')) return 28_000
+  if (normalized.includes('qwen')) return 28_000
   return 8_000
 }
 

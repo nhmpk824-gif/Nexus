@@ -84,3 +84,20 @@ test('tokenize supports CJK character fallback and stopword filtering', () => {
   assert.deepEqual(tokenize('我们 今天 看 星绘'), ['今天', '今', '天', '看', '星绘', '星', '绘'])
   assert.deepEqual(tokenize('a the of B useful'), ['useful'])
 })
+
+test('SessionStore uses the injected clock for ids and timestamps', () => {
+  let now = 5_000
+  const store = new SessionStore({
+    time: {
+      now: () => now,
+      id: (prefix) => `${prefix}frozen`,
+    },
+  })
+  const session = store.createSession('conversation-a', 'Clocked')
+  assert.equal(session.id, 'sess-frozen')
+  assert.equal(session.createdAt, 5_000)
+
+  now = 6_000
+  store.appendMessage(session.id, { role: 'user', content: 'hello', timestamp: 1 })
+  assert.equal(store.getSession(session.id)?.updatedAt, 6_000)
+})

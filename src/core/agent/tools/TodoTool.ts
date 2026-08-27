@@ -1,3 +1,5 @@
+import type { CoreTime } from '../../time.ts'
+import { systemTime } from '../../time.ts'
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
 
@@ -10,22 +12,34 @@ export type TodoItem = {
   updatedAt: number
 }
 
+function cloneItem(item: TodoItem): TodoItem {
+  return { ...item }
+}
+
+/**
+ * Per-conversation todo list used by `/todo` slash commands.
+ * Returns clones so slash-command formatting cannot mutate store state.
+ */
 export class TodoStore {
   private readonly items = new Map<string, TodoItem>()
+  private readonly time: CoreTime
+
+  constructor(options?: { time?: CoreTime }) {
+    this.time = options?.time ?? systemTime()
+  }
 
   add(conversationId: string, text: string): TodoItem {
-    const id = `todo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-    const now = Date.now()
+    const now = this.time.now()
     const item: TodoItem = {
-      id,
+      id: this.time.id('todo-'),
       conversationId,
       text,
       status: 'pending',
       createdAt: now,
       updatedAt: now,
     }
-    this.items.set(id, item)
-    return item
+    this.items.set(item.id, item)
+    return cloneItem(item)
   }
 
   update(id: string, patch: { text?: string; status?: TodoStatus }): TodoItem | undefined {
@@ -33,14 +47,15 @@ export class TodoStore {
     if (!item) return undefined
     if (patch.text !== undefined) item.text = patch.text
     if (patch.status !== undefined) item.status = patch.status
-    item.updatedAt = Date.now()
-    return item
+    item.updatedAt = this.time.now()
+    return cloneItem(item)
   }
 
   list(conversationId: string): TodoItem[] {
     return Array.from(this.items.values())
       .filter((item) => item.conversationId === conversationId)
       .sort((a, b) => a.createdAt - b.createdAt)
+      .map(cloneItem)
   }
 
   remove(id: string): boolean {

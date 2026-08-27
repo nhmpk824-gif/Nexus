@@ -7,6 +7,7 @@ import type {
 import { blobToBase64 } from '../../lib/common.ts'
 import { createId } from '../../lib/index.ts'
 import { recordSttUsage } from '../../features/metering/speechCost.ts'
+import { humanizeIfSpeechIpcError } from '../../lib/humanizeError.ts'
 import { mapSpeechError } from '../../lib/voice.ts'
 import type {
   AppSettings,
@@ -211,7 +212,8 @@ export async function startApiRecordingConversation(
           await params.handleRecognizedVoiceTranscript(transcript, { traceId })
         } catch (error) {
           params.handleVoiceListeningFailure(
-            error instanceof Error ? error.message : params.ti('voice.provider.api.failed_retry'),
+            humanizeIfSpeechIpcError(error, 'stt')
+              ?? (error instanceof Error ? error.message : params.ti('voice.provider.api.failed_retry')),
           )
         }
       },
@@ -221,9 +223,10 @@ export async function startApiRecordingConversation(
     params.setVoiceState('idle')
     params.setMood('idle')
     params.setError(
-      error instanceof Error
-        ? error.message
-        : params.ti('voice.provider.api.permission_denied'),
+      humanizeIfSpeechIpcError(error, 'stt')
+        ?? (error instanceof Error
+          ? error.message
+          : params.ti('voice.provider.api.permission_denied')),
     )
   }
 }

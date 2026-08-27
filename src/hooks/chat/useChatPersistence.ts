@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import {
   createId,
   inferSessionTitle,
@@ -21,7 +21,7 @@ export function useChatPersistence({
   setMessages,
 }: {
   messages: ChatMessage[]
-  setMessages: (messages: ChatMessage[]) => void
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>
 }) {
   // Stable for the whole mount — a lazy useState (not a ref) so the value can
   // be read during render without tripping react-hooks/refs.
@@ -36,8 +36,18 @@ export function useChatPersistence({
 
   const applyRemoteMessages = useCallback((next: ChatMessage[]) => {
     messagesSaveSkipRef.current = true
-    lastSavedMessagesSignatureRef.current = messagesSignature(next)
-    setMessages(next)
+    setMessages((current) => {
+      const localById = new Map(current.map((message) => [message.id, message]))
+      const merged = next.map((remote) => {
+        const local = localById.get(remote.id)
+        if (local?.images?.length && !remote.images?.length) {
+          return { ...remote, images: local.images }
+        }
+        return remote
+      })
+      lastSavedMessagesSignatureRef.current = messagesSignature(merged)
+      return merged
+    })
   }, [setMessages])
 
   useEffect(() => {

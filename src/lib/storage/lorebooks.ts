@@ -7,21 +7,14 @@ import {
 } from './core.ts'
 import { isObject } from '../guards.ts'
 import { normalizeIsoOr } from '../localDate.ts'
-import { hasChanged } from '../normalize.ts'
-
-function normalizeString(value: unknown, collapseWhitespace = true): string {
-  if (typeof value !== 'string') return ''
-  return collapseWhitespace
-    ? value.replace(/\s+/g, ' ').trim()
-    : value.trim()
-}
+import { hasChanged, normalizeBoundedText, normalizeString } from '../normalize.ts'
 
 function normalizeKeywords(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   const keywords: string[] = []
   const seen = new Set<string>()
   for (const item of value) {
-    const keyword = normalizeString(item)
+    const keyword = normalizeBoundedText(item, Number.MAX_SAFE_INTEGER)
     if (!keyword) continue
     const key = keyword.toLowerCase()
     if (seen.has(key)) continue
@@ -57,10 +50,10 @@ function makeStableLorebookId(entry: {
 
 function normalizeLorebookEntry(raw: unknown, now: string, index: number): LorebookEntry | null {
   if (!isObject(raw)) return null
-  const id = normalizeString(raw.id)
-  const label = normalizeString(raw.label)
+  const id = normalizeBoundedText(raw.id, Number.MAX_SAFE_INTEGER)
+  const label = normalizeBoundedText(raw.label, Number.MAX_SAFE_INTEGER)
   const keywords = normalizeKeywords(raw.keywords)
-  const content = normalizeString(raw.content, false)
+  const content = normalizeString(raw.content)
   if (!id && !label && keywords.length === 0 && !content) return null
 
   const createdAt = normalizeIsoOr(raw.createdAt, now)

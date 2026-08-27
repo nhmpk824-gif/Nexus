@@ -1,3 +1,4 @@
+import { clamp } from '../../lib/common.ts'
 import type { ParaformerStreamSession } from './localParaformer.ts'
 import type { SenseVoiceStreamSession } from './localSenseVoice.ts'
 import type { TencentAsrStreamSession } from './tencentAsr.ts'
@@ -179,7 +180,7 @@ export class HearingRuntime {
 
   setSpeechLevel(level: number) {
     // Speech level changes at ~60 Hz — only notify on visually meaningful deltas.
-    const clamped = Math.max(0, Math.min(1, level))
+    const clamped = clamp(level, 0, 1)
     if (Math.abs(this._speechLevel - clamped) < 0.015) return
     this._speechLevel = clamped
     this.notify()

@@ -22,3 +22,9 @@ export declare function buildChatIpcError(
 ): Error
 
 export declare function extractChatIpcErrorCode(error: unknown): ChatIpcErrorCode | null
+
+export declare function chatIpcErrorCodeFromConnectionCode(
+  code: string | null | undefined,
+): ChatIpcErrorCode | null
+
+export declare function classifyChatTransportFailure(error: unknown): ChatIpcErrorCode

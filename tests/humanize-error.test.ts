@@ -90,9 +90,9 @@ describe('humanizeError — chat IPC error codes', () => {
     const pinned = [
       'CHAT_IPC_ERROR_CODES.AUTH_FAILED',
       'CHAT_IPC_ERROR_CODES.MISSING_API_KEY',
-      'CHAT_IPC_ERROR_CODES.UNREACHABLE',
       'CHAT_IPC_ERROR_CODES.TIMEOUT',
       'CHAT_IPC_ERROR_CODES.EMPTY_CONTENT',
+      'classifyChatTransportFailure',
     ]
     for (const literal of pinned) {
       assert.ok(source.includes(literal), `chatIpc.js no longer throws pinned code: ${literal}`)
@@ -205,6 +205,11 @@ describe('humanizeError — chat IPC error codes', () => {
     assert.match(out, /Something went wrong/)
     assert.match(out, /sk-\*\*\*/)
     assert.doesNotMatch(out, /sk-ABCDEF1234567890XYZ/)
+  })
+
+  test('chat path does not classify leftover Chinese timeout copy as the contract', () => {
+    const out = humanizeError('模型回复太慢了，看看网络和服务有没有问题？', 'chat')
+    assert.doesNotMatch(out, /(too long|faster)/i)
   })
 })
 

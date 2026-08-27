@@ -1,6 +1,7 @@
 import { runTextConnectionTestPreflight } from '../models/connectionPreflight.ts'
 import { getApiProviderPreset } from '../models/providerCatalog.ts'
 import type { AppSettings } from '../../types/app.ts'
+import { normalizeText as normalizeOptionalText } from '../../lib/normalize.ts'
 
 export type ModelEntry = {
   id: string
@@ -60,13 +61,6 @@ const MAX_MODEL_ID_CHARS = 80
 const MAX_MODEL_PROGRESS_TEXT_CHARS = 1_000
 const MAX_MODEL_PROGRESS_BYTES = Number.MAX_SAFE_INTEGER
 
-function normalizeText(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const trimmed = value.trim()
-  if (!trimmed) return undefined
-  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed
-}
-
 function normalizeNonNegativeNumber(value: unknown): number | undefined {
   const numeric = typeof value === 'number'
     ? value
@@ -82,7 +76,7 @@ function isModelProgressPhase(value: unknown): value is ProgressEvent['phase'] {
 export function normalizeModelProgressEvent(event: unknown): ProgressEvent | null {
   if (typeof event !== 'object' || event === null) return null
   const record = event as Record<string, unknown>
-  const modelId = normalizeText(record.modelId, MAX_MODEL_ID_CHARS)
+  const modelId = normalizeOptionalText(record.modelId, MAX_MODEL_ID_CHARS)
   if (!modelId || !isModelProgressPhase(record.phase)) return null
 
   return {
@@ -90,8 +84,8 @@ export function normalizeModelProgressEvent(event: unknown): ProgressEvent | nul
     phase: record.phase,
     downloaded: normalizeNonNegativeNumber(record.downloaded),
     total: normalizeNonNegativeNumber(record.total),
-    fileName: normalizeText(record.fileName, MAX_MODEL_PROGRESS_TEXT_CHARS),
-    message: normalizeText(record.message, MAX_MODEL_PROGRESS_TEXT_CHARS),
+    fileName: normalizeOptionalText(record.fileName, MAX_MODEL_PROGRESS_TEXT_CHARS) ?? undefined,
+    message: normalizeOptionalText(record.message, MAX_MODEL_PROGRESS_TEXT_CHARS) ?? undefined,
   }
 }
 

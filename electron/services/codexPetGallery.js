@@ -1,3 +1,5 @@
+import { decodeHtmlEntities } from '../textNormalize.js'
+
 const CODEX_PET_GALLERY_HOME_URL = 'https://codex-pet.com/'
 const CODEX_PET_GALLERY_BASE_URL = 'https://codex-pet.com/pets/'
 const CODEX_PET_ORG_HOME_URL = 'https://codex-pet.org/'
@@ -160,30 +162,6 @@ function pathnameSlug(url) {
   } catch {
     return ''
   }
-}
-
-function decodeHtmlEntities(value) {
-  const namedEntities = {
-    amp: '&',
-    apos: "'",
-    gt: '>',
-    lt: '<',
-    quot: '"',
-    x27: "'",
-  }
-
-  return String(value ?? '').replace(/&(#x[0-9a-f]+|#[0-9]+|[a-zA-Z][a-zA-Z0-9]+);/gu, (match, entity) => {
-    const normalized = String(entity).toLowerCase()
-    if (normalized.startsWith('#x')) {
-      const codePoint = Number.parseInt(normalized.slice(2), 16)
-      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match
-    }
-    if (normalized.startsWith('#')) {
-      const codePoint = Number.parseInt(normalized.slice(1), 10)
-      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match
-    }
-    return namedEntities[normalized] ?? match
-  })
 }
 
 function cleanHtmlText(value) {

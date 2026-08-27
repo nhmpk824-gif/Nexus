@@ -4,6 +4,7 @@ import {
   runConnectionPreflight,
   runTextConnectionTestPreflight,
 } from '../src/features/models/connectionPreflight.ts'
+import { CHAT_IPC_ERROR_CODES } from '../shared/chatErrorCodes.js'
 
 const base = {
   providerId: 'openai',
@@ -22,6 +23,7 @@ test('catches empty API key for provider that requires one', () => {
   assert.equal(result?.ok, false)
   assert.equal(result?.status, 'needs_key')
   assert.equal(result?.code, 'missing_api_key')
+  assert.equal(result?.ipcCode, CHAT_IPC_ERROR_CODES.MISSING_API_KEY)
 })
 
 test('DeepSeek missing API key includes the first-run repair path', () => {
@@ -55,6 +57,7 @@ test('catches CJK characters in API key', () => {
   assert.equal(result?.ok, false)
   assert.equal(result?.status, 'misconfigured')
   assert.equal(result?.code, 'api_key_contains_cjk')
+  assert.equal(result?.ipcCode, CHAT_IPC_ERROR_CODES.API_KEY_HEADER_UNSAFE)
 })
 
 test('catches whitespace in API key', () => {
@@ -62,6 +65,7 @@ test('catches whitespace in API key', () => {
   assert.equal(result?.ok, false)
   assert.equal(result?.status, 'misconfigured')
   assert.equal(result?.code, 'api_key_contains_whitespace')
+  assert.equal(result?.ipcCode, CHAT_IPC_ERROR_CODES.API_KEY_HEADER_UNSAFE)
 })
 
 test('catches newlines in API key before they break HTTP headers', () => {
@@ -160,6 +164,14 @@ test('text connection test preflight still reports missing key after structural 
 
   assert.equal(result?.ok, false)
   assert.equal(result?.status, 'needs_key')
+  assert.equal(result?.ipcCode, CHAT_IPC_ERROR_CODES.MISSING_API_KEY)
+})
+
+test('header-unsafe API key maps to the complete-path IPC class', () => {
+  const result = runConnectionPreflight({ ...base, apiKey: 'sk-test\x00key' })
+  assert.equal(result?.ok, false)
+  assert.equal(result?.code, 'api_key_header_unsafe')
+  assert.equal(result?.ipcCode, CHAT_IPC_ERROR_CODES.API_KEY_HEADER_UNSAFE)
 })
 
 test('custom missing base URL explains the OpenAI-compatible URL shape', () => {

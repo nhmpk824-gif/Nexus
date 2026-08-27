@@ -33,9 +33,7 @@ export function isSameLocalWeek(aMs: number, bMs: number): boolean {
 }
 
 /** ISO-8601 timestamp for the given moment (defaults to now). */
-export function nowIso(now: Date | string | number = new Date()): string {
-  return now instanceof Date ? now.toISOString() : new Date(now).toISOString()
-}
+export { nowIso } from '../../shared/time.js'
 
 /** True when the string parses as a valid date/time. */
 export function isValidIsoTimestamp(value: string): boolean {

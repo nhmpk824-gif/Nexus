@@ -22,6 +22,7 @@ import {
   DEFAULT_PERSONA_PROFILE_ID,
   type LoadedPersona,
 } from '../features/autonomy/v2/personaTypes.ts'
+import { localDayKey } from '../lib/localDate.ts'
 import { getRedactedLogErrorMessage } from '../lib/logRedaction.ts'
 import {
   acquireBackgroundChatLease,
@@ -51,11 +52,6 @@ type UseLetterSchedulerOptions = {
     detail: string
     tone: 'info' | 'warn'
   }) => void
-}
-
-function localDayKey(ms: number): string {
-  const d = new Date(ms)
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
 }
 
 function activeDayKeysFromMessages(messages: ChatMessage[], windowStartMs: number): string[] {

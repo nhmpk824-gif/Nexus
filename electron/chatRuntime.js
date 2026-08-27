@@ -5,15 +5,17 @@ import {
 } from '../shared/modelCapabilities.js'
 import { inferProviderIdFromHost } from '../shared/providerHostInference.js'
 import {
+  CHAT_IPC_ERROR_CODES,
+  chatIpcErrorCodeFromConnectionCode,
+  classifyChatTransportFailure,
+} from '../shared/chatErrorCodes.js'
+import {
   CHAT_CONNECTION_MESSAGE,
   CHAT_CONNECTION_RECOMMENDATION,
   buildChatConnectionResult,
   classifyChatMessageProbeIdentity,
 } from './services/chatConnectionProof.js'
-
-function normalizeBaseUrl(value) {
-  return String(value ?? '').trim().replace(/\/+$/u, '')
-}
+import { normalizeBaseUrl } from './netHelpers.js'
 
 function stripAnthropicVersionSuffix(baseUrl) {
   return normalizeBaseUrl(baseUrl).replace(/\/v1$/iu, '')
@@ -212,10 +214,13 @@ export function getChatConnectionTestPreflightFailure({ providerId, apiKey }) {
     try {
       normalizeChatApiKeyForHeader(normalizedProviderId, apiKey)
     } catch (error) {
+      const shortCode = error?.code || 'api_key_header_unsafe'
       return buildChatConnectionResult({
         ok: false,
         status: 'needs_key',
-        code: error?.code || 'api_key_header_unsafe',
+        code: shortCode,
+        ipcCode: chatIpcErrorCodeFromConnectionCode(shortCode)
+          || CHAT_IPC_ERROR_CODES.API_KEY_HEADER_UNSAFE,
         messageKey: CHAT_CONNECTION_MESSAGE.API_KEY_HEADER_UNSAFE,
         recommendationKey: CHAT_CONNECTION_RECOMMENDATION.API_KEY_HEADER_UNSAFE,
         diagnosticDetail: error instanceof Error ? error.message : undefined,
@@ -229,6 +234,7 @@ export function getChatConnectionTestPreflightFailure({ providerId, apiKey }) {
       ok: false,
       status: 'needs_key',
       code: 'missing_api_key',
+      ipcCode: CHAT_IPC_ERROR_CODES.MISSING_API_KEY,
       messageKey: CHAT_CONNECTION_MESSAGE.MISSING_API_KEY_DEEPSEEK,
       recommendationKey: CHAT_CONNECTION_RECOMMENDATION.MISSING_API_KEY,
     })
@@ -238,6 +244,7 @@ export function getChatConnectionTestPreflightFailure({ providerId, apiKey }) {
     ok: false,
     status: 'needs_key',
     code: 'missing_api_key',
+    ipcCode: CHAT_IPC_ERROR_CODES.MISSING_API_KEY,
     messageKey: CHAT_CONNECTION_MESSAGE.MISSING_API_KEY,
     recommendationKey: CHAT_CONNECTION_RECOMMENDATION.MISSING_API_KEY,
   })
@@ -728,25 +735,28 @@ function classifyOllamaTransportFailure(reason) {
   if (
     normalized.includes('etimedout')
     || normalized.includes('timeout')
-    || normalized.includes('超时')
   ) {
     return 'timeout'
   }
   return 'unknown'
 }
 
-export function summarizeChatConnectionTransportFailure({ providerId, reason, baseUrl }) {
+export function summarizeChatConnectionTransportFailure({ providerId, reason, baseUrl, error }) {
   const checkedAt = new Date().toISOString()
   const normalizedProviderId = normalizeChatProviderId(providerId, baseUrl)
   const diagnosticDetail = String(reason ?? '').trim() || undefined
+  const ipcCode = classifyChatTransportFailure(error ?? reason)
+  const isTimeout = ipcCode === CHAT_IPC_ERROR_CODES.TIMEOUT
 
   if (normalizedProviderId === 'ollama') {
-    const failureKind = classifyOllamaTransportFailure(reason)
+    const failureKind = isTimeout ? 'timeout' : classifyOllamaTransportFailure(reason)
+    const timedOut = failureKind === 'timeout'
     return buildChatConnectionResult({
       ok: false,
       status: 'unreachable',
-      code: failureKind === 'timeout' ? 'request_timeout' : 'provider_unreachable',
-      messageKey: failureKind === 'timeout'
+      code: timedOut ? 'request_timeout' : 'provider_unreachable',
+      ipcCode: timedOut ? CHAT_IPC_ERROR_CODES.TIMEOUT : CHAT_IPC_ERROR_CODES.UNREACHABLE,
+      messageKey: timedOut
         ? CHAT_CONNECTION_MESSAGE.PROVIDER_UNREACHABLE_OLLAMA_TIMEOUT
         : CHAT_CONNECTION_MESSAGE.PROVIDER_UNREACHABLE_OLLAMA,
       recommendationKey: CHAT_CONNECTION_RECOMMENDATION.PROVIDER_UNREACHABLE_OLLAMA,
@@ -758,9 +768,14 @@ export function summarizeChatConnectionTransportFailure({ providerId, reason, ba
   return buildChatConnectionResult({
     ok: false,
     status: 'unreachable',
-    code: 'provider_unreachable',
-    messageKey: CHAT_CONNECTION_MESSAGE.PROVIDER_UNREACHABLE,
-    recommendationKey: CHAT_CONNECTION_RECOMMENDATION.PROVIDER_UNREACHABLE,
+    code: isTimeout ? 'request_timeout' : 'provider_unreachable',
+    ipcCode,
+    messageKey: isTimeout
+      ? CHAT_CONNECTION_MESSAGE.REQUEST_TIMEOUT
+      : CHAT_CONNECTION_MESSAGE.PROVIDER_UNREACHABLE,
+    recommendationKey: isTimeout
+      ? CHAT_CONNECTION_RECOMMENDATION.REQUEST_TIMEOUT
+      : CHAT_CONNECTION_RECOMMENDATION.PROVIDER_UNREACHABLE,
     checkedAt,
     diagnosticDetail,
   })

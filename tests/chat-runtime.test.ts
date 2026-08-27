@@ -26,6 +26,7 @@ test('ollama is inferred from the default local port and does not require an API
 test('provider base URLs map to the correct Nexus provider ids', () => {
   assert.equal(normalizeChatProviderId('', 'https://qianfan.baidubce.com/v2'), 'qianfan')
   assert.equal(normalizeChatProviderId('', 'https://open.bigmodel.cn/api/paas/v4'), 'zai')
+  assert.equal(normalizeChatProviderId('', 'https://api.z.ai/api/paas/v4'), 'zai-global')
   assert.equal(normalizeChatProviderId('', 'https://ark.ap-southeast.bytepluses.com/api/v3'), 'byteplus')
   assert.equal(normalizeChatProviderId('', 'https://ark.ap-southeast.bytepluses.com/api/coding/v3'), 'byteplus-coding')
   assert.equal(normalizeChatProviderId('', 'https://ark.cn-beijing.volces.com/api/v3'), 'doubao')

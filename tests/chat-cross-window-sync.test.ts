@@ -192,8 +192,8 @@ async function setup() {
   const render = () => {
     hook = renderer.render({
       messages: current,
-      setMessages: (next: ChatMessage[]) => {
-        current = next
+      setMessages: (next: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => {
+        current = typeof next === 'function' ? next(current) : next
         render()
       },
     })

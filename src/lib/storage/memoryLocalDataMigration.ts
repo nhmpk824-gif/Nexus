@@ -10,6 +10,7 @@ import {
 } from './memory.ts'
 import type { DailyMemoryEntry, MemoryItem } from '../../types/memory.ts'
 import type { MemoryMigrationDryRunReport } from './memoryMigrationDryRun.ts'
+import { nowIso } from '../localDate.ts'
 
 type EnvLike = Record<string, string | boolean | undefined>
 
@@ -139,7 +140,7 @@ export function buildMemoryLocalDataMigrationPackageFromState(
   const daily = normalizeDailyMemoryStore(dailyMemories)
   return {
     schemaVersion: MEMORY_MIGRATION_PACKAGE_SCHEMA_VERSION,
-    createdAt: now instanceof Date ? now.toISOString() : new Date(now).toISOString(),
+    createdAt: nowIso(now),
     source,
     longTerm,
     daily: flattenDailyMemories(daily),
@@ -191,10 +192,6 @@ export function buildMemoryMigrationBackupEnvelope(
     },
     migrationPackage,
   }
-}
-
-function nowIso(now: Date | string | number = new Date()): string {
-  return now instanceof Date ? now.toISOString() : new Date(now).toISOString()
 }
 
 export function buildMemoryMigrationBackupFileName(exportedAt: string): string {

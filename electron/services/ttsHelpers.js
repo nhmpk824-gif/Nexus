@@ -1,3 +1,4 @@
+import { SPEECH_IPC_ERROR_CODES } from '../../shared/speechErrorCodes.js'
 import { normalizeBaseUrl, normalizeLanguageCode } from '../net.js'
 import {
   isEdgeTtsSpeechOutputProvider,
@@ -34,7 +35,7 @@ export function resolveSpeechOutputTimeoutMs() {
 }
 
 export function resolveSpeechOutputTimeoutMessage() {
-  return '语音播报等了好久都没回应，看看网络和代理对不对？'
+  return SPEECH_IPC_ERROR_CODES.TTS_TIMEOUT
 }
 
 export function buildOpenAiCompatibleSpeechRequestPayload(payload, content, options = {}) {

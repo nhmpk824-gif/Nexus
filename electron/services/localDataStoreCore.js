@@ -1,6 +1,10 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { nowIso } from '../../shared/time.js'
+
+export { nowIso }
+
 const LOCAL_DATA_BACKEND = 'sqlite'
 const LOCAL_DATA_SCHEMA_VERSION = 4
 const LOCAL_DATA_MANIFEST_FORMAT = 'nexus-local-data-manifest'
@@ -171,10 +175,6 @@ let runtimeStatus = {
   storageDirectoryName: LOCAL_DATA_DIR_NAME,
   errorKind: null,
   errorMessage: null,
-}
-
-export function nowIso(now = new Date()) {
-  return now instanceof Date ? now.toISOString() : new Date(now).toISOString()
 }
 
 export function isPlainObject(value) {

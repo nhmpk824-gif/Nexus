@@ -1,5 +1,6 @@
 import { parseAssistantPerformanceContent } from '../../features/pet/performance.ts'
 import { t } from '../../i18n/runtime.ts'
+import { humanizeIfSpeechIpcError } from '../../lib/humanizeError.ts'
 import type { ChatMessage } from '../../types/index.ts'
 
 export function formatReminderNextRunLabel(timestamp: string | undefined, locale: string) {
@@ -17,6 +18,8 @@ export function formatReminderNextRunLabel(timestamp: string | undefined, locale
 }
 
 export function getSpeechOutputErrorMessage(error: unknown, fallback?: string) {
+  const coded = humanizeIfSpeechIpcError(error, 'tts')
+  if (coded) return coded
   if (error instanceof Error) return error.message
   return fallback ?? t('voice.tts.playback_failed_fallback')
 }

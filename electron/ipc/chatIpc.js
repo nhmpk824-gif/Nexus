@@ -2,6 +2,8 @@ import { ipcMain } from 'electron'
 import {
   CHAT_IPC_ERROR_CODES,
   buildChatIpcError,
+  chatIpcErrorCodeFromConnectionCode,
+  classifyChatTransportFailure,
 } from '../../shared/chatErrorCodes.js'
 import {
   buildChatConnectionTestRequest,
@@ -84,9 +86,9 @@ function chatIpcErrorCodeForStatus(status) {
 }
 
 function buildPreflightIpcError(preflightFailure) {
-  const code = preflightFailure.code === 'missing_api_key'
-    ? CHAT_IPC_ERROR_CODES.MISSING_API_KEY
-    : CHAT_IPC_ERROR_CODES.API_KEY_HEADER_UNSAFE
+  const code = preflightFailure.ipcCode
+    || chatIpcErrorCodeFromConnectionCode(preflightFailure.code)
+    || CHAT_IPC_ERROR_CODES.API_KEY_HEADER_UNSAFE
   const error = buildChatIpcError(
     code,
     preflightFailure.messageKey || 'chat preflight check failed',
@@ -152,7 +154,7 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
         // hosts past the first-hop SSRF check (see chat:test-connection).
         followRedirectsSafely: true,
         timeoutMs: CHAT_REQUEST_TIMEOUT_MS,
-        timeoutMessage: '模型回复太慢了，看看网络和服务有没有问题？',
+        timeoutMessage: CHAT_IPC_ERROR_CODES.TIMEOUT,
         maxAttempts: 2,
         onAttempt: () => companionPresence?.retryResume(),
         onRetry: ({ attempt, reason }) => {
@@ -162,9 +164,7 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
       })
     } catch (error) {
       const reason = getRedactedErrorMessage(error)
-      const ipcCode = error?.code === 'request_timeout'
-        ? CHAT_IPC_ERROR_CODES.TIMEOUT
-        : CHAT_IPC_ERROR_CODES.UNREACHABLE
+      const ipcCode = classifyChatTransportFailure(error)
       // Transport-level failure: the provider never answered, so presence is
       // 'offline' rather than 'error'.
       companionPresence?.fail('offline', ipcCode)
@@ -267,6 +267,13 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
       )
     }
     const providerId = normalizeChatProviderId(chatPayload.providerId, baseUrl, chatPayload.model)
+    const preflightFailure = getChatConnectionTestPreflightFailure({
+      providerId,
+      apiKey: chatPayload.apiKey,
+    })
+    if (preflightFailure) {
+      throw buildPreflightIpcError(preflightFailure)
+    }
     const requestSpec = buildChatRequest(chatPayload, { stream: true })
 
     console.info('[chat:stream] request', {
@@ -298,7 +305,7 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
         // headers are exchanged during redirects — the 200 stream is untouched.
         followRedirectsSafely: true,
         timeoutMs: CHAT_REQUEST_TIMEOUT_MS,
-        timeoutMessage: '模型回复太慢了，看看网络和服务有没有问题？',
+        timeoutMessage: CHAT_IPC_ERROR_CODES.TIMEOUT,
         maxAttempts: 2,
         onAttempt: () => companionPresence?.retryResume(),
         onRetry: ({ attempt, reason }) => {
@@ -309,9 +316,7 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
     } catch (error) {
       const reason = getRedactedErrorMessage(error)
       activeChatStreamControllers.delete(requestId)
-      const ipcCode = error?.code === 'request_timeout'
-        ? CHAT_IPC_ERROR_CODES.TIMEOUT
-        : CHAT_IPC_ERROR_CODES.UNREACHABLE
+      const ipcCode = classifyChatTransportFailure(error)
       // A user abort is a neutral wind-down; only genuine transport failures
       // mark presence 'offline'.
       if (abortController.signal.aborted) {
@@ -609,7 +614,7 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
         // hosts past the first-hop SSRF check (non-streaming probe — safe to follow).
         followRedirectsSafely: true,
         timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
-        timeoutMessage: '等了好久都没连上，看看地址和网络对不对？',
+        timeoutMessage: CHAT_IPC_ERROR_CODES.TIMEOUT,
       })
 
       const data = await response.json().catch(() => ({}))
@@ -636,6 +641,7 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
         providerId,
         reason,
         baseUrl,
+        error,
       })
     }
   })
@@ -704,7 +710,7 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
         // a non-streaming GET, safe to follow with per-hop SSRF revalidation.
         followRedirectsSafely: true,
         timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
-        timeoutMessage: '读取模型列表有点久，看看地址和网络对不对？',
+        timeoutMessage: CHAT_IPC_ERROR_CODES.TIMEOUT,
       })
       const data = await response.json().catch(() => ({}))
       const discoveredModels = buildDiscoveredChatModels({ providerId, data })
@@ -748,6 +754,7 @@ export function register({ activeChatStreamControllers, CHAT_REQUEST_TIMEOUT_MS,
           providerId,
           reason,
           baseUrl,
+          error,
         }),
         providerId,
         discoveredModels: [],

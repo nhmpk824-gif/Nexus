@@ -520,9 +520,11 @@ export const REQUIRED_PHRASES = [
     file: 'src/components/settingsDrawerHooks/useSpeechVoiceManagement.ts',
     phrases: [
       "import { getRedactedLogErrorMessage } from '../../lib/logRedaction.ts'",
-      "message: getRedactedLogErrorMessage(error) || t('settings.voice.fetch_voices_error')",
-      "message: getRedactedLogErrorMessage(error) || t('settings.voice.preview_error')",
-      "message: getRedactedLogErrorMessage(error) || t('settings.voice.audio_smoke_error')",
+      "import { humanizeIfSpeechIpcError } from '../../lib/humanizeError.ts'",
+      "|| getRedactedLogErrorMessage(error)",
+      "|| t('settings.voice.fetch_voices_error')",
+      "|| t('settings.voice.preview_error')",
+      "|| t('settings.voice.audio_smoke_error')",
     ],
   },
   {

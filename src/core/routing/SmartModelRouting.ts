@@ -1,3 +1,4 @@
+import { clamp } from '../../lib/common.ts'
 import type { ModelTier, RoutingRequest, RoutingResult, SmartModelRoutingConfig } from './types.ts'
 
 const REASONING_KEYWORDS = [
@@ -48,8 +49,8 @@ export function scoreComplexity(request: RoutingRequest): ComplexityScore {
   const factors: Record<string, number> = {}
   const text = request.userMessage.toLowerCase()
 
-  factors.length = clampScore(text.length / 200, 0, 3)
-  factors.history = clampScore(request.historyLength / 10, 0, 2)
+  factors.length = clamp(text.length / 200, 0, 3)
+  factors.history = clamp(request.historyLength / 10, 0, 2)
   factors.tools = request.hasToolCalls ? 2 : 0
   factors.images = request.hasImages ? 1 : 0
 
@@ -57,13 +58,13 @@ export function scoreComplexity(request: RoutingRequest): ComplexityScore {
   for (const kw of REASONING_KEYWORDS) {
     if (text.includes(kw)) reasoningHits += 1
   }
-  factors.reasoning = clampScore(reasoningHits, 0, 3)
+  factors.reasoning = clamp(reasoningHits, 0, 3)
 
   let codeHits = 0
   for (const kw of CODE_KEYWORDS) {
     if (text.includes(kw)) codeHits += 1
   }
-  factors.code = clampScore(codeHits * 0.5, 0, 2)
+  factors.code = clamp(codeHits * 0.5, 0, 2)
 
   const total = Object.values(factors).reduce((a, b) => a + b, 0)
   return { total, factors }
@@ -99,12 +100,6 @@ export function pickTier(
     reason += ` -> clamped to ${clamped}`
   }
   return { tier: clamped, reason }
-}
-
-function clampScore(value: number, min: number, max: number): number {
-  if (value < min) return min
-  if (value > max) return max
-  return value
 }
 
 function clampTier(tier: ModelTier, config: SmartModelRoutingConfig): ModelTier {

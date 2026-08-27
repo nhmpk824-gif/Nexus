@@ -11,7 +11,7 @@
  * Drives system prompt tone parameters and Live2D mood mapping.
  */
 
-import { classifyByPatterns, driftToward } from '../../lib/common.ts'
+import { clamp, classifyByPatterns, driftToward } from '../../lib/common.ts'
 import type { PetMood } from '../../types'
 
 export interface EmotionState {
@@ -39,7 +39,7 @@ export function normalizeEmotionState(value: unknown): EmotionState {
 
 function normalizeEmotionAxis(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value)
-    ? clamp(value)
+    ? clamp(value, 0, 1)
     : fallback
 }
 
@@ -118,10 +118,6 @@ const SIGNAL_DELTAS: Record<EmotionSignal, Partial<EmotionState>> = {
 /** Natural decay per tick — emotions drift toward neutral baseline. */
 const DECAY_RATE = 0.02
 const BASELINE: EmotionState = { energy: 0.5, warmth: 0.5, curiosity: 0.4, concern: 0.15 }
-
-function clamp(value: number): number {
-  return Math.max(0, Math.min(1, value))
-}
 
 /** Apply a signal to the emotion state. */
 // ── LLM mood reads (deep-emotion channel) ────────────────────────────────────
@@ -235,10 +231,10 @@ export function resolveIdleArcSignals(
 export function applyEmotionSignal(state: EmotionState, signal: EmotionSignal): EmotionState {
   const deltas = SIGNAL_DELTAS[signal]
   return {
-    energy: clamp(state.energy + (deltas.energy ?? 0)),
-    warmth: clamp(state.warmth + (deltas.warmth ?? 0)),
-    curiosity: clamp(state.curiosity + (deltas.curiosity ?? 0)),
-    concern: clamp(state.concern + (deltas.concern ?? 0)),
+    energy: clamp(state.energy + (deltas.energy ?? 0), 0, 1),
+    warmth: clamp(state.warmth + (deltas.warmth ?? 0), 0, 1),
+    curiosity: clamp(state.curiosity + (deltas.curiosity ?? 0), 0, 1),
+    concern: clamp(state.concern + (deltas.concern ?? 0), 0, 1),
   }
 }
 

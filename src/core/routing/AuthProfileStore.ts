@@ -4,6 +4,8 @@ import type {
   AuthProfileStatus,
   ProviderId,
 } from './types.ts'
+import type { CoreTime } from '../time.ts'
+import { systemTime } from '../time.ts'
 import { normalizeNonNegativeInteger } from '../../lib/normalize.ts'
 
 const DEFAULT_COOLDOWN_MS = 60_000
@@ -80,9 +82,11 @@ export function normalizeAuthProfileSnapshot(value: unknown): AuthProfileSnapsho
 export class AuthProfileStore {
   private readonly profiles = new Map<string, AuthProfile>()
   private readonly cooldownMs: number
+  private readonly time: CoreTime
 
-  constructor(options?: { cooldownMs?: number }) {
+  constructor(options?: { cooldownMs?: number; time?: CoreTime }) {
     this.cooldownMs = options?.cooldownMs ?? DEFAULT_COOLDOWN_MS
+    this.time = options?.time ?? systemTime()
   }
 
   register(input: RegisterProfileInput): AuthProfile {
@@ -133,7 +137,7 @@ export class AuthProfileStore {
     return profiles.map(cloneProfile)
   }
 
-  pickNextActive(providerId: ProviderId, now: number = Date.now()): AuthProfile | undefined {
+  pickNextActive(providerId: ProviderId, now: number = this.time.now()): AuthProfile | undefined {
     this.refreshExpiredCooldowns(now)
     const candidates: AuthProfile[] = []
     for (const profile of this.profiles.values()) {
@@ -166,7 +170,7 @@ export class AuthProfileStore {
       return
     }
     profile.status = 'cooldown'
-    profile.cooldownUntil = Date.now() + this.cooldownMs
+    profile.cooldownUntil = this.time.now() + this.cooldownMs
   }
 
   setStatus(id: string, status: AuthProfileStatus): void {
@@ -190,7 +194,7 @@ export class AuthProfileStore {
     }
   }
 
-  private refreshExpiredCooldowns(now: number = Date.now()): void {
+  private refreshExpiredCooldowns(now: number = this.time.now()): void {
     for (const profile of this.profiles.values()) {
       if (
         profile.status === 'cooldown'

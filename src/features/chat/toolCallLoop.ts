@@ -247,6 +247,7 @@ export type RunToolCallLoopOptions = {
    * (persisted by the host via applySettingsUpdate; takes effect next turn).
    */
   onSetToolEnabled?: BuiltInToolExecutionCallbacks['onSetToolEnabled']
+  signal?: AbortSignal
 }
 
 /**
@@ -395,6 +396,9 @@ export async function runToolCallLoop(
   const toolConversationTail: ChatCompletionRequest['messages'] = []
 
   while (round < MAX_TOOL_CALL_ROUNDS) {
+    if (options.signal?.aborted) {
+      break
+    }
     const resolved = resolveResponseToolCalls(response, promptModeEnabled)
     if (!resolved.toolCalls.length) {
       // Strip prompt-mode markers from the final response even when no tool
@@ -453,6 +457,10 @@ export async function runToolCallLoop(
 
     const payload = await rebuildPayload()
     payload.messages.push(...toolConversationTail)
+
+    if (options.signal?.aborted) {
+      break
+    }
 
     lastContinuationPayload = payload
     response = await executeContinuation(payload)

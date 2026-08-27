@@ -66,9 +66,38 @@ const SINGLE_SOURCE_CONTRACTS: Array<{ name: string; canonicalFile: string; lite
     ],
   },
   {
+    name: 'pet IPC error codes',
+    canonicalFile: 'shared/petErrorCodes.js',
+    literals: [
+      `'NEXUS_ERR_PET_ALREADY_IMPORTED'`,
+      `'NEXUS_ERR_PET_IMPORT_INCOMPLETE'`,
+      `'NEXUS_ERR_PET_UNSUPPORTED_FILE'`,
+    ],
+  },
+  {
+    name: 'speech IPC error codes',
+    canonicalFile: 'shared/speechErrorCodes.js',
+    literals: [
+      `'NEXUS_ERR_TTS_TIMEOUT'`,
+      `'NEXUS_ERR_STT_TIMEOUT'`,
+    ],
+  },
+  {
+    name: 'net IPC error codes',
+    canonicalFile: 'shared/netErrorCodes.js',
+    literals: [
+      `'NEXUS_ERR_NET_TIMEOUT'`,
+    ],
+  },
+  {
     name: 'GitHub releases URL',
     canonicalFile: 'shared/updates.js',
     literals: ['https://github.com/FanyinLiu/Nexus/releases/latest'],
+  },
+  {
+    name: 'ISO now helper',
+    canonicalFile: 'shared/time.js',
+    literals: ['now instanceof Date ? now.toISOString()'],
   },
 ]
 

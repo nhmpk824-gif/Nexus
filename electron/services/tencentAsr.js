@@ -14,6 +14,7 @@
 
 import { createHmac } from 'node:crypto'
 import { BrowserWindow } from 'electron'
+import { SPEECH_IPC_ERROR_CODES } from '../../shared/speechErrorCodes.js'
 import { getRedactedErrorMessage } from './errorRedaction.js'
 
 /** @type {'disconnected'|'connecting'|'ready'|'streaming'} */
@@ -210,7 +211,7 @@ export async function connect(credentials) {
     const timeoutId = setTimeout(() => {
       _state = 'disconnected'
       try { ws.close() } catch {}
-      reject(new Error(`腾讯云语音识别连接超时 (${CONNECTION_TIMEOUT_MS / 1000}s)`))
+      reject(new Error(SPEECH_IPC_ERROR_CODES.STT_TIMEOUT))
     }, CONNECTION_TIMEOUT_MS)
 
     let ws
@@ -309,7 +310,8 @@ export function finishStream() {
       if (_finishResolve) {
         const r = _finishResolve
         _finishResolve = null
-        console.log('[TencentASR] finish timeout, using cached:', (_lastFinalText || _lastPartialText).slice(0, 60))
+        const cached = _lastFinalText || _lastPartialText
+        console.log('[TencentASR] finish timeout, using cached:', `chars=${String(cached ?? '').length}`)
         r(_lastFinalText || _lastPartialText)
       }
     }, FINISH_TIMEOUT_MS)
@@ -325,6 +327,11 @@ export function abortStream() {
     if (_finishTimeout) { clearTimeout(_finishTimeout); _finishTimeout = null }
     resolve('')
   }
+  if (_ws) {
+    try { _ws.close() } catch { /* already closed */ }
+    _ws = null
+  }
+  _state = 'disconnected'
 }
 
 export async function disconnect() {

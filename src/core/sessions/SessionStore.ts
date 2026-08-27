@@ -1,3 +1,8 @@
+// In-memory conversation index used by /search and coreRuntime.
+// Callers always receive clones; ids and timestamps come from CoreTime
+// so tests can freeze the clock without depending on Date.now().
+import type { CoreTime } from '../time.ts'
+import { systemTime } from '../time.ts'
 import type {
   SessionId,
   SessionMessage,
@@ -74,10 +79,15 @@ export class SessionStore {
   private readonly messages = new Map<string, StoredMessage>()
   private readonly invertedIndex = new Map<string, Set<string>>()
   private readonly messageIndexes = new Map<string, MessageIndex>()
+  private readonly time: CoreTime
+
+  constructor(options?: { time?: CoreTime }) {
+    this.time = options?.time ?? systemTime()
+  }
 
   createSession(conversationId: string, title?: string): SessionRecord {
-    const id = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-    const now = Date.now()
+    const id = this.time.id('sess-')
+    const now = this.time.now()
     const record: SessionRecord = {
       id,
       conversationId,
@@ -111,7 +121,7 @@ export class SessionStore {
     const key = composeKey(sessionId, messageIndex)
     this.messages.set(key, stored)
     session.messageCount += 1
-    session.updatedAt = Date.now()
+    session.updatedAt = this.time.now()
     this.indexMessage(key, stored)
     return cloneStoredMessage(stored)
   }

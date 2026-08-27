@@ -132,6 +132,7 @@ export async function requestAssistantReply(
   history: ChatMessage[],
   memoryContext: MemoryRecallContext,
   options: AssistantReplyRequestOptions = {},
+  signal?: AbortSignal,
 ) {
   const { settings: routedSettings, tier } = applyRoutingToSettings(settings, history)
 
@@ -159,6 +160,7 @@ export async function requestAssistantReply(
       settings: effectiveSettings,
       onBuiltInToolResult: options.onBuiltInToolResult,
       onSetToolEnabled: options.onSetToolEnabled,
+      signal,
     },
   )
 
@@ -181,13 +183,23 @@ export function requestAssistantReplyStreaming(
   onDelta: (delta: string, done: boolean) => void,
   options: AssistantReplyRequestOptions = {},
 ): AbortableChatRequest {
+  const abortController = new AbortController()
+
   if (!window.desktopPet?.completeChatStream) {
-    const request = requestAssistantReply(settings, history, memoryContext, options)
+    const request = requestAssistantReply(
+      settings,
+      history,
+      memoryContext,
+      options,
+      abortController.signal,
+    )
     const wrapped = request.then((result) => {
       onDelta(result.response.content, true)
       return result
     }) as AbortableChatRequest
-    wrapped.abort = async () => undefined
+    wrapped.abort = async () => {
+      abortController.abort()
+    }
     return wrapped
   }
 
@@ -223,6 +235,7 @@ export function requestAssistantReplyStreaming(
         settings: effectiveSettings,
         onBuiltInToolResult: options.onBuiltInToolResult,
         onSetToolEnabled: options.onSetToolEnabled,
+        signal: abortController.signal,
       },
     )
 
@@ -240,6 +253,7 @@ export function requestAssistantReplyStreaming(
 
   const request = innerRequest() as AbortableChatRequest
   request.abort = async () => {
+    abortController.abort()
     await activeRequest?.abort?.()
   }
 

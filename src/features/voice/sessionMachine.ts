@@ -1,4 +1,5 @@
 import type { VoiceState } from '../../types'
+import { normalizeString } from '../../lib/normalize.ts'
 
 export type VoiceSessionPhase = 'idle' | 'listening' | 'transcribing' | 'speaking'
 
@@ -77,12 +78,8 @@ export type VoiceSessionEvent =
       code?: string
     }
 
-function normalizeText(value?: string) {
-  return value?.trim() ?? ''
-}
-
 function resolveTranscript(current: VoiceSessionState, nextText?: string) {
-  const transcript = normalizeText(nextText)
+  const transcript = normalizeString(nextText)
   return transcript || current.transcript
 }
 
@@ -195,7 +192,7 @@ export function reduceVoiceSessionState(
     }
 
     case 'tts_started': {
-      const transcript = normalizeText(event.text)
+      const transcript = normalizeString(event.text)
       const resolvedTranscript = transcript || current.finalTranscript || current.transcript
       return {
         ...current,
@@ -247,7 +244,7 @@ export function reduceVoiceSessionState(
         partialTranscript: '',
         closeReason: event.code === 'no-speech' ? 'no_speech' : 'error',
         errorCode: event.code ?? null,
-        errorMessage: normalizeText(event.message) || null,
+        errorMessage: normalizeString(event.message) || null,
       }
   }
 }

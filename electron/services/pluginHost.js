@@ -1,7 +1,8 @@
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { copyFile, readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { app, dialog } from 'electron'
 import * as mcpHost from './mcpHost.js'
+import { atomicWriteJson } from './localDataStoreCore.js'
 import {
   formatPluginDirectoryEntryLogLabel,
   formatPluginLogLabel,
@@ -22,6 +23,7 @@ const _plugins = new Map()
 /** @type {Map<string, string>} id → command hash */
 let _approvedPlugins = new Map()
 let _approvedPluginsLoaded = false
+let pluginApprovalWritesBlocked = false
 
 // hashCommand is now imported from pluginHostUtils.js
 
@@ -58,7 +60,20 @@ async function loadApprovedPlugins() {
   if (_approvedPluginsLoaded) return
   try {
     const raw = await readFile(getApprovedPluginsPath(), 'utf8')
-    const parsed = JSON.parse(raw)
+    let parsed
+    try {
+      parsed = JSON.parse(raw)
+    } catch (error) {
+      pluginApprovalWritesBlocked = true
+      const backupPath = `${getApprovedPluginsPath()}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`
+      await copyFile(getApprovedPluginsPath(), backupPath).catch(() => {})
+      console.error(
+        '[pluginHost] Approved plugins file is corrupted; writes disabled for this process:',
+        getRedactedErrorMessage(error),
+      )
+      _approvedPluginsLoaded = true
+      return
+    }
     if (Array.isArray(parsed)) {
       // Migrate from old format (array of ids) → map with empty hash (will re-prompt)
       _approvedPlugins = new Map(parsed.filter((id) => typeof id === 'string').map((id) => [id, '']))
@@ -74,10 +89,11 @@ async function loadApprovedPlugins() {
 }
 
 async function persistApprovedPlugins() {
-  await writeFile(
+  if (pluginApprovalWritesBlocked) return
+  await atomicWriteJson(
     getApprovedPluginsPath(),
-    JSON.stringify(Object.fromEntries(_approvedPlugins), null, 2),
-    'utf8',
+    Object.fromEntries(_approvedPlugins),
+    { fileMode: 0o600 },
   )
 }
 

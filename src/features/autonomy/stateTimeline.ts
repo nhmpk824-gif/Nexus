@@ -19,15 +19,15 @@
  *    rather than going blank.
  *
  *  - **Retention by time window, not count.** v0.4 rebalanced this to
- *    support affect-dynamics monthly / annual reports. Samples are kept
- *    for up to 365 days and pruned by age on every write. Hard count
- *    caps still apply as a runaway-write safety belt (~36k emotion /
- *    1k relationship) but the time window is the primary gate.
+ *    support affect-dynamics reports. Samples are kept for up to 365
+ *    days and pruned by age on every write. Hard count caps still apply
+ *    as a runaway-write safety belt (~36k emotion / 1k relationship)
+ *    but the time window is the primary gate.
  *
  *  - **Footprint.** ~150 bytes per emotion sample × 30-50 samples/day
  *    × 365 days = 1-3 MB / year in localStorage. The Settings timeline
  *    panel reads only the recent slice (last 14 days) for charting;
- *    yearbook / annual report consumers read the full window on demand.
+ *    longer affect-dynamics windows read the full retained history.
  */
 
 import {

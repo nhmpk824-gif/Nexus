@@ -1,4 +1,5 @@
 import type { AppSettings, AutonomyPhase, AutonomyTickState, FocusState } from '../../types'
+import { localDayKey } from '../../lib/localDate.ts'
 import { shouldSuppressAutonomy } from './focusAwareness.ts'
 
 // ── Initial state factory ─────────────────────────────────────────────────────
@@ -13,7 +14,7 @@ export function createInitialTickState(): AutonomyTickState {
     lastSleepAt: null,
     tickCount: 0,
     dailyTickCount: 0,
-    dailyTickResetDate: todayDateString(),
+    dailyTickResetDate: localDayKey(Date.now()),
     idleSeconds: 0,
     consecutiveIdleTicks: 0,
   }
@@ -79,7 +80,7 @@ export function shouldTick(
   settings: Pick<AppSettings, 'autonomyCostLimitDailyTicks'>,
 ): boolean {
   // Reset daily counter if date has changed
-  const today = todayDateString()
+  const today = localDayKey(Date.now())
   if (state.dailyTickResetDate !== today) {
     return true // Will reset in advanceTick
   }
@@ -98,7 +99,7 @@ export function advanceTick(
   idleSeconds: number,
 ): AutonomyTickState {
   const now = new Date()
-  const today = todayDateString()
+  const today = localDayKey(now.getTime())
   const isNewDay = state.dailyTickResetDate !== today
   const wasIdle = focusState !== 'active'
 
@@ -137,9 +138,4 @@ export function wakeUpState(state: AutonomyTickState): AutonomyTickState {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function todayDateString(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}

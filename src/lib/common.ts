@@ -1,6 +1,8 @@
 import { t } from '../i18n/runtime.ts'
 
+/** Bound `value` to [min, max]. Non-finite values snap to `min`. */
 export function clamp(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min
   return Math.min(max, Math.max(min, value))
 }
 

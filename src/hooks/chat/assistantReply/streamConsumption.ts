@@ -128,7 +128,11 @@ export async function consumeAssistantStream(
   // Per-round flushes (in the onDelta `done` branch) already queued each
   // round's text; finish() here only closes the stream.
   if (streamingTtsController) {
-    streamingTtsController.finish()
+    if (!isLatestTurn()) {
+      try { streamingTtsController.abort() } catch { /* already torn down */ }
+    } else {
+      streamingTtsController.finish()
+    }
   }
 
   return response

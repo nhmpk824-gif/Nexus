@@ -1,12 +1,16 @@
+// Renderer composition root for src/core stores.
+// createCoreRuntime(deps) is the FILE-3 factory. getCoreRuntime() is the
+// process-wide singleton used by chat/hooks. Tests call resetCoreRuntime()
+// so files cannot leak auth, budget, or remembered Discord channels.
 import {
   AuthProfileStore,
 } from '../core/routing/AuthProfileStore.ts'
-import { isActionAllowed } from '../features/integrations/permissions.ts'
-import { parseDiscordChannelIdList, parseTelegramChatIdList } from '../features/integrations/allowlists.ts'
-import type { AppSettings } from '../types/index.ts'
 import type {
   AuthProfile,
+  AuthProfileSnapshot,
 } from '../core/routing/types.ts'
+import type { CoreTime } from '../core/time.ts'
+import { systemTime } from '../core/time.ts'
 import type {
   BudgetConfig,
   CostEntry,
@@ -51,39 +55,64 @@ export type CoreRuntime = {
   refreshBudgetConfig: (config: BudgetConfig) => void
 }
 
-let singleton: CoreRuntime | null = null
+export type CoreRuntimeOptions = {
+  time?: CoreTime
+  seedSkills?: boolean
+  loadAuthSnapshot?: () => AuthProfileSnapshot
+  loadBudgetConfig?: () => BudgetConfig
+  loadCostEntries?: () => CostEntry[]
+  persistAuthSnapshot?: (snapshot: AuthProfileSnapshot) => void
+  persistCostEntries?: (entries: CostEntry[]) => void
+  persistBudgetConfig?: (config: BudgetConfig) => void
+}
 
-export function getCoreRuntime(): CoreRuntime {
-  if (singleton) return singleton
+type WiredRuntime = CoreRuntime & {
+  telegramChatIds: Set<number>
+  discordChannelIds: Set<string>
+}
+
+function asWired(runtime: CoreRuntime): WiredRuntime {
+  return runtime as WiredRuntime
+}
+
+/**
+ * Build an isolated core runtime. Does not touch the process singleton.
+ */
+export function createCoreRuntime(options: CoreRuntimeOptions = {}): CoreRuntime {
+  const time = options.time ?? systemTime()
+  const loadAuth = options.loadAuthSnapshot ?? loadAuthProfileSnapshot
+  const loadBudget = options.loadBudgetConfig ?? loadBudgetConfig
+  const loadCosts = options.loadCostEntries ?? loadCostEntries
+  const persistAuth = options.persistAuthSnapshot ?? persistAuthProfileSnapshot
+  const persistCosts = options.persistCostEntries ?? persistCostEntries
+  const persistBudgetCfg = options.persistBudgetConfig ?? persistBudgetConfig
 
   const pricing = new UsagePricingTable()
-  const authStore = new AuthProfileStore()
-  const snapshot = loadAuthProfileSnapshot()
-  authStore.restore(snapshot)
+  const authStore = new AuthProfileStore({ time })
+  authStore.restore(loadAuth())
 
-  const costTracker = new CostTracker({ pricing, config: loadBudgetConfig() })
-  costTracker.restore(loadCostEntries())
+  const costTracker = new CostTracker({ pricing, config: loadBudget(), time })
+  costTracker.restore(loadCosts())
 
-  const sessionStore = new SessionStore()
+  const sessionStore = new SessionStore({ time })
+  const skills = new SkillRegistry({ time })
+  if (options.seedSkills !== false) seedDefaultSkills(skills)
 
-  const skills = new SkillRegistry()
-  seedDefaultSkills(skills)
-
-  const memoryBackend = new InMemoryMemoryBackend()
-  const todoStore = new TodoStore()
+  const memoryBackend = new InMemoryMemoryBackend({ time })
+  const todoStore = new TodoStore({ time })
 
   const persistAuthProfiles = () => {
-    persistAuthProfileSnapshot(authStore.snapshot())
+    persistAuth(authStore.snapshot())
   }
   const persistBudget = () => {
-    persistCostEntries(costTracker.listEntries())
+    persistCosts(costTracker.listEntries())
   }
   const refreshBudgetConfig = (config: BudgetConfig) => {
     costTracker.setConfig(config)
-    persistBudgetConfig(config)
+    persistBudgetCfg(config)
   }
 
-  singleton = {
+  const runtime: WiredRuntime = {
     authStore,
     costTracker,
     pricing,
@@ -94,8 +123,23 @@ export function getCoreRuntime(): CoreRuntime {
     persistAuthProfiles,
     persistBudget,
     refreshBudgetConfig,
+    telegramChatIds: new Set<number>(),
+    discordChannelIds: new Set<string>(),
   }
+  return runtime
+}
+
+let singleton: CoreRuntime | null = null
+
+/** Process-wide runtime. Created on first use from localStorage-backed loaders. */
+export function getCoreRuntime(): CoreRuntime {
+  if (!singleton) singleton = createCoreRuntime()
   return singleton
+}
+
+/** Drop the process singleton so the next getCoreRuntime() builds a fresh graph. */
+export function resetCoreRuntime(): void {
+  singleton = null
 }
 
 export function recordCostEntry(entry: CostEntry): void {
@@ -149,29 +193,37 @@ export function removeAuthProfileFromRuntime(id: string): void {
 // gateway hooks (useTelegramGateway / useDiscordGateway) own the bridge
 // connections and remember IDs from inbound traffic and settings.
 
-const knownTelegramChatIds = new Set<number>()
-const knownDiscordChannelIds = new Set<string>()
-
 export function setTelegramKnownChatIds(ids: number[]): void {
-  knownTelegramChatIds.clear()
+  const idsSet = asWired(getCoreRuntime()).telegramChatIds
+  idsSet.clear()
   for (const id of ids) {
-    if (Number.isFinite(id) && id !== 0) knownTelegramChatIds.add(id)
+    if (Number.isFinite(id) && id !== 0) idsSet.add(id)
   }
 }
 
 export function setDiscordKnownChannelIds(ids: string[]): void {
-  knownDiscordChannelIds.clear()
+  const idsSet = asWired(getCoreRuntime()).discordChannelIds
+  idsSet.clear()
   for (const id of ids) {
-    if (id.trim().length > 0) knownDiscordChannelIds.add(id.trim())
+    if (id.trim().length > 0) idsSet.add(id.trim())
   }
 }
 
 export function rememberTelegramChatId(chatId: number): void {
-  if (Number.isFinite(chatId) && chatId !== 0) knownTelegramChatIds.add(chatId)
+  if (Number.isFinite(chatId) && chatId !== 0) {
+    asWired(getCoreRuntime()).telegramChatIds.add(chatId)
+  }
 }
 
 export function rememberDiscordChannelId(channelId: string): void {
-  if (channelId.trim().length > 0) knownDiscordChannelIds.add(channelId.trim())
+  if (channelId.trim().length > 0) {
+    asWired(getCoreRuntime()).discordChannelIds.add(channelId.trim())
+  }
+}
+
+/** Snapshot of remembered Discord channel ids for the host broadcast path. */
+export function listKnownDiscordChannelIds(): string[] {
+  return [...asWired(getCoreRuntime()).discordChannelIds]
 }
 
 function seedDefaultSkills(registry: SkillRegistry): void {
@@ -239,63 +291,4 @@ export function matchCoreSkills(
     .join('\n')
 }
 
-type BroadcastChannelId = 'telegram' | 'discord'
 
-export type BroadcastResult = {
-  channelId: BroadcastChannelId
-  target: string
-  ok: boolean
-  error?: string
-}
-
-/**
- * Broadcast a reminder/notice to the master's own bridge chats.
- *
- * Hardened (bridge plan Phase 2 #3): this used to message EVERY remembered
- * inbound sender with no permission check — private reminders could leak to
- * any allowlisted contact. Targets are now the owner's Telegram chats and
- * the allowlisted Discord channels only, and each channel passes through
- * the same isActionAllowed('send') gate as every other outbound path.
- */
-export async function broadcastToChannels(text: string, settings: AppSettings): Promise<BroadcastResult[]> {
-  const bridge = typeof window !== 'undefined' ? window.desktopPet : undefined
-  const results: BroadcastResult[] = []
-  if (!bridge) return results
-
-  if (bridge.telegramSendMessage && isActionAllowed(settings, 'telegram', 'send')) {
-    const ownerChatIds = parseTelegramChatIdList(settings.ownerTelegramChatIds)
-    for (const chatId of ownerChatIds) {
-      try {
-        await bridge.telegramSendMessage({ chatId, text })
-        results.push({ channelId: 'telegram', target: String(chatId), ok: true })
-      } catch (error) {
-        results.push({
-          channelId: 'telegram',
-          target: String(chatId),
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    }
-  }
-
-  if (bridge.discordSendMessage && isActionAllowed(settings, 'discord', 'send')) {
-    const allowedChannels = new Set(parseDiscordChannelIdList(settings.discordAllowedChannelIds))
-    for (const channelId of knownDiscordChannelIds) {
-      if (!allowedChannels.has(channelId)) continue
-      try {
-        await bridge.discordSendMessage({ channelId, text })
-        results.push({ channelId: 'discord', target: channelId, ok: true })
-      } catch (error) {
-        results.push({
-          channelId: 'discord',
-          target: channelId,
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    }
-  }
-
-  return results
-}

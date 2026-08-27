@@ -1,5 +1,6 @@
-import { normalizeWhitespace, stripHtml } from './textNormalize.js'
+import { decodeHtmlEntities, normalizeWhitespace, stripHtml } from './textNormalize.js'
 import { DEFAULT_WEB_SEARCH_PROVIDER_ID } from '../shared/webSearchProviderIds.js'
+import { normalizeBaseUrl } from './netHelpers.js'
 
 // Provider id whitelist + normalization are single-sourced in
 // shared/webSearchProviderIds.js and re-exported here for electron consumers.
@@ -155,10 +156,6 @@ export function rankTrustedItems(items, request, helpers) {
     subject: request.subject,
     trusted: true,
   })
-}
-
-function normalizeBaseUrl(value) {
-  return String(value ?? '').trim().replace(/\/+$/u, '')
 }
 
 function resolveEndpointWithSuffix(baseUrl, defaultBase, suffix = '/search') {
@@ -360,26 +357,6 @@ export function extractPerplexityCitations(payload) {
   }
 
   return [...new Set(citations)]
-}
-
-// DuckDuckGo result parsing decodes an extended named-entity set (&ndash;, &mdash;,
-// &hellip;, &#x2F;) that textNormalize.js decodeHtmlEntities intentionally lacks.
-function decodeHtmlEntities(text) {
-  return String(text ?? '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, '\'')
-    .replace(/&#39;/g, '\'')
-    .replace(/&#x27;/g, '\'')
-    .replace(/&#x2F;/g, '/')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&ndash;/g, '-')
-    .replace(/&mdash;/g, '--')
-    .replace(/&hellip;/g, '...')
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
 }
 
 function decodeDuckDuckGoUrl(rawUrl) {

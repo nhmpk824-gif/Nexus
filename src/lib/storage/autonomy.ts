@@ -7,6 +7,7 @@ import {
   writeJson,
 } from './core.ts'
 import { isObject } from '../guards.ts'
+import { normalizeIso as parseIso } from '../localDate.ts'
 import { hasChanged, normalizeNullableString } from '../normalize.ts'
 
 export type BracketState = {
@@ -30,13 +31,6 @@ const EMPTY_BRACKET_STATE: BracketState = {
 
 function normalizeOptionalString(value: unknown): string | undefined {
   return normalizeNullableString(value) ?? undefined
-}
-
-function normalizeIso(value: unknown, fallback?: string): string | undefined {
-  if (typeof value !== 'string' && typeof value !== 'number') return fallback
-  const parsed = typeof value === 'number' ? value : Date.parse(value)
-  if (!Number.isFinite(parsed)) return fallback
-  return new Date(parsed).toISOString()
 }
 
 function normalizeProgress(value: unknown, fallback: number): number {
@@ -75,8 +69,8 @@ function normalizeGoal(raw: unknown, nowIso: string): Goal | null {
   const fallbackProgress = subtasks.length > 0
     ? Math.round((subtasks.filter((item) => item.done).length / subtasks.length) * 100)
     : 0
-  const createdAt = normalizeIso(raw.createdAt, nowIso) ?? nowIso
-  const updatedAt = normalizeIso(raw.updatedAt, createdAt) ?? createdAt
+  const createdAt = parseIso(raw.createdAt) ?? nowIso
+  const updatedAt = parseIso(raw.updatedAt) ?? createdAt
   const status = normalizeGoalStatus(raw.status)
 
   const goal: Goal = {
@@ -92,10 +86,10 @@ function normalizeGoal(raw: unknown, nowIso: string): Goal | null {
   const description = normalizeOptionalString(raw.description)
   if (description) goal.description = description
 
-  const deadline = normalizeIso(raw.deadline)
+  const deadline = parseIso(raw.deadline)
   if (deadline) goal.deadline = deadline
 
-  const completedAt = normalizeIso(raw.completedAt)
+  const completedAt = parseIso(raw.completedAt)
   if (status === 'completed' && completedAt) {
     goal.completedAt = completedAt
   }

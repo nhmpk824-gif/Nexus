@@ -95,6 +95,7 @@ export function buildChatConnectionResult({
   recommendationKey = undefined,
   messageParams = undefined,
   code = undefined,
+  ipcCode = undefined,
   status = undefined,
   evidence = undefined,
   recommendation = undefined,
@@ -133,6 +134,7 @@ export function buildChatConnectionResult({
       ? { recommendation: redactSpeechConnectionText(recommendation) }
       : {}),
     ...(code ? { code } : {}),
+    ...(ipcCode ? { ipcCode } : {}),
     ...(status ? { status } : {}),
     ...(evidence ? { evidence } : {}),
     ...(checkedAt ? { checkedAt } : {}),

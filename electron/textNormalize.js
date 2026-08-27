@@ -26,6 +26,9 @@ export function decodeHtmlEntities(value) {
     .replace(/&#([0-9]+);/g, (_, dec) => safeCodePointFromNumber(dec, 10))
     .replace(/&nbsp;/giu, ' ')
     .replace(/&ensp;|&emsp;/giu, ' ')
+    .replace(/&ndash;/giu, '-')
+    .replace(/&mdash;/giu, '--')
+    .replace(/&hellip;/giu, '...')
     .replace(/&amp;/giu, '&')
     .replace(/&quot;/giu, '"')
     .replace(/&apos;|&#39;/giu, '\'')
@@ -47,4 +50,17 @@ export function stripHtml(html) {
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+/**
+ * Escape text for XML / SVG attribute and text nodes.
+ * Sprite-pet assembler and creator-kit share this so entity encoding cannot drift.
+ */
+export function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
 }

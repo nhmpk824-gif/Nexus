@@ -57,6 +57,9 @@ export function createAsyncJsonFileStore({
   normalize = defaultNormalize,
   serialize = (cache) => cache,
   fileMode,
+  onPersistError = (error) => {
+    console.warn('[jsonFileStore] persist failed:', error)
+  },
 }) {
   let cache = null
 
@@ -71,7 +74,11 @@ export function createAsyncJsonFileStore({
   }
 
   async function save() {
-    await atomicWriteJson(getStorePath(), serialize(cache), { fileMode })
+    try {
+      await atomicWriteJson(getStorePath(), serialize(cache), { fileMode })
+    } catch (error) {
+      onPersistError(error)
+    }
   }
 
   return { ensureLoaded, save }

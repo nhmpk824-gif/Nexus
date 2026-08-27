@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { SPEECH_IPC_ERROR_CODES } from '../../shared/speechErrorCodes.js'
 import {
   performNetworkRequest,
   readJsonSafe,
@@ -222,7 +223,7 @@ async function performVolcengineSpeechOutputAttempt({
   volume = 1,
   pitch = 1,
   timeoutMs = AUDIO_SYNTH_TIMEOUT_MS,
-  timeoutMessage = '语音播报等了好久都没回应，看看网络和代理对不对？',
+  timeoutMessage = SPEECH_IPC_ERROR_CODES.TTS_TIMEOUT,
 }) {
   const response = await performNetworkRequest(`${baseUrl}/v1/tts`, {
     allowPrivateNetwork: true,

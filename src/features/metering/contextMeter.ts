@@ -9,6 +9,8 @@
  * All metrics are session-scoped; daily totals are persisted to localStorage.
  */
 
+import { localDayKey } from '../../lib/localDate.ts'
+
 const METER_STORAGE_KEY_LEGACY = 'nexus:metering:daily'
 const METER_STORAGE_PREFIX = 'nexus:metering:day:'
 
@@ -79,7 +81,11 @@ const PRICING_TABLE: Array<{ pattern: string; price: ModelPrice }> = [
   { pattern: 'deepseek-v4-flash',    price: { inputPerM: 0.14,  outputPerM: 0.28  } },
   { pattern: 'deepseek-chat',        price: { inputPerM: 0.14,  outputPerM: 0.28  } },
   { pattern: 'deepseek-reasoner',    price: { inputPerM: 0.14,  outputPerM: 0.28  } },
-  // OpenAI — longest-first; 5.5 / 5.4 distinct rates, bare gpt-5 falls back to 5.4 cost
+  // OpenAI — longest-first; 5.6 / 5.5 / 5.4 distinct rates, bare gpt-5 falls back to 5.4 cost
+  { pattern: 'gpt-5.6-sol',         price: { inputPerM: 5.00,  outputPerM: 30.00  } },
+  { pattern: 'gpt-5.6-terra',       price: { inputPerM: 2.00,  outputPerM: 12.00  } },
+  { pattern: 'gpt-5.6-luna',        price: { inputPerM: 0.20,  outputPerM: 1.20  } },
+  { pattern: 'gpt-5.6',             price: { inputPerM: 5.00,  outputPerM: 30.00  } },
   { pattern: 'gpt-5.5',             price: { inputPerM: 5.00,  outputPerM: 30.00  } },
   { pattern: 'gpt-5.4-mini',        price: { inputPerM: 0.75,  outputPerM: 4.50  } },
   { pattern: 'gpt-5.4-nano',        price: { inputPerM: 0.20,  outputPerM: 1.25  } },
@@ -90,9 +96,10 @@ const PRICING_TABLE: Array<{ pattern: string; price: ModelPrice }> = [
   { pattern: 'gpt-4-turbo',         price: { inputPerM: 10.00, outputPerM: 30.00 } },
   { pattern: 'gpt-3.5',             price: { inputPerM: 0.50,  outputPerM: 1.50  } },
   // Anthropic model family pricing.
+  { pattern: 'claude-fable',        price: { inputPerM: 10.00, outputPerM: 50.00 } },
   { pattern: 'claude-opus',         price: { inputPerM: 5.00,  outputPerM: 25.00 } },
-  { pattern: 'claude-sonnet',       price: { inputPerM: 3.00,  outputPerM: 15.00 } },
-  { pattern: 'claude-haiku',        price: { inputPerM: 0.80,  outputPerM: 4.00  } },
+  { pattern: 'claude-sonnet',       price: { inputPerM: 2.00,  outputPerM: 10.00 } },
+  { pattern: 'claude-haiku',        price: { inputPerM: 1.00,  outputPerM: 5.00  } },
   // Google Gemini
   { pattern: 'gemini-1.5-pro',      price: { inputPerM: 3.50,  outputPerM: 10.50 } },
   { pattern: 'gemini-1.5-flash',    price: { inputPerM: 0.075, outputPerM: 0.30  } },
@@ -130,18 +137,11 @@ const _sessionBySource: Record<string, { input: number; output: number; calls: n
 
 let _dailyCache: DailyMeterRecord | null = null
 
-function localDateKey(d: Date): string {
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 function todayKey(): string {
   // Local-time day key so usage aggregation lines up with CostTracker (which
   // uses local-midnight day/month boundaries) and the user's own "today",
   // instead of drifting by the machine's UTC offset (was toISOString()).
-  return localDateKey(new Date())
+  return localDayKey(Date.now())
 }
 
 function dailyStorageKey(date: string): string {
@@ -290,7 +290,7 @@ export function loadDailyRange(days: number): DailyMeterRecord[] {
   for (let i = 0; i < days; i++) {
     const d = new Date(today)
     d.setDate(d.getDate() - i)
-    const dateKey = localDateKey(d)
+    const dateKey = localDayKey(d.getTime())
     try {
       const raw = localStorage.getItem(dailyStorageKey(dateKey))
       if (!raw) continue

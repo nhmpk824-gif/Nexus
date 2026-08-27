@@ -14,20 +14,13 @@ import {
   shouldFetchSearchPreviews,
 } from '../webSearchSignals.js'
 import { runWebSearchWithProviders } from '../webSearchRuntime.js'
-import { normalizeSearchableText } from '../textNormalize.js'
+import { decodeHtmlEntities, normalizeSearchableText } from '../textNormalize.js'
 
 const TOOL_SEARCH_TIMEOUT_MS = 12_000
 const SEARCH_PREVIEW_MAX_REDIRECTS = 4
 
 function decodeXmlEntities(value) {
-  return String(value ?? '')
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim()
+  return decodeHtmlEntities(String(value ?? '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')).trim()
 }
 
 function getXmlTagValue(block, tagName) {

@@ -1,3 +1,5 @@
+import type { CoreTime } from '../time.ts'
+import { systemTime } from '../time.ts'
 import type { Skill, SkillId, SkillMatchContext, SkillMatchResult } from './types.ts'
 
 export type SkillBackend = {
@@ -23,19 +25,34 @@ export type RegisterSkillInput = Omit<
   status?: Skill['status']
 }
 
+function cloneSkill(skill: Skill): Skill {
+  return {
+    ...skill,
+    trigger: {
+      ...skill.trigger,
+      ...(skill.trigger.keywords ? { keywords: [...skill.trigger.keywords] } : {}),
+      ...(skill.trigger.intents ? { intents: [...skill.trigger.intents] } : {}),
+      ...(skill.trigger.channels ? { channels: [...skill.trigger.channels] } : {}),
+    },
+    ...(skill.metadata ? { metadata: { ...skill.metadata } } : {}),
+  }
+}
+
 export class SkillRegistry {
   private readonly skills = new Map<SkillId, Skill>()
   private readonly backend: SkillBackend
+  private readonly time: CoreTime
 
-  constructor(backend: SkillBackend = new InMemorySkillBackend()) {
-    this.backend = backend
+  constructor(options?: { backend?: SkillBackend; time?: CoreTime }) {
+    this.backend = options?.backend ?? new InMemorySkillBackend()
+    this.time = options?.time ?? systemTime()
   }
 
   async load(): Promise<void> {
     const loaded = await this.backend.load()
     this.skills.clear()
     for (const skill of loaded) {
-      this.skills.set(skill.id, skill)
+      this.skills.set(skill.id, cloneSkill(skill))
     }
   }
 
@@ -44,15 +61,20 @@ export class SkillRegistry {
   }
 
   register(input: RegisterSkillInput): Skill {
-    const now = Date.now()
-    const id = input.id ?? `skill-${now}-${Math.random().toString(36).slice(2, 6)}`
+    const now = this.time.now()
+    const id = input.id ?? this.time.id('skill-')
     const existing = this.skills.get(id)
     if (existing) {
       const updated: Skill = {
         ...existing,
         name: input.name,
         description: input.description,
-        trigger: input.trigger,
+        trigger: {
+          ...input.trigger,
+          ...(input.trigger.keywords ? { keywords: [...input.trigger.keywords] } : {}),
+          ...(input.trigger.intents ? { intents: [...input.trigger.intents] } : {}),
+          ...(input.trigger.channels ? { channels: [...input.trigger.channels] } : {}),
+        },
         body: input.body,
         status: input.status ?? existing.status,
         version: existing.version + 1,
@@ -60,13 +82,18 @@ export class SkillRegistry {
         metadata: input.metadata,
       }
       this.skills.set(id, updated)
-      return updated
+      return cloneSkill(updated)
     }
     const skill: Skill = {
       id,
       name: input.name,
       description: input.description,
-      trigger: input.trigger,
+      trigger: {
+        ...input.trigger,
+        ...(input.trigger.keywords ? { keywords: [...input.trigger.keywords] } : {}),
+        ...(input.trigger.intents ? { intents: [...input.trigger.intents] } : {}),
+        ...(input.trigger.channels ? { channels: [...input.trigger.channels] } : {}),
+      },
       body: input.body,
       status: input.status ?? 'draft',
       version: 1,
@@ -77,16 +104,18 @@ export class SkillRegistry {
       metadata: input.metadata,
     }
     this.skills.set(id, skill)
-    return skill
+    return cloneSkill(skill)
   }
 
   get(id: SkillId): Skill | undefined {
-    return this.skills.get(id)
+    const skill = this.skills.get(id)
+    return skill ? cloneSkill(skill) : undefined
   }
 
   list(status?: Skill['status']): Skill[] {
     const all = Array.from(this.skills.values())
-    return status ? all.filter((s) => s.status === status) : all
+    const filtered = status ? all.filter((s) => s.status === status) : all
+    return filtered.map(cloneSkill)
   }
 
   remove(id: SkillId): boolean {
@@ -137,7 +166,7 @@ export class SkillRegistry {
           : skill.successCount / (skill.successCount + skill.failureCount)
       score += successRatio * 2
 
-      results.push({ skill, score, reasons })
+      results.push({ skill: cloneSkill(skill), score, reasons })
     }
     results.sort((a, b) => b.score - a.score)
     return results
@@ -147,13 +176,13 @@ export class SkillRegistry {
     const skill = this.skills.get(id)
     if (!skill) return
     skill.successCount += 1
-    skill.updatedAt = Date.now()
+    skill.updatedAt = this.time.now()
   }
 
   recordFailure(id: SkillId): void {
     const skill = this.skills.get(id)
     if (!skill) return
     skill.failureCount += 1
-    skill.updatedAt = Date.now()
+    skill.updatedAt = this.time.now()
   }
 }

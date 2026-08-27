@@ -1,13 +1,13 @@
 import { memo, type ChangeEvent, type Dispatch, type SetStateAction } from 'react'
 import {
   buildVolcengineCredential,
-  clampNumber,
   formatTtsAdjustmentValue,
   parseNumberInput,
   parseVolcengineCredentialParts,
   type ConnectionResult,
   type VolcengineCredentialParts,
 } from '../../components/settingsDrawerSupport.ts'
+import { clamp } from '../../lib/common.ts'
 import { UrlInput } from './UrlInput.tsx'
 import {
   getSpeechOutputAdjustmentSupport,
@@ -87,7 +87,7 @@ function TuningSliderV3({
   onChange,
 }: TuningSliderProps) {
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    onChange(clampNumber(parseNumberInput(event.target.value, value), min, max))
+    onChange(clamp(parseNumberInput(event.target.value, value), min, max))
   }
   return (
     <div className="settings-v3-tuning" data-disabled={disabled ? 'true' : undefined}>
