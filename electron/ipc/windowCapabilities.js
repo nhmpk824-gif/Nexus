@@ -22,7 +22,7 @@ const PANEL_ONLY_PATTERNS = Object.freeze([
   /^pet-model:(?:assemble-creator-kit|create-(?:creator-kit|from-image)|import(?:-codex-gallery)?|install-creator-kit-codex|open-creator-kit-path)$/,
   /^plugin:(?:approve|disable|enable|restart|revoke|start|stop)$/,
   /^plugin-bus:(?:publish|subscribe|unsubscribe)$/,
-  /^persona:/,
+  /^persona:(?:save-|open-dir$|init$|import-card$|profile-dir$)/,
   /^skill:/,
   /^telegram:(?:connect|send-)/,
   /^tool:open-external$/,
