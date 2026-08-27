@@ -26,7 +26,7 @@
 
 > **現在の安定版：** v0.4.7。詳細は [RELEASE-NOTES-v0.4.7.md](RELEASE-NOTES-v0.4.7.md)。Live2D の取り込み検査、Portrait Puppet v4、Grok 音声、Qwen 3.8-max / GLM-5.3 の既定カタログを含みます。正式パッケージは保護された tag ワークフローからのみ GitHub Releases に公開されます。
 
-> **開発スコープの注記：** この多言語 README は長期的な機能一覧を残しています。短期開発はルートの [README](../README.md) と [Nexus アップグレード統合計画](NEXUS_UPGRADE_INTEGRATION_PLAN.md) を基準にしてください。Phase 1 は常駐する小さなデスクトップウィンドウ、ミニマルなアバター、Ollama / DeepSeek のテキストモデル、シンプルな会話だけに絞ります。
+> **開発スコープの注記：** この多言語 README は長期的な機能一覧を残しています。現在の公開安定版は v0.4.7 です。ルートの [README](../README.md) と [Nexus アップグレード統合計画](NEXUS_UPGRADE_INTEGRATION_PLAN.md) が基準です。Phase 1 の最小デスクトップ同伴ループは公開済みで、次の段階で v0.5 のペット挙動や署名付きインストーラーを安定入口へ先取りしません。
 
 ---
 

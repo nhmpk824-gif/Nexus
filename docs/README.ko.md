@@ -26,7 +26,7 @@
 
 > **현재 안정 버전:** v0.4.7. 자세한 내용은 [RELEASE-NOTES-v0.4.7.md](RELEASE-NOTES-v0.4.7.md). Live2D 가져오기 검증, Portrait Puppet v4, Grok 음성, Qwen 3.8-max / GLM-5.3 기본 카탈로그가 포함됩니다. 공식 설치 패키지는 보호된 tag 워크플로로만 GitHub Releases에 게시됩니다.
 
-> **개발 범위 안내:** 이 다국어 README는 장기 기능 목록을 보존합니다. 단기 개발 기준은 루트 [README](../README.md)와 [Nexus 업그레이드 통합 계획](NEXUS_UPGRADE_INTEGRATION_PLAN.md)입니다. Phase 1은 상주하는 작은 데스크톱 창, 미니멀 아바타, Ollama / DeepSeek 텍스트 모델, 간단한 대화에만 집중합니다.
+> **개발 범위 안내:** 이 다국어 README는 장기 기능 목록을 보존합니다. 현재 공개 안정 버전은 v0.4.7입니다. 루트 [README](../README.md)와 [Nexus 업그레이드 통합 계획](NEXUS_UPGRADE_INTEGRATION_PLAN.md)이 기준입니다. Phase 1 최소 데스크톱 동반 루프는 이미 공개되었고, 다음 단계에서 v0.5 펫 행동이나 서명된 설치 패키지를 안정 입구에 앞당기지 않습니다.
 
 ---
 

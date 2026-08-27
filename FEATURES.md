@@ -1,6 +1,7 @@
 # Nexus — Feature Inventory
 
-> Electron + React + TypeScript desktop AI companion. Live2D character by default, lightweight sprite pets as the alternative path.
+> Electron + React + TypeScript desktop AI companion. Live2D character by default,
+> Portrait Puppet v4 and lightweight sprite pets as alternative paths.
 > This file is a broad capability inventory, not the Phase 1 build scope.
 > For the active MVP scope, see
 > [Nexus 升级整合计划](docs/NEXUS_UPGRADE_INTEGRATION_PLAN.md).
@@ -11,12 +12,13 @@
 
 | Stage | Status | Capabilities |
 |---|---|---|
-| Phase 1 必需 | Active MVP scope | 桌面常驻小窗口、二次元极简头像、Ollama / DeepSeek、简单文本对话 |
-| 后续核心 | Planned integration | 轻量桌宠互动、基础语音、可控记忆、授权任务助手 |
-| 高级/实验 | Keep gated | 完整 Live2D、完整 Agent、MCP、插件、多平台网关、游戏集成 |
+| Phase 1 必需 | Shipped foundation | 桌面常驻小窗口、Live2D 默认形象、Ollama / DeepSeek 文本主路径、简单对话 |
+| 0.4 当前稳定 | v0.4.7 public stable | 桌面陪伴感知、Live2D 导入校验、分层立绘 v4、记忆可信度、语音（含 Grok）、更新后的模型目录 |
+| 后续核心 | Next line | v0.5 桌宠跟随 / 打字反应；签名安装包 |
+| 高级/实验 | Keep gated | 完整 Agent、MCP、插件、多平台网关、游戏集成 |
 
 Read the inventory below as modules that may be reused or reintroduced by
-phase. Do not treat every listed feature as something Phase 1 must ship.
+phase. Do not treat every listed feature as a current stable promise.
 
 ---
 
@@ -24,8 +26,9 @@ phase. Do not treat every listed feature as something Phase 1 must ship.
 
 | Feature | Description |
 |---|---|
-| Minimal Avatar | Phase 1 static companion avatar with lightweight status states |
-| Optional Live2D Avatar | Desktop pet with idle animation choreography, lip-sync, mood expressions, stage directions in chat |
+| Live2D Avatar | Default desktop companion with idle animation, lip-sync, mood expressions, and import validation before activation |
+| Portrait Puppet v4 | Layered portrait packs (`preview.png` + `parts/`) as the default in-app picture path; single-portrait v3 remains a fallback |
+| Sprite Pet | Lightweight atlas pets remain importable; Creator Kit authors packages outside Nexus |
 | Character Profiles | Multiple persona presets — each with name, system prompt, model, voice |
 | SOUL.md Persona | File-based identity system (`userData/persona/SOUL.md`), hot-reload, overrides `systemPrompt` |
 | Persona MEMORY.md | Companion-side persistent memory file injected alongside SOUL.md |
@@ -54,6 +57,7 @@ phase. Do not treat every listed feature as something Phase 1 must ship.
 | Local SenseVoice | Offline ASR via sherpa-onnx OfflineRecognizer (final-only) |
 | Local Paraformer | Streaming offline ASR via sherpa-onnx OnlineRecognizer (partial results) |
 | Volcengine STT | Cloud speech recognition |
+| Grok STT | xAI speech-to-text |
 | OpenAI STT | Whisper-based cloud transcription |
 | ElevenLabs STT | Cloud speech recognition |
 | Tencent Real-Time ASR | WebSocket streaming ASR |
@@ -70,6 +74,7 @@ phase. Do not treat every listed feature as something Phase 1 must ship.
 
 | Feature | Description |
 |---|---|
+| Grok TTS | xAI text-to-speech |
 | OpenAI TTS | Cloud speech synthesis |
 | MiniMax TTS | Cloud synthesis with voice listing |
 | Volcengine TTS | Volcano Engine speech synthesis |
@@ -255,8 +260,8 @@ phase. Do not treat every listed feature as something Phase 1 must ship.
 | Category | Count |
 |---|---|
 | Text LLM Providers | 19 |
-| Speech Input Providers | 7 + browser VAD |
-| Speech Output Providers | 8 + voice cloning |
+| Speech Input Providers | 8 + browser VAD |
+| Speech Output Providers | 9 + voice cloning |
 | Web Search Providers | 8 |
 | Game Integrations | 2 (Minecraft, Factorio) |
 | Messaging Gateways | 2 (Telegram, Discord) |

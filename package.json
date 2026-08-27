@@ -2,7 +2,7 @@
   "name": "nexus",
   "private": true,
   "version": "0.4.7",
-  "description": "Nexus desktop AI companion built with Electron, React, and TypeScript.",
+  "description": "Local-first desktop AI companion with Live2D or Portrait Puppet, memory, voice, and light tools.",
   "author": {
     "name": "FanyinLiu",
     "email": "nexus@fanyinliu.com"

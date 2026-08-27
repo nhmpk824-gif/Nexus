@@ -26,7 +26,7 @@
 
 > **当前稳定版：** v0.4.7，稳定入口见 [RELEASE-NOTES-v0.4.7.md](RELEASE-NOTES-v0.4.7.md)。本版带来 Live2D 导入校验、分层立绘 v4、Grok 语音，以及 Qwen 3.8-max / GLM-5.3 目录默认。正式安装包只由受保护的 tag 工作流发布到 GitHub Releases。
 
-> **开发范围提示：** 这份多语言 README 保留的是长期能力清单。当前短期开发以根目录 [README](../README.md) 和 [Nexus 升级整合计划](NEXUS_UPGRADE_INTEGRATION_PLAN.md) 为准：Phase 1 只收敛桌面常驻小窗口、极简头像、Ollama / DeepSeek 文本模型和简单对话。
+> **开发范围提示：** 这份多语言 README 保留的是长期能力清单。当前公开稳定版是 v0.4.7。根目录 [README](../README.md) 和 [Nexus 升级整合计划](NEXUS_UPGRADE_INTEGRATION_PLAN.md) 说明：Phase 1 最小桌面伙伴闭环已经发布；下一阶段不要把 v0.5 桌宠行为或签名安装包提前塞进稳定入口。
 
 ---
 
