@@ -22,7 +22,11 @@ test('modelSupportsVision: known multimodal families', () => {
     'claude-3-5-sonnet-20241022',
     'claude-4-opus',
     'claude-sonnet-4-6',
+    'claude-sonnet-5',
+    'claude-fable-5',
     'claude-haiku-4-5',
+    'kimi-k3',
+    'gpt-5.6-sol',
     'gemini-1.5-pro',
     'gemini-2.0-flash',
     'qwen-vl-max-latest',
@@ -79,14 +83,22 @@ test('modelSupportsSpeech: detects voice and realtime model ids', () => {
 test('estimateModelContextWindowTokens: returns useful coarse buckets', () => {
   assert.equal(estimateModelContextWindowTokens('deepseek-v4-flash'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('gpt-5.4-mini'), 400_000)
+  assert.equal(estimateModelContextWindowTokens('gpt-5.6-sol'), 1_000_000)
+  assert.equal(estimateModelContextWindowTokens('grok-4.6'), 500_000)
   assert.equal(estimateModelContextWindowTokens('grok-4.3'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('grok-build-0.1'), 256_000)
-  assert.equal(estimateModelContextWindowTokens('grok-4.20-0309-reasoning'), 2_000_000)
+  assert.equal(estimateModelContextWindowTokens('grok-4.20-0309-reasoning'), 1_000_000)
+  assert.equal(estimateModelContextWindowTokens('claude-opus-5'), 1_000_000)
+  assert.equal(estimateModelContextWindowTokens('claude-sonnet-5'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('claude-opus-4-8'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('claude-sonnet-4-6'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('deepseek-v4-pro'), 1_000_000)
+  assert.equal(estimateModelContextWindowTokens('qwen3.8-max'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('qwen3.7-max'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('qwen-3-7-max'), 1_000_000)
+  assert.equal(estimateModelContextWindowTokens('qwen3.7-plus'), 256_000)
+  assert.equal(estimateModelContextWindowTokens('kimi-k3'), 1_000_000)
+  assert.equal(estimateModelContextWindowTokens('glm-5.2'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('qwen3.6-plus'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('qwen3-6-27b'), 256_000)
   assert.equal(estimateModelContextWindowTokens('qwen3-coder-next'), 256_000)

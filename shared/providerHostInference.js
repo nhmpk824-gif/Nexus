@@ -38,7 +38,7 @@ const PROVIDER_HOST_INFERENCE_TABLE = Object.freeze([
   ['api.siliconflow.com', 'siliconflow-global'],
   ['api.siliconflow.cn', 'siliconflow'],
   ['qianfan.baidubce.com', 'qianfan'],
-  ['api.z.ai', 'zai'],
+  ['api.z.ai', 'zai-global'],
   ['open.bigmodel.cn', 'zai'],
   ['ark.cn-beijing.volces.com/api/coding', 'doubao-coding'],
   ['ark.cn-beijing.volces.com', 'doubao'],

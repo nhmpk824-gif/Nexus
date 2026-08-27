@@ -189,6 +189,7 @@ test('infers global and Token Plan text providers from stored base URLs', () => 
   for (const item of cases) {
     const localStorage = createLocalStorageMock({
       [SETTINGS_STORAGE_KEY]: JSON.stringify({
+        settingsSchemaVersion: CURRENT_SETTINGS_SCHEMA_VERSION,
         apiBaseUrl: item.apiBaseUrl,
         model: item.model,
       }),
@@ -257,7 +258,7 @@ test('ignores malformed root settings values and falls back to defaults', () => 
 
     const settings = loadSettings()
 
-    assert.equal(settings.settingsSchemaVersion, 5)
+    assert.equal(settings.settingsSchemaVersion, 6)
     assert.equal(settings.apiProviderId, 'ollama')
     assert.equal(settings.apiBaseUrl, 'http://127.0.0.1:11434/v1')
     assert.equal(settings.model, 'qwen3:8b')
@@ -284,6 +285,56 @@ test('migrates the old qiyi default pet to the Codex sprite pet', () => {
   const settings = loadSettings()
 
   assert.equal(settings.petModelId, 'codex')
+})
+
+test('migrates a stored previous catalog default to the current flagship', () => {
+  const localStorage = createLocalStorageMock({
+    [SETTINGS_STORAGE_KEY]: JSON.stringify({
+      settingsSchemaVersion: 5,
+      apiProviderId: 'openai',
+      apiBaseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.5',
+      textProviderProfiles: {
+        openai: { apiBaseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-5.5' },
+        anthropic: { apiBaseUrl: 'https://api.anthropic.com', apiKey: '', model: 'claude-sonnet-4-6' },
+        xai: { apiBaseUrl: 'https://api.x.ai/v1', apiKey: '', model: 'grok-4.20' },
+      },
+    }),
+  })
+
+  Object.defineProperty(globalThis, 'window', {
+    value: { localStorage },
+    configurable: true,
+    writable: true,
+  })
+
+  const settings = loadSettings()
+
+  assert.equal(settings.model, 'gpt-5.6-sol')
+  assert.equal(settings.textProviderProfiles.openai?.model, 'gpt-5.6-sol')
+  assert.equal(settings.textProviderProfiles.anthropic?.model, 'claude-sonnet-5')
+  assert.equal(settings.textProviderProfiles.xai?.model, 'grok-4.20')
+})
+
+test('preserves an explicit older model that was not the previous default', () => {
+  const localStorage = createLocalStorageMock({
+    [SETTINGS_STORAGE_KEY]: JSON.stringify({
+      settingsSchemaVersion: 5,
+      apiProviderId: 'openai',
+      apiBaseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.4-mini',
+    }),
+  })
+
+  Object.defineProperty(globalThis, 'window', {
+    value: { localStorage },
+    configurable: true,
+    writable: true,
+  })
+
+  const settings = loadSettings()
+
+  assert.equal(settings.model, 'gpt-5.4-mini')
 })
 
 test('preserves a non-default pet choice during the Codex pet migration', () => {

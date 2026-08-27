@@ -11,9 +11,37 @@
  */
 
 import type { UiLanguage } from '../types'
+import { inferApiProviderId } from '../features/models/providerCatalog.ts'
 import { normalizeUiLanguage } from './uiLanguage.ts'
 
-export const CURRENT_SETTINGS_SCHEMA_VERSION = 5
+/**
+ * Frozen snapshot of catalog defaults replaced in the 2026-08 refresh.
+ * v6 remaps a stored model only when it still equals that previous
+ * default. Do not edit these pairs in place — add a later migration.
+ */
+const RETIRED_CATALOG_DEFAULTS: Record<string, { from: string; to: string }> = {
+  openai: { from: 'gpt-5.5', to: 'gpt-5.6-sol' },
+  anthropic: { from: 'claude-sonnet-4-6', to: 'claude-sonnet-5' },
+  gemini: { from: 'gemini-3.5-flash', to: 'gemini-3.7-flash' },
+  xai: { from: 'grok-4.3', to: 'grok-4.6' },
+  moonshot: { from: 'kimi-k2.6', to: 'kimi-k3' },
+  'moonshot-global': { from: 'kimi-k2.6', to: 'kimi-k3' },
+  'kimi-coding': { from: 'kimi-k2.6', to: 'kimi-k3' },
+  'kimi-coding-global': { from: 'kimi-k2.6', to: 'kimi-k3' },
+  dashscope: { from: 'qwen3.6-plus', to: 'qwen3.7-plus' },
+  'dashscope-global': { from: 'qwen3.6-plus', to: 'qwen3.7-plus' },
+  'modelstudio-coding': { from: 'qwen3.6-plus', to: 'qwen3.7-plus' },
+  zai: { from: 'glm-5.1', to: 'glm-5.2' },
+  'zai-global': { from: 'glm-5.1', to: 'glm-5.2' },
+}
+
+function migrateRetiredCatalogDefault(providerId: string, model: string) {
+  const mapping = RETIRED_CATALOG_DEFAULTS[providerId]
+  if (!mapping) return model
+  return model === mapping.from ? mapping.to : model
+}
+
+export const CURRENT_SETTINGS_SCHEMA_VERSION = 6
 
 interface SettingsMigration {
   toVersion: number
@@ -103,6 +131,36 @@ const migrations: SettingsMigration[] = [
       const next = { ...raw }
       if (next.petModelId === 'qiyi') {
         next.petModelId = 'codex'
+      }
+      return next
+    },
+  },
+  {
+    toVersion: 6,
+    description: 'Promote stored previous catalog defaults to the 2026-08 flagship IDs',
+    migrate: (raw) => {
+      const next = { ...raw }
+      const storedProviderId = typeof next.apiProviderId === 'string' ? next.apiProviderId : ''
+      const storedBaseUrl = typeof next.apiBaseUrl === 'string' ? next.apiBaseUrl : ''
+      const storedModel = typeof next.model === 'string' ? next.model : ''
+      const providerId = storedProviderId || inferApiProviderId(storedBaseUrl, storedModel)
+      if (storedModel && providerId) {
+        next.model = migrateRetiredCatalogDefault(providerId, storedModel)
+      }
+
+      const profiles = next.textProviderProfiles
+      if (profiles && typeof profiles === 'object' && !Array.isArray(profiles)) {
+        const nextProfiles: Record<string, unknown> = { ...profiles }
+        for (const [id, profile] of Object.entries(nextProfiles)) {
+          if (!profile || typeof profile !== 'object' || Array.isArray(profile)) continue
+          const model = 'model' in profile && typeof profile.model === 'string' ? profile.model : ''
+          if (!model) continue
+          const migrated = migrateRetiredCatalogDefault(id, model)
+          if (migrated !== model) {
+            nextProfiles[id] = { ...profile, model: migrated }
+          }
+        }
+        next.textProviderProfiles = nextProfiles
       }
       return next
     },

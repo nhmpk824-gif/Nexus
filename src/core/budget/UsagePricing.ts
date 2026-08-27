@@ -6,26 +6,54 @@ const DEFAULT_PRICING: UsagePricing[] = [
   // Anthropic
   {
     providerId: 'anthropic',
-    modelId: 'claude-opus-4-7',
+    modelId: 'claude-fable-5',
+    tier: 'heavy',
+    inputPricePerMTokens: 10,
+    outputPricePerMTokens: 50,
+  },
+  {
+    providerId: 'anthropic',
+    modelId: 'claude-opus-5',
     tier: 'heavy',
     inputPricePerMTokens: 5,
     outputPricePerMTokens: 25,
   },
   {
     providerId: 'anthropic',
-    modelId: 'claude-sonnet-4-6',
+    modelId: 'claude-sonnet-5',
     tier: 'standard',
-    inputPricePerMTokens: 3,
-    outputPricePerMTokens: 15,
+    inputPricePerMTokens: 2,
+    outputPricePerMTokens: 10,
   },
   {
     providerId: 'anthropic',
-    modelId: 'claude-haiku-4-5-20251001',
+    modelId: 'claude-haiku-4-5',
     tier: 'cheap',
-    inputPricePerMTokens: 0.8,
-    outputPricePerMTokens: 4,
+    inputPricePerMTokens: 1,
+    outputPricePerMTokens: 5,
   },
-  // OpenAI — GPT-5.5 + 5.4 family.
+  // OpenAI — GPT-5.6 family first; 5.5 remains for existing settings.
+  {
+    providerId: 'openai',
+    modelId: 'gpt-5.6-sol',
+    tier: 'heavy',
+    inputPricePerMTokens: 5,
+    outputPricePerMTokens: 30,
+  },
+  {
+    providerId: 'openai',
+    modelId: 'gpt-5.6-terra',
+    tier: 'standard',
+    inputPricePerMTokens: 2,
+    outputPricePerMTokens: 12,
+  },
+  {
+    providerId: 'openai',
+    modelId: 'gpt-5.6-luna',
+    tier: 'cheap',
+    inputPricePerMTokens: 0.2,
+    outputPricePerMTokens: 1.2,
+  },
   {
     providerId: 'openai',
     modelId: 'gpt-5.5',
@@ -54,7 +82,7 @@ const DEFAULT_PRICING: UsagePricing[] = [
     inputPricePerMTokens: 0.2,
     outputPricePerMTokens: 1.25,
   },
-  // DeepSeek — V4 family first; chat/reasoner aliases stay for legacy settings until 2026-07-24.
+  // DeepSeek — V4 family first; chat/reasoner stay as fallbacks for leftover stored IDs.
   {
     providerId: 'deepseek',
     modelId: 'deepseek-chat',
@@ -89,12 +117,16 @@ const DEFAULT_PRICING: UsagePricing[] = [
 // Checked when an exact providerId::modelId lookup fails.
 // Longer patterns take priority over shorter ones.
 const FALLBACK_PRICING: Array<{ pattern: string; price: Pick<UsagePricing, 'inputPricePerMTokens' | 'outputPricePerMTokens' | 'tier'> }> = [
-  // Anthropic — ordered longest-first so opus/sonnet/haiku don't clash
-  // Opus 4.7 (2026-04) cut prices 3x from Opus 3 era — $5/$25 instead of $15/$75
+  // Anthropic — ordered longest-first so fable/opus/sonnet/haiku don't clash
+  { pattern: 'claude-fable',     price: { tier: 'heavy',    inputPricePerMTokens: 10,   outputPricePerMTokens: 50   } },
   { pattern: 'claude-opus',      price: { tier: 'heavy',    inputPricePerMTokens: 5,    outputPricePerMTokens: 25   } },
-  { pattern: 'claude-sonnet',    price: { tier: 'standard', inputPricePerMTokens: 3,    outputPricePerMTokens: 15   } },
-  { pattern: 'claude-haiku',     price: { tier: 'cheap',    inputPricePerMTokens: 0.8,  outputPricePerMTokens: 4    } },
-  // OpenAI — longest-first so 5.5 / 5.4 variants don't collide with bare "gpt-5"
+  { pattern: 'claude-sonnet',    price: { tier: 'standard', inputPricePerMTokens: 2,    outputPricePerMTokens: 10   } },
+  { pattern: 'claude-haiku',     price: { tier: 'cheap',    inputPricePerMTokens: 1,    outputPricePerMTokens: 5    } },
+  // OpenAI — longest-first so 5.6 / 5.5 / 5.4 variants don't collide with bare "gpt-5"
+  { pattern: 'gpt-5.6-sol',     price: { tier: 'heavy',    inputPricePerMTokens: 5,    outputPricePerMTokens: 30   } },
+  { pattern: 'gpt-5.6-terra',   price: { tier: 'standard', inputPricePerMTokens: 2,    outputPricePerMTokens: 12   } },
+  { pattern: 'gpt-5.6-luna',    price: { tier: 'cheap',    inputPricePerMTokens: 0.2,  outputPricePerMTokens: 1.2  } },
+  { pattern: 'gpt-5.6',         price: { tier: 'heavy',    inputPricePerMTokens: 5,    outputPricePerMTokens: 30   } },
   { pattern: 'gpt-5.5',         price: { tier: 'heavy',    inputPricePerMTokens: 5,    outputPricePerMTokens: 30   } },
   { pattern: 'gpt-5.4-mini',    price: { tier: 'standard', inputPricePerMTokens: 0.75, outputPricePerMTokens: 4.5  } },
   { pattern: 'gpt-5.4-nano',    price: { tier: 'cheap',    inputPricePerMTokens: 0.2,  outputPricePerMTokens: 1.25 } },
