@@ -20,6 +20,13 @@ export async function load(url, context, nextLoad) {
     // ipcRegistry.js only uses `app.once`.
     return { format: 'module', shortCircuit: true, source: 'export const app = { once() {} }\n' }
   }
+  if (url.endsWith('/electron/ipc/validate.js')) {
+    return {
+      format: 'module',
+      shortCircuit: true,
+      source: 'export function installIpcChannelBinding() {}\nexport function requireTrustedSender() {}\n',
+    }
+  }
   if (url.endsWith('/electron/ipc/skillIpc.js')) {
     // Simulated flaky module: the module itself loads fine (so Node caches
     // it identically on every version), but its register() throws while the
