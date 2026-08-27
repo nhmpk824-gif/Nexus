@@ -6,22 +6,35 @@
 
 ## [Unreleased]
 
-### [0.4.7-beta.1] - 2026-08-11
+## [0.4.7] - 2026-08-27
 
-Beta candidate for avatar compatibility and diagnostics; v0.4.5 remains the
-current stable release. Full detail in
-[`docs/RELEASE-NOTES-v0.4.7-beta.1.md`](docs/RELEASE-NOTES-v0.4.7-beta.1.md).
+v0.4.7 is the current stable companion-avatar and catalog release. Full detail
+in [`docs/RELEASE-NOTES-v0.4.7.md`](docs/RELEASE-NOTES-v0.4.7.md).
 
-- Imported Cubism models validate the Moc, textures, and every declared local
-  resource before copying or activation, including directory-escape checks.
-- Missing required or declared files block activation; models without motions
-  or expressions remain renderable with a localized limited-capability notice.
-- Compatibility diagnostics expose categories and counts rather than private
-  paths, with actionable repair guidance in all five UI languages.
-- Three-model cold starts and switches retain Moc/texture/motion/expression
-  profiles in schema-4 browser and packaged-runtime evidence.
-- No stable promotion is implied: v0.4.6-beta.1 still lacks the required
-  multi-day validation window, and v0.4.5 remains the stable update target.
+- Imported Cubism models validate Moc, textures, and declared local resources
+  before activation; missing motions/expressions stay renderable with a
+  limited-interaction notice.
+- Portrait Puppet v4 layered packs, Live2D import guidance, and sprite-pet wear
+  land on the companion surface. Image-to-sprite atlas generation stays removed.
+- Chat/speech/network timeouts use stable `NEXUS_ERR_*` codes. Grok STT/TTS
+  and current Qwen 3.8 / GLM-5.3 catalog defaults are included.
+
+## [0.4.6] - 2026-08-21
+
+v0.4.6 is the current stable avatar runtime reliability release, promoted
+through the standard beta flow. Full detail in
+[`docs/RELEASE-NOTES-v0.4.6.md`](docs/RELEASE-NOTES-v0.4.6.md).
+
+- Live2D uses straight-alpha WebGL output to remove white fringes in
+  transparent Electron window compositing.
+- Lost WebGL contexts recover within a bounded restart budget and keep a
+  localized readable fallback after repeated failure.
+- The three-model visual smoke proves cold start, switching, transparency, and
+  forced context-loss recovery for Mao, Haru, and Hiyori.
+- The image/atlas-to-pet generator is removed from the stable UI and IPC
+  surface; existing package import and Creator Kit authoring remain supported.
+
+The release commit is published only through the protected stable-tag workflow.
 
 ### [0.4.6-beta.1] - 2026-08-09
 

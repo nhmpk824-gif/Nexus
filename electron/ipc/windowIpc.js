@@ -381,6 +381,7 @@ export function register() {
     )
   })
 
+
   ipcMain.handle('dialog:confirm', async (event, message) => {
     requireTrustedSender(event)
     const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? panelWindow ?? mainWindow ?? undefined

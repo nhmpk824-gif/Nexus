@@ -4,10 +4,11 @@
 
 ## 当前锚点
 
-- 当前公开稳定版是 v0.4.5；README 把稳定入口指向 v0.4.5，上一公开版本为 v0.4.4。准备 beta 时 `package.json` 可以是 `0.4.7-beta.N`，但 README 稳定入口不得提前移动。
-- 当前在途候选是 `v0.4.7-beta.1`（形象兼容性与诊断）；它不是稳定版，未完成 tag/发布前必须保持候选语义。`v0.4.6-beta.1` 的多日验证窗口尚未关闭，不得写成稳定版。
+- 当前公开稳定版是 v0.4.7；README 把稳定入口指向 v0.4.7，上一公开版本为 v0.4.6。准备后续 beta 时 `package.json` 可以是 `0.4.8-beta.N`，但 README 稳定入口不得提前移动。
+- v0.4.7 经维护者例外直接晋升为稳定版（2026-08-27）：形象兼容诊断、分层立绘 v4、Grok 语音与 Qwen 3.8-max / GLM-5.3 目录默认。例外记录见 `RELEASING.md`。`v0.4.7-beta.1` 的 2026-08-10 准备记录只作历史，不描述本棵树。
+- v0.4.6 走标准 beta 流程晋升（v0.4.6-beta.1 于 2026-08-10 预发布，验证窗口关闭后于 2026-08-21 稳定）：形象运行时可靠性切片。
 - v0.4.5 走标准 beta 流程晋升（v0.4.5-beta.1 于 2026-08-03 预发布，验证窗口 2026-08-03 → 2026-08-06，无维护者例外）：记忆可信度切片（矛盾检测、迁移默认开）+ presence 管道 + 维护加固。
-- v0.4.5 采用明确的未签名发行策略，签名准备度不是这个版本的阻塞项；v0.4.4 的维护者例外仅属上一版，不影响 v0.4.5 的标准流程。
+- v0.4.7 采用明确的未签名发行策略，签名准备度不是这个版本的阻塞项；v0.4.4 / v0.4.7 的维护者例外仅属对应版本，不影响后续默认流程。
 - 官方 GitHub Releases 是唯一二进制来源；平台范围固定为 macOS arm64、Windows x64、Linux x64。
 - v0.3.6 这类更早历史只作为归档 release note / changelog 节点保留。
 - 更早历史放在 GitHub Releases 和 `docs/RELEASE-NOTES-v*.md`，不在 README 顶部继续滚动维护旧版本号。
@@ -16,8 +17,8 @@
 
 | 文档 | 检查重点 |
 |---|---|
-| `README.md` | 顶部稳定入口必须指向公开 v0.4.5；beta package 只增加候选提示，不得冒充稳定版。 |
-| `docs/README.zh-CN.md` / `docs/README.zh-TW.md` / `docs/README.ja.md` / `docs/README.ko.md` | 多语言稳定入口必须指向公开 v0.4.5；beta 候选提示需保持同一版本和非稳定语义。 |
+| `README.md` | 顶部稳定入口必须指向公开 v0.4.7；beta package 只增加候选提示，不得冒充稳定版。 |
+| `docs/README.zh-CN.md` / `docs/README.zh-TW.md` / `docs/README.ja.md` / `docs/README.ko.md` | 多语言稳定入口必须指向公开 v0.4.7；beta 候选提示需保持同一版本和非稳定语义。 |
 | `docs/ROADMAP.md` | 近期版本边界、0.4.x draft stack、0.5.0 方向必须和当前规划一致。 |
 | `docs/NEXUS_UPGRADE_INTEGRATION_PLAN.md` | Phase 1 / P0-P3 范围和 README 的短期边界不能冲突。 |
 | `FEATURES.md` | 继续保持“能力库存”定位，不能被读成当前稳定版承诺全部交付。 |

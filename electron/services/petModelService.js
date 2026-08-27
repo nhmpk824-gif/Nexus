@@ -19,12 +19,17 @@ import {
   listSpritePetModelsFromRoot,
 } from './spritePetModelDiscovery.js'
 import {
-  createSpritePetPackageFromImage,
-} from './spritePetMaker.js'
-import {
   copyPortraitPuppetLayers,
+  createPortraitPuppetPackageFromImage,
+  createPortraitPuppetPackageFromImages,
+  expandPortraitImageSources,
 } from './portraitPuppetPackage.js'
-import { copyPortraitPuppetV4Assets } from './portraitPuppetV4Package.js'
+import {
+  copyPortraitPuppetV4Assets,
+  createPortraitPuppetV4PackageFromLayerSources,
+  isFlatPortraitPuppetV4ImageSet,
+  resolvePortraitPuppetV4LayerRoot,
+} from './portraitPuppetV4Package.js'
 import {
   createSpritePetCreatorKit,
 } from './spritePetCreatorKit.js'
@@ -72,7 +77,6 @@ import {
   IMPORTED_SPRITE_PET_MODELS_ROUTE,
 } from './petModelUrlBuilders.js'
 import {
-  formatDiscoveredModelLabel,
   listPetModelsFromRoot,
 } from './live2dModelDiscoveryService.js'
 import { inspectLive2dModelFile } from './live2dModelCompatibility.js'
@@ -495,78 +499,74 @@ async function createSpritePetModelFromImagePaths(selectedImagePaths) {
   const packageId = slugifyPetModelId(path.basename(selectedPaths[0], path.extname(selectedPaths[0])))
   const displayName = formatDiscoveredModelLabel(packageId)
   const importDirectoryBaseName = `${packageId}-${Date.now()}`
+  const expanded = await expandPortraitImageSources(selectedPaths)
+  if (!expanded.length) {
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.UNSUPPORTED_FILE)
+  }
 
   await fs.mkdir(importedRoot, { recursive: true })
   return withFreshImportDirectory(importedRoot, importDirectoryBaseName, async (targetDirectory) => {
-    const {
-      spritePath,
-      manifestPath,
-      targetDirectory: packageDirectory,
-      visualAuditPath,
-      archivePath,
-      sourceLayout = 'single',
-      nativeAtlasPreserved = false,
-      visualWarnings = [],
-    } = await createSpritePetPackageFromImage({
-      sourcePath: selectedPaths[0],
-      sourcePaths: selectedPaths,
-      targetDirectory,
-      id: packageId,
-      displayName,
-    })
+    const v4LayerRoot = await resolvePortraitPuppetV4LayerRoot(selectedPaths)
+    const created = v4LayerRoot || isFlatPortraitPuppetV4ImageSet(expanded)
+      ? await createPortraitPuppetV4PackageFromLayerSources({
+        sourceDirectory: v4LayerRoot,
+        sourcePaths: expanded,
+        targetDirectory,
+        id: packageId,
+        displayName,
+        description: 'Layered portrait puppet with independent eyes, mouth, hair, and cloth.',
+      })
+      : expanded.length > 1
+        ? await createPortraitPuppetPackageFromImages({
+          sourcePaths: expanded,
+          targetDirectory,
+          id: packageId,
+          displayName,
+        })
+        : await createPortraitPuppetPackageFromImage({
+          sourcePath: expanded[0],
+          targetDirectory,
+          id: packageId,
+          displayName,
+          description: 'Locally animated from one portrait by Nexus — no LLM or online image generation.',
+        })
     const importedModels = await listImportedSpritePetModels()
     const importedSpriteUrl = buildImportedSpritePetAssetUrl(
-      normalizeAssetRelativePath(importedRoot, spritePath),
+      normalizeAssetRelativePath(importedRoot, created.portraitPath || created.spritePath),
     )
     const importedModel = importedModels.find((model) => (
-      model.spriteAtlas?.imagePath === importedSpriteUrl
-      || model.portraitPuppet?.imagePath === importedSpriteUrl
+      model.portraitPuppet?.imagePath === importedSpriteUrl
+      || model.spriteAtlas?.imagePath === importedSpriteUrl
     ))
 
     if (!importedModel) {
       throw buildPetIpcError(PET_IPC_ERROR_CODES.IMPORT_INCOMPLETE)
     }
 
-    const isPortrait = Boolean(importedModel.portraitPuppet)
     const isLayered = Boolean(importedModel.portraitPuppet?.layeredRig)
     return {
       model: importedModel,
-      packageDirectory,
-      manifestPath,
-      spritesheetPath: isPortrait ? undefined : spritePath,
-      visualAuditPath: visualAuditPath || undefined,
-      archivePath,
+      packageDirectory: created.targetDirectory || targetDirectory,
+      manifestPath: created.manifestPath,
+      archivePath: created.archivePath,
       ...petArtifactDisplayFields({
-        packageDirectory,
-        manifestPath,
-        spritesheetPath: isPortrait ? undefined : spritePath,
-        visualAuditPath: visualAuditPath || undefined,
-        archivePath,
+        packageDirectory: created.targetDirectory || targetDirectory,
+        manifestPath: created.manifestPath,
+        archivePath: created.archivePath,
       }),
       ...petUserMessage(
-        isLayered
-          ? PET_IMPORT_MESSAGE_KEYS.layered
-          : isPortrait ? PET_IMPORT_MESSAGE_KEYS.portrait : PET_IMPORT_MESSAGE_KEYS.sprite,
-        isPortrait
-          ? {
-            name: importedModel.label,
-            actionKey: isLayered
-              ? PET_IMPORT_MESSAGE_KEYS.actionLayered
-              : PET_IMPORT_MESSAGE_KEYS.actionPortrait,
-          }
-          : {
-            name: importedModel.label,
-            actionKey: spriteActionKey(sourceLayout, nativeAtlasPreserved),
-            archive: getPetArtifactDisplayPath(archivePath),
-            auditKey: visualWarnings.length
-              ? PET_IMPORT_MESSAGE_KEYS.auditWarn
-              : PET_IMPORT_MESSAGE_KEYS.auditOk,
-            count: visualWarnings.length,
-          },
+        isLayered ? PET_IMPORT_MESSAGE_KEYS.layered : PET_IMPORT_MESSAGE_KEYS.portrait,
+        {
+          name: importedModel.label,
+          actionKey: isLayered
+            ? PET_IMPORT_MESSAGE_KEYS.actionLayered
+            : PET_IMPORT_MESSAGE_KEYS.actionPortrait,
+        },
       ),
     }
   })
 }
+
 
 async function importSpritePetModelFromCodexGallery(input) {
   const rawInput = String(input ?? '').trim()
@@ -995,6 +995,7 @@ async function createSpritePetModelFromImageDialog() {
 
   return createSpritePetModelFromImagePaths(selection.filePaths.map((entry) => path.resolve(entry)))
 }
+
 
 async function saveTextFileFromDialog(sourceWindow, payload = {}) {
   const defaultFileName = String(payload.defaultFileName ?? '').trim() || `desktop-pet-${Date.now()}.json`

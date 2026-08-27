@@ -413,7 +413,7 @@ export const koCore = {
   'about.links.changelog': '변경 내역',
   'about.release_spotlight.eyebrow': '버전 테마 · v{version}',
   'about.release_spotlight.title': '모델 폴더에서 동반자까지 더 안전하게 전환합니다.',
-  'about.release_spotlight.summary': 'Nexus v0.4.7-beta.1은 Live2D 호환성 진단을 미리 검증합니다. 안정 버전은 v0.4.5입니다. 서명되지 않은 macOS beta는 릴리스 페이지에서 수동으로 업데이트합니다.',
+  'about.release_spotlight.summary': 'Nexus v0.4.7이 현재 안정 버전입니다. Live2D 호환성 진단, Portrait Puppet v4, 갱신된 모델 카탈로그가 포함됩니다. 서명되지 않은 macOS 빌드는 릴리스 페이지에서 수동으로 업데이트합니다.',
   'about.release_spotlight.action.open_voice': '음성 설정 열기',
   'about.release_spotlight.action.preview_companion': '동반자 미리보기',
   'about.release_spotlight.bullet.companion_presence.title': '동반자 존재감을 중심에',

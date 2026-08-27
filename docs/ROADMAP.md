@@ -1,6 +1,6 @@
 # Nexus Roadmap — companion-first phases
 
-> Last updated 2026-08-11. Stewardship follows Klein's product direction.
+> Last updated 2026-08-27. Stewardship follows Klein's product direction.
 > For the short-term MVP and Chinese execution plan, see
 > [Nexus 升级整合计划](NEXUS_UPGRADE_INTEGRATION_PLAN.md). When planning
 > near-term work, Phase 1 in that document is the active scope.
@@ -27,10 +27,13 @@ The larger product steps are:
   hardening, check-in policy, companion-surface cohesion and transparency,
   maintenance and hardening, and release
   hardening. `v0.4.0` is the stable quiet-observation foundation; the current
-  public stable release is v0.4.5, which shipped as the current stable release
-  on 2026-08-06 through the standard beta flow (`v0.4.5-beta.1`, published
-  2026-08-03, then the beta validation window) as a memory integrity and
-  maintenance release. `v0.4.4` was the previous maintenance and hardening
+  public stable release is v0.4.7, which shipped as the current stable release
+  on 2026-08-27 under a version-scoped maintainer exception after the
+  automated gate, as a companion-avatar and catalog release. `v0.4.6` was the
+  previous avatar runtime reliability release, shipped on 2026-08-21 through
+  the standard beta flow (`v0.4.6-beta.1`, followed by the beta validation
+  window). `v0.4.5` was the previous memory integrity and maintenance release,
+  and `v0.4.4` was the previous maintenance and hardening
   release (toolchain refresh, security fixes, code-structure cleanup). The
   beta feedback and copy tuning scope once planned for v0.4.4 was evaluated
   and dropped: no beta program is planned, and its copy guardrails already
@@ -38,23 +41,21 @@ The larger product steps are:
   (the [Companion Surface Cohesion & Transparency](V0.4.3_OPTIMIZATION_AND_COMPETITOR_PLAN_2026-07-12.md)
   follow-up) is closed. Future work must not move the
   package version, tag, GitHub Release, or README stable entry beyond
-  `v0.4.5` until a later release is explicitly prepared. `v0.4.6-beta.1`
-  remains in its standard multi-day validation window and is not eligible for
-  stable promotion yet. `v0.4.7-beta.1` is the active compatibility candidate;
-  v0.4.5 remains the public stable entry while both beta lines keep candidate
-  semantics.
+  `v0.4.7` until a later release is explicitly prepared. The v0.4.7 stable
+  promotion is the current release boundary.
 - **v0.4.6 — avatar runtime reliability.** Fix transparent Live2D compositing,
   recover boundedly from WebGL context loss, keep a localized readable
   fallback, and prove Mao/Haru/Hiyori cold start, switching, and recovery in
   the durable visual plus packaged runtime gates. No dependency upgrade or
   behavior expansion belongs to this patch line.
-- **v0.4.7 — avatar compatibility and diagnostics.** Validate imported Cubism
-  resources before activation, explain missing textures/motions/expressions,
-  surface actionable repair guidance, and retain packaged switch diagnostics.
-  The `v0.4.7-beta.1` slice implements this boundary with path-contained
-  resource inspection, five-locale guidance, limited-versus-blocked results,
-  and schema-4 switch evidence. This remains a compatibility/maintenance
-  release, not a behavior release.
+- **v0.4.7 — avatar compatibility, portrait v4, and catalog.** Validate
+  imported Cubism resources before activation, explain missing
+  textures/motions/expressions, surface actionable repair guidance, and retain
+  packaged switch diagnostics. Portrait Puppet v4 is the default in-app
+  picture path; Grok speech and Qwen 3.8-max / GLM-5.3 catalog defaults are
+  included. The 2026-08-10 `v0.4.7-beta.1` preparation record remains
+  historical. This remains a compatibility/catalog release, not a v0.5
+  behavior release.
 - **v0.5.0 — adaptive desktop presence.** Extend the existing sprite
   locomotion foundation into a shared sprite/Live2D behavior layer. The visible
   companion may react to mouse proximity, coarse typing rhythm, idleness, and

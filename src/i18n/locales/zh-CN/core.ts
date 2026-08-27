@@ -411,7 +411,7 @@ export const zhCNCore = {
   'about.links.changelog': '更新历史',
   'about.release_spotlight.eyebrow': '版本主题 · v{version}',
   'about.release_spotlight.title': '从模型文件夹到桌面伙伴，切换更安全。',
-  'about.release_spotlight.summary': 'Nexus v0.4.7-beta.1 预览 Live2D 兼容性诊断；v0.4.5 仍是稳定版。macOS beta 未签名，需从发布页手动更新。',
+  'about.release_spotlight.summary': 'Nexus v0.4.7 是当前稳定版：Live2D 兼容性诊断、分层立绘 v4 和更新后的模型目录。macOS 构建未签名，需从发布页手动更新。',
   'about.release_spotlight.action.open_voice': '打开语音设置',
   'about.release_spotlight.action.preview_companion': '预览伙伴',
   'about.release_spotlight.bullet.companion_presence.title': '陪伴存在仍是主线',

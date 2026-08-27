@@ -482,7 +482,6 @@ export function usePetModelImport({
     setLastCreatorKitSourceRowsDirectory('')
     setLastCreatorKitSourceRowsDirectoryDisplay('')
     setAssembledCreatorKitPackage(null)
-    setGeneratedSpritePetPackage(null)
   }
 
   return {
@@ -500,7 +499,6 @@ export function usePetModelImport({
     lastCreatorKitSourceRowsDirectory,
     lastCreatorKitSourceRowsDirectoryDisplay,
     assembledCreatorKitPackage,
-    generatedSpritePetPackage,
     handleImportPetModel,
     handleImportCodexPetGallery,
     handleLoadCodexPetGallery,
@@ -508,9 +506,10 @@ export function usePetModelImport({
     handleInspectCodexPetCreatorKit,
     handleAssembleCodexPetCreatorKit,
     handleInstallCodexPetCreatorKitToCodex,
-    handleInstallGeneratedSpritePetPackageToCodex,
     handleOpenCodexPetCreatorKitPath,
     handleCreateSpritePetFromImage,
+    handleInstallGeneratedSpritePetPackageToCodex,
+    generatedSpritePetPackage,
     resetPetModelImport,
   }
 }

@@ -413,7 +413,7 @@ export const jaCore = {
   'about.links.changelog': '変更履歴',
   'about.release_spotlight.eyebrow': 'バージョンテーマ · v{version}',
   'about.release_spotlight.title': 'モデルフォルダからコンパニオンまで、より安全に切り替え。',
-  'about.release_spotlight.summary': 'Nexus v0.4.7-beta.1 では Live2D 互換性診断を先行検証します。安定版は v0.4.5 のままです。署名なし macOS beta はリリースページから手動で更新します。',
+  'about.release_spotlight.summary': 'Nexus v0.4.7 が現在の安定版です。Live2D 互換性診断、Portrait Puppet v4、更新されたモデルカタログを含みます。署名なし macOS ビルドはリリースページから手動で更新します。',
   'about.release_spotlight.action.open_voice': '音声設定を開く',
   'about.release_spotlight.action.preview_companion': 'コンパニオンをプレビュー',
   'about.release_spotlight.bullet.companion_presence.title': 'コンパニオンの存在感を主軸に',

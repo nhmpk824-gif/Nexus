@@ -89,6 +89,41 @@ summaries, and retained resource profiles in switch evidence. Its protected tag
 may be pushed only after the release commit passes the full local gate and
 cross-platform CI.
 
+### v0.4.6 stable record — 2026-08-21
+
+The v0.4.6 beta validation window closed with the avatar runtime reliability
+scope intact. The stable promotion keeps straight-alpha Live2D compositing,
+bounded WebGL context-loss recovery, localized fallback states, and the
+three-model visual proof. The image/atlas-to-pet generator was removed from the
+stable UI and IPC surface; existing package import and Creator Kit authoring
+remain supported. The stable handoff lives in
+`RELEASE-CANDIDATE-v0.4.6-HANDOFF.md`. Official binaries must still be rebuilt
+from the release commit by the protected workflow; no physical-device evidence
+is claimed.
+
+### v0.4.7 maintainer exception — 2026-08-27
+
+For v0.4.7 only, the owner explicitly accepted a direct stable promotion after
+reviewing the merge of origin/main (v0.4.6) into the v0.4.7 line, the restored
+portrait-from-image path without the removed atlas generator, the August 2026
+catalog defaults, and the complete automated release gate. The remaining
+multi-day beta validation window was waived for this version-scoped tree; no
+multi-day conversation evidence or cross-platform physical-device validation
+is claimed. The v0.4.7-beta.1 preparation record of 2026-08-10 remains
+historical and does not describe this exact tree. Final v0.4.7 binaries must
+be rebuilt from the merged release commit by `.github/workflows/release.yml`,
+pass the clean remote asset/checksum closure gate, and only then become public.
+This exception does not change the default policy for v0.4.8 or later releases.
+
+### v0.4.7 stable record — 2026-08-27
+
+v0.4.7 is the current stable companion-avatar and catalog release. It keeps
+Cubism import validation, Portrait Puppet v4, Grok speech, Qwen 3.8-max /
+GLM-5.3 catalog defaults, and the v0.4.6 avatar-runtime reliability work. The
+stable handoff lives in `RELEASE-CANDIDATE-v0.4.7-HANDOFF.md`. Official
+binaries must still be rebuilt from the release commit by the protected
+workflow; no physical-device evidence is claimed.
+
 This doc is the source of truth for every release. The short version:
 
 ```
@@ -324,8 +359,8 @@ version only; it does not invent or substitute multi-day evidence.
   `latest-linux.yml` metadata — both stable users AND beta users auto-upgrade on
   next app launch.
 - **Never** publish a feature release directly as stable unless a version-scoped
-  maintainer exception is documented before the release commit. The v0.4.3
-  and v0.4.4 exceptions above are the only current exceptions.
+  maintainer exception is documented before the release commit. The v0.4.3,
+  v0.4.4, and v0.4.7 exceptions above are the only current exceptions.
 
 ---
 

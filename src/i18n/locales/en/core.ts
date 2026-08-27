@@ -413,7 +413,7 @@ export const enCore = {
   'about.links.changelog': 'What\'s Changed',
   'about.release_spotlight.eyebrow': 'Version theme · v{version}',
   'about.release_spotlight.title': 'A safer path from model folder to companion.',
-  'about.release_spotlight.summary': 'Nexus v0.4.7-beta.1 previews Live2D compatibility diagnostics while v0.4.5 remains stable. Unsigned macOS beta builds update manually from the release page.',
+  'about.release_spotlight.summary': 'Nexus v0.4.7 is the current stable release for Live2D compatibility diagnostics, Portrait Puppet v4, and the updated model catalog. Unsigned macOS builds update manually from the release page.',
   'about.release_spotlight.action.open_voice': 'Open Voice Settings',
   'about.release_spotlight.action.preview_companion': 'Preview Companion',
   'about.release_spotlight.bullet.companion_presence.title': 'The companion stays present',

@@ -67,14 +67,13 @@ test('current release spotlight translation keys are registered for every locale
   }
 })
 
-test('current release spotlight describes the v0.4.7 compatibility beta and keeps historical keys', async () => {
+test('current release spotlight describes the v0.4.7 stable compatibility release and keeps historical keys', async () => {
   const en = await ensureLocaleLoaded('en-US')
   const zhCN = await ensureLocaleLoaded('zh-CN')
 
   assert.equal(en['about.release_spotlight.title'], 'A safer path from model folder to companion.')
-  assert.match(en['about.release_spotlight.summary'], /v0\.4\.7-beta\.1.*Live2D compatibility diagnostics/i)
-  assert.match(en['about.release_spotlight.summary'], /v0\.4\.5 remains stable/i)
-  assert.match(en['about.release_spotlight.summary'], /unsigned macOS beta builds.*manually.*release page/i)
+  assert.match(en['about.release_spotlight.summary'], /v0\.4\.7 is the current stable release/i)
+  assert.match(en['about.release_spotlight.summary'], /unsigned macOS builds.*manually.*release page/i)
   assert.match(en['about.release_spotlight.bullet.import_validation.body'], /Moc.*textures.*declared local resource.*before/i)
   assert.match(en['about.release_spotlight.bullet.repair_guidance.body'], /Five localized messages.*missing textures.*unsafe paths/i)
   assert.match(en['about.release_spotlight.bullet.limited_compatibility.body'], /without motions or expressions.*still display/i)
@@ -95,9 +94,8 @@ test('current release spotlight describes the v0.4.7 compatibility beta and keep
   assert.match(en['about.release_spotlight.bullet.voice_settings.body'], /frameless companions and desktop pets/)
 
   assert.equal(zhCN['about.release_spotlight.title'], '从模型文件夹到桌面伙伴，切换更安全。')
-  assert.match(zhCN['about.release_spotlight.summary'], /v0\.4\.7-beta\.1.*Live2D 兼容性诊断/)
-  assert.match(zhCN['about.release_spotlight.summary'], /v0\.4\.5 仍是稳定版/)
-  assert.match(zhCN['about.release_spotlight.summary'], /macOS beta 未签名.*发布页.*手动/)
+  assert.match(zhCN['about.release_spotlight.summary'], /v0\.4\.7 是当前稳定版/)
+  assert.match(zhCN['about.release_spotlight.summary'], /macOS 构建未签名.*发布页.*手动/)
   assert.match(zhCN['about.release_spotlight.bullet.import_validation.body'], /Moc.*纹理.*本地资源.*再切换/)
   assert.match(zhCN['about.release_spotlight.bullet.repair_guidance.body'], /五语言.*纹理.*动作.*表情.*不安全路径/)
   assert.match(zhCN['about.release_spotlight.bullet.limited_compatibility.body'], /没有动作或表情.*仍可显示/)
@@ -118,13 +116,13 @@ test('current release spotlight describes the v0.4.7 compatibility beta and keep
   assert.match(zhCN['about.release_spotlight.bullet.voice_settings.body'], /无框伙伴与桌宠/)
 })
 
-test('release spotlight presents v0.4.7 as beta while keeping v0.4.5 stable and unsigned macOS updates explicit', async () => {
+test('release spotlight presents v0.4.7 as stable and keeps unsigned macOS updates explicit', async () => {
   const contracts = [
-    ['en-US', /v0\.4\.7-beta\.1.*v0\.4\.5 remains stable/i, /unsigned macOS beta.*manually.*release page/i],
-    ['zh-CN', /v0\.4\.7-beta\.1.*v0\.4\.5 仍是稳定版/, /macOS beta 未签名.*发布页.*手动/],
-    ['zh-TW', /v0\.4\.7-beta\.1.*v0\.4\.5 仍是穩定版/, /macOS beta 未簽署.*發布頁.*手動/],
-    ['ja', /v0\.4\.7-beta\.1.*安定版は v0\.4\.5/, /署名なし macOS beta.*リリースページ.*手動/],
-    ['ko', /v0\.4\.7-beta\.1.*안정 버전은 v0\.4\.5/, /서명되지 않은 macOS beta.*릴리스 페이지.*수동/],
+    ['en-US', /v0\.4\.7 is the current stable release/i, /unsigned macOS builds.*manually.*release page/i],
+    ['zh-CN', /v0\.4\.7 是当前稳定版/, /macOS 构建未签名.*发布页.*手动/],
+    ['zh-TW', /v0\.4\.7 是目前穩定版/, /macOS 建置未簽署.*發布頁.*手動/],
+    ['ja', /v0\.4\.7 が現在の安定版/, /署名なし macOS ビルド.*リリースページ.*手動/],
+    ['ko', /v0\.4\.7이 현재 안정 버전/, /서명되지 않은 macOS 빌드.*릴리스 페이지.*수동/],
   ] as const
 
   for (const [locale, releaseStatePattern, unsignedUpdatePattern] of contracts) {
@@ -136,7 +134,7 @@ test('release spotlight presents v0.4.7 as beta while keeping v0.4.5 stable and 
         dictionary[item.bodyKey],
       ]),
     ].join(' ')
-    assert.match(copy, releaseStatePattern, `${locale} must keep the beta/stable boundary explicit`)
+    assert.match(copy, releaseStatePattern, `${locale} must keep the v0.4.7 stable entry explicit`)
     assert.match(copy, unsignedUpdatePattern, `${locale} must keep the unsigned macOS manual-update boundary`)
   }
 })
@@ -263,8 +261,8 @@ test('human-facing v0.3.6 docs keep foundation wrap-up aligned', () => {
     readWorkspaceFile('docs/RELEASE-NOTES-v0.3.6.zh-CN.md'),
   )
 
-  assert.match(rootReadme, /当前稳定版：\*{0,2}\s*v0\.4\.5/)
-  assert.match(rootReadme, /上一公开版本 — v0\.4\.4/)
+  assert.match(rootReadme, /当前稳定版：\*{0,2}\s*v0\.4\.7/)
+  assert.match(rootReadme, /上一公开版本 — v0\.4\.6/)
   assert.doesNotMatch(rootReadme, /## 上次更新 — v0\.3\.6/)
 
   assert.match(englishReleaseNotes, /The foundation is ready for the next companion step\./)

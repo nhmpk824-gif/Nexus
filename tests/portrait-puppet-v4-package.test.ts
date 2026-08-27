@@ -7,15 +7,13 @@ import sharp from 'sharp'
 
 import {
   copyPortraitPuppetV4Assets,
+  createPortraitPuppetV4PackageFromLayerSources,
+  isFlatPortraitPuppetV4ImageSet,
+  resolvePortraitPuppetV4LayerRoot,
   resolvePortraitPuppetV4Package,
   validatePortraitPuppetV4Assets,
 } from '../electron/services/portraitPuppetV4Package.js'
 import { readSpritePetPackage } from '../electron/services/spritePetPackage.js'
-import { createSpritePetPackageFromImage } from '../electron/services/spritePetMaker.js'
-import {
-  isFlatPortraitPuppetV4ImageSet,
-  resolvePortraitPuppetV4LayerRoot,
-} from '../electron/services/portraitPuppetV4Package.js'
 import {
   PET_IPC_ERROR_CODES,
   extractPetIpcErrorCode,
@@ -150,12 +148,11 @@ test('maker prefers a v4 layer folder over the single-image v3 fallback', async 
       true,
     )
 
-    const result = await createSpritePetPackageFromImage({
-      sourcePath: rootPath,
+    const result = await createPortraitPuppetV4PackageFromLayerSources({
+      sourceDirectory: rootPath,
       targetDirectory,
       id: 'layered-maker',
       displayName: 'Layered Maker',
-      force: true,
     })
     const packageInfo = await readSpritePetPackage(result.manifestPath)
 

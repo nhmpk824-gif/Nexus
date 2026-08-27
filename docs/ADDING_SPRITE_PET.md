@@ -40,7 +40,7 @@ Most users should not have to learn the atlas details first. The default portrai
 
 A single portrait still works as a **fallback v3 puppet**: one image that approximates turn, blink, breath, and mouth locally. Extra named pictures (`idle`, `happy`, `shy` / `embarrassed`, `闭眼` / `blink`, `张嘴` / `mouth`, `speaking`…) become expression swaps. It is simpler to make than v4, but it cannot occlude blinks or give independent hair and cloth the way a layered pack can.
 
-If the selected image already looks like a Nexus dense sheet or a Codex `8x9` atlas, Nexus keeps it as a sprite pet. A valid native atlas is preserved instead of being reanimated from a single frame; a scaled atlas is resized to the matching contract.
+Nexus does **not** generate an `8x9` sprite atlas from a single picture. Existing Live2D/Sprite packages can still be imported, community `.codex-pet.zip` files can still be imported, and the Creator Kit below remains the supported path for authoring an atlas outside Nexus.
 
 A v4 portrait package is:
 
@@ -50,23 +50,19 @@ A v4 portrait package is:
 - `masks/*.png` when present
 - a shareable `.nexus-portrait.zip`
 
-A fallback single-image package is `pet.json` + `portrait.png`. An atlas/sprite package is still:
+A fallback single-image package is `pet.json` + `portrait.png`. An atlas/sprite package remains:
 
 - `pet.json`
 - `spritesheet.png`
 - `my-pet.codex-pet.zip`
 - `README.md`
 
-The maker removes a simple solid background, creates the required `8x9` atlas, fills unused cells transparently, applies starter row motion, validates the result with the same parser Nexus uses in the app, and writes a shareable `.codex-pet.zip`. After the app flow finishes, the settings panel shows the generated package with actions to open the folder, reveal the ZIP, or install the pet into `${CODEX_HOME:-$HOME/.codex}/pets/`. It does not add speed lines, glow, stars, floor shadows, checkmarks, detached props, or other decorative effects. Start from art that already looks like a Codex digital pet: compact silhouette, thick dark outline, limited palette, flat shading, and a transparent or clean chroma-key background.
-
-For better motion, generate or draw a source image that is already an `8x9` action sheet and let the maker package it. The settings UI detects this automatically.
-
 The user-facing product flow should be:
 
-1. Give Nexus a character image or a ready action sheet.
-2. Nexus builds the package automatically.
-3. Preview the 9 action rows.
-4. Keep or share the generated folder or `.codex-pet.zip`.
+1. Prefer a layered v4 pack, or fall back to one portrait.
+2. Nexus builds the portrait package automatically.
+3. Keep or share the generated folder or `.nexus-portrait.zip`.
+4. Use package import or Creator Kit if you already have a native atlas.
 
 Advanced users can still edit `spritesheet.png` frame by frame, but the ecosystem should treat that as optional polish, not the default path.
 

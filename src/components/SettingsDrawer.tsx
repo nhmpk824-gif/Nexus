@@ -196,10 +196,15 @@ export type SettingsDrawerProps = {
     model: PetModelDefinition
     message: string
     packageDirectory?: string
+    packageDirectoryDisplay?: string
     manifestPath?: string
+    manifestPathDisplay?: string
     spritesheetPath?: string
+    spritesheetPathDisplay?: string
     visualAuditPath?: string
+    visualAuditPathDisplay?: string
     archivePath?: string
+    archivePathDisplay?: string
   } | null>
   onTestConnection: (
     capability: ServiceConnectionCapability,
