@@ -27,6 +27,9 @@ test('modelSupportsVision: known multimodal families', () => {
     'claude-haiku-4-5',
     'kimi-k3',
     'gpt-5.6-sol',
+    'qwen3.8-max',
+    'qwen3.8-flash',
+    'glm-5.3-flash',
     'gemini-1.5-pro',
     'gemini-2.0-flash',
     'qwen-vl-max-latest',
@@ -48,6 +51,7 @@ test('modelSupportsVision: known multimodal families', () => {
 
 test('modelSupportsVision: text-only models', () => {
   for (const id of [
+    'glm-5.3',
     'deepseek-v4-flash',
     'deepseek-v4-pro',
     'deepseek-coder',
@@ -94,6 +98,10 @@ test('estimateModelContextWindowTokens: returns useful coarse buckets', () => {
   assert.equal(estimateModelContextWindowTokens('claude-sonnet-4-6'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('deepseek-v4-pro'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('qwen3.8-max'), 1_000_000)
+  assert.equal(estimateModelContextWindowTokens('qwen3.8-flash'), 1_000_000)
+  assert.equal(estimateModelContextWindowTokens('qwen3.8-27b'), 256_000)
+  assert.equal(estimateModelContextWindowTokens('glm-5.3'), 1_000_000)
+  assert.equal(estimateModelContextWindowTokens('glm-5.3-flash'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('qwen3.7-max'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('qwen-3-7-max'), 1_000_000)
   assert.equal(estimateModelContextWindowTokens('qwen3.7-plus'), 256_000)

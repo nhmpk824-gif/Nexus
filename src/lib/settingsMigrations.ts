@@ -35,13 +35,59 @@ const RETIRED_CATALOG_DEFAULTS: Record<string, { from: string; to: string }> = {
   'zai-global': { from: 'glm-5.1', to: 'glm-5.2' },
 }
 
-function migrateRetiredCatalogDefault(providerId: string, model: string) {
-  const mapping = RETIRED_CATALOG_DEFAULTS[providerId]
-  if (!mapping) return model
-  return model === mapping.from ? mapping.to : model
+function migrateCatalogDefault(
+  mapping: Record<string, { from: string; to: string }>,
+  providerId: string,
+  model: string,
+) {
+  const entry = mapping[providerId]
+  if (!entry) return model
+  return model === entry.from ? entry.to : model
 }
 
-export const CURRENT_SETTINGS_SCHEMA_VERSION = 6
+function remapStoredCatalogDefaults(
+  raw: Record<string, unknown>,
+  mapping: Record<string, { from: string; to: string }>,
+) {
+  const next = { ...raw }
+  const storedProviderId = typeof next.apiProviderId === 'string' ? next.apiProviderId : ''
+  const storedBaseUrl = typeof next.apiBaseUrl === 'string' ? next.apiBaseUrl : ''
+  const storedModel = typeof next.model === 'string' ? next.model : ''
+  const providerId = storedProviderId || inferApiProviderId(storedBaseUrl, storedModel)
+  if (storedModel && providerId) {
+    next.model = migrateCatalogDefault(mapping, providerId, storedModel)
+  }
+
+  const profiles = next.textProviderProfiles
+  if (profiles && typeof profiles === 'object' && !Array.isArray(profiles)) {
+    const nextProfiles: Record<string, unknown> = { ...profiles }
+    for (const [id, profile] of Object.entries(nextProfiles)) {
+      if (!profile || typeof profile !== 'object' || Array.isArray(profile)) continue
+      const model = 'model' in profile && typeof profile.model === 'string' ? profile.model : ''
+      if (!model) continue
+      const migrated = migrateCatalogDefault(mapping, id, model)
+      if (migrated !== model) {
+        nextProfiles[id] = { ...profile, model: migrated }
+      }
+    }
+    next.textProviderProfiles = nextProfiles
+  }
+  return next
+}
+
+/**
+ * Frozen snapshot of catalog defaults replaced after the 2026-08 v6 refresh.
+ * v7 remaps a stored model only when it still equals that previous default.
+ */
+const V7_RETIRED_CATALOG_DEFAULTS: Record<string, { from: string; to: string }> = {
+  dashscope: { from: 'qwen3.7-plus', to: 'qwen3.8-max' },
+  'dashscope-global': { from: 'qwen3.7-plus', to: 'qwen3.8-max' },
+  'modelstudio-coding': { from: 'qwen3.7-plus', to: 'qwen3.8-max' },
+  zai: { from: 'glm-5.2', to: 'glm-5.3' },
+  'zai-global': { from: 'glm-5.2', to: 'glm-5.3' },
+}
+
+export const CURRENT_SETTINGS_SCHEMA_VERSION = 7
 
 interface SettingsMigration {
   toVersion: number
@@ -138,32 +184,12 @@ const migrations: SettingsMigration[] = [
   {
     toVersion: 6,
     description: 'Promote stored previous catalog defaults to the 2026-08 flagship IDs',
-    migrate: (raw) => {
-      const next = { ...raw }
-      const storedProviderId = typeof next.apiProviderId === 'string' ? next.apiProviderId : ''
-      const storedBaseUrl = typeof next.apiBaseUrl === 'string' ? next.apiBaseUrl : ''
-      const storedModel = typeof next.model === 'string' ? next.model : ''
-      const providerId = storedProviderId || inferApiProviderId(storedBaseUrl, storedModel)
-      if (storedModel && providerId) {
-        next.model = migrateRetiredCatalogDefault(providerId, storedModel)
-      }
-
-      const profiles = next.textProviderProfiles
-      if (profiles && typeof profiles === 'object' && !Array.isArray(profiles)) {
-        const nextProfiles: Record<string, unknown> = { ...profiles }
-        for (const [id, profile] of Object.entries(nextProfiles)) {
-          if (!profile || typeof profile !== 'object' || Array.isArray(profile)) continue
-          const model = 'model' in profile && typeof profile.model === 'string' ? profile.model : ''
-          if (!model) continue
-          const migrated = migrateRetiredCatalogDefault(id, model)
-          if (migrated !== model) {
-            nextProfiles[id] = { ...profile, model: migrated }
-          }
-        }
-        next.textProviderProfiles = nextProfiles
-      }
-      return next
-    },
+    migrate: (raw) => remapStoredCatalogDefaults(raw, RETIRED_CATALOG_DEFAULTS),
+  },
+  {
+    toVersion: 7,
+    description: 'Promote stored Qwen 3.7-plus / GLM-5.2 defaults to Qwen 3.8-max / GLM-5.3',
+    migrate: (raw) => remapStoredCatalogDefaults(raw, V7_RETIRED_CATALOG_DEFAULTS),
   },
 ]
 

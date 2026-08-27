@@ -258,7 +258,7 @@ test('ignores malformed root settings values and falls back to defaults', () => 
 
     const settings = loadSettings()
 
-    assert.equal(settings.settingsSchemaVersion, 6)
+    assert.equal(settings.settingsSchemaVersion, 7)
     assert.equal(settings.apiProviderId, 'ollama')
     assert.equal(settings.apiBaseUrl, 'http://127.0.0.1:11434/v1')
     assert.equal(settings.model, 'qwen3:8b')
@@ -314,6 +314,39 @@ test('migrates a stored previous catalog default to the current flagship', () =>
   assert.equal(settings.textProviderProfiles.openai?.model, 'gpt-5.6-sol')
   assert.equal(settings.textProviderProfiles.anthropic?.model, 'claude-sonnet-5')
   assert.equal(settings.textProviderProfiles.xai?.model, 'grok-4.20')
+})
+
+test('migrates stored Qwen 3.7-plus and GLM-5.2 defaults to the 3.8 / 5.3 flagships', () => {
+  const localStorage = createLocalStorageMock({
+    [SETTINGS_STORAGE_KEY]: JSON.stringify({
+      settingsSchemaVersion: 6,
+      apiProviderId: 'dashscope',
+      apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      model: 'qwen3.7-plus',
+      textProviderProfiles: {
+        dashscope: {
+          apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+          apiKey: '',
+          model: 'qwen3.7-plus',
+        },
+        zai: { apiBaseUrl: 'https://open.bigmodel.cn/api/paas/v4', apiKey: '', model: 'glm-5.2' },
+        openai: { apiBaseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-5.4-mini' },
+      },
+    }),
+  })
+
+  Object.defineProperty(globalThis, 'window', {
+    value: { localStorage },
+    configurable: true,
+    writable: true,
+  })
+
+  const settings = loadSettings()
+
+  assert.equal(settings.model, 'qwen3.8-max')
+  assert.equal(settings.textProviderProfiles.dashscope?.model, 'qwen3.8-max')
+  assert.equal(settings.textProviderProfiles.zai?.model, 'glm-5.3')
+  assert.equal(settings.textProviderProfiles.openai?.model, 'gpt-5.4-mini')
 })
 
 test('preserves an explicit older model that was not the previous default', () => {
