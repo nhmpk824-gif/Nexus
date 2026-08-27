@@ -390,6 +390,10 @@ export function Live2DCanvas({
       modelRef.current = null
       appRef.current = null
 
+      const ownedCanvas = (activeApp as { canvas?: HTMLCanvasElement; view?: HTMLCanvasElement } | null)?.canvas
+        ?? (activeApp as { view?: HTMLCanvasElement } | null)?.view
+      ownedCanvas?.parentNode?.removeChild(ownedCanvas)
+
       const finalizeDestroy = () => {
         // Flush one empty stage while the WebGL context is still valid. Waiting
         // until the next browser frame lets Pixi finish the render that was
