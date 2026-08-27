@@ -45,15 +45,17 @@ export type Live2DApplicationLike = {
  *   load may share TextureCache URLs.
  *
  * Chosen flags:
- * - Owned model: free textures (exclusive published owner for this canvas).
- * - Late/orphan model: destroy structure only — do not invalidate shared cache.
- * - Application: always removeView + destroy children; never stage texture free.
+ * - Models: destroy structure only. Pixi Assets caches texture sources globally,
+ *   so per-canvas teardown must not unload a source a new boot may already reuse.
+ * - Application: removeView + destroy children after the model leaves the stage;
+ *   destroy the model structure before its owning renderer so the Live2D plugin
+ *   cannot retain WebGL handles after the renderer has invalidated them.
  *
  * Remaining measurement gap: packaged GPU/memory proof that owned texture free
  * fully reclaims VRAM must be collected on a real runtime (not unit-testable here).
  */
 export const LIVE2D_TEARDOWN = {
-  ownedModel: { children: true, texture: true, baseTexture: true } as const satisfies Live2DDestroyOptions,
+  ownedModel: { children: true, texture: false, baseTexture: false } as const satisfies Live2DDestroyOptions,
   lateModel: { children: true, texture: false, baseTexture: false } as const satisfies Live2DDestroyOptions,
   appStage: { children: true, texture: false, baseTexture: false } as const satisfies Live2DDestroyOptions,
   removeView: true as const,

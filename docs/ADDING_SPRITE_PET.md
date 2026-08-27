@@ -36,9 +36,21 @@ The spritesheet must be PNG or WebP, transparent where unused, and exactly `1536
 
 ## Easy Creator Flow
 
-Most users should not have to learn the atlas details first. Start from one character image: in the app, use Settings -> Companion -> Avatar -> `Make pet from image/atlas`. Nexus creates the local package, validates it, and switches the active avatar to the generated Sprite pet. If the selected image already looks like a full Codex `8x9` atlas, Nexus detects that automatically. A valid native `1536x1872` Codex atlas is preserved instead of being reanimated from a single frame; a scaled AI-style atlas is split into rows and cells before packaging.
+Most users should not have to learn the atlas details first. The default portrait path is **Portrait Puppet v4**: a layered pack (`preview.png` + `parts/*.png`). In the app, use Settings -> Companion -> Avatar -> `Make a pet from a picture` and select the preview or the layer folder. Copy the in-app layered prompt into an image model, approve the full-body preview, then export same-canvas layers. `npm run pet:scaffold-portrait-v4 -- /path/to/layer-directory` builds the same package from a folder.
 
-This produces a ready-to-import package:
+A single portrait still works as a **fallback v3 puppet**: one image that approximates turn, blink, breath, and mouth locally. Extra named pictures (`idle`, `happy`, `shy` / `embarrassed`, `闭眼` / `blink`, `张嘴` / `mouth`, `speaking`…) become expression swaps. It is simpler to make than v4, but it cannot occlude blinks or give independent hair and cloth the way a layered pack can.
+
+If the selected image already looks like a Nexus dense sheet or a Codex `8x9` atlas, Nexus keeps it as a sprite pet. A valid native atlas is preserved instead of being reanimated from a single frame; a scaled atlas is resized to the matching contract.
+
+A v4 portrait package is:
+
+- `pet.json` (`formatVersion: 4`, `renderMode: layered-artmesh-v1`)
+- `preview.png`
+- `parts/*.png`
+- `masks/*.png` when present
+- a shareable `.nexus-portrait.zip`
+
+A fallback single-image package is `pet.json` + `portrait.png`. An atlas/sprite package is still:
 
 - `pet.json`
 - `spritesheet.png`
@@ -51,16 +63,16 @@ For better motion, generate or draw a source image that is already an `8x9` acti
 
 The user-facing product flow should be:
 
-1. Pick or generate a character image.
-2. Nexus builds a starter pet automatically.
+1. Give Nexus a character image or a ready action sheet.
+2. Nexus builds the package automatically.
 3. Preview the 9 action rows.
-4. Import/share the generated folder or `.codex-pet.zip`.
+4. Keep or share the generated folder or `.codex-pet.zip`.
 
 Advanced users can still edit `spritesheet.png` frame by frame, but the ecosystem should treat that as optional polish, not the default path.
 
 ## Prompt Creator Kit
 
-When a user wants to design a new pet from a concept instead of importing an existing package, generate a creator kit first:
+The in-app path is “give Nexus a picture”. The creator kit stays available from the CLI for people who want to draw or generate the nine row strips themselves:
 
 ```bash
 npm run pet:create-kit -- \
@@ -83,18 +95,7 @@ The kit writes:
 
 This is the user-friendly version of the hatch-pet rules. It does not fake artwork with local scripts, and it does not bundle community artwork. The style samples are links only, so users can study the Codex pet feeling while still generating or drawing original, user-owned, or explicitly licensed art.
 
-In the app, the same flow is available from Settings -> Companion -> Avatar -> `Make your own Codex pet`. Nexus writes the creator kit into the user's Documents folder so it can be opened in an image tool, shared, or zipped with the finished art. After creation, the settings panel can open the whole kit folder or open `source-rows/` directly.
-
-For a faster start, the same settings block also exposes `Generate prompt`. This produces one complete copyable prompt with the Codex-style visual contract, the exact `1536x1872` / `8x9` / `192x208` atlas requirements, and the required `source-rows/<row>-<state>.png` filenames. Use it when the user wants to paste one instruction into Codex or an image workflow before creating a full kit folder.
-
-After `Create kit`, Nexus keeps the generated kit directory as the current kit. The `Check kit` and `Assemble kit` buttons use that current directory first, so a user does not have to pick the same folder again. If no current kit is tracked, Nexus falls back to a folder picker.
-
-`Check kit` also writes QA files once at least one row strip exists:
-
-- `qa/source-rows-contact-sheet.svg` embeds the current row images, overlays the Codex `8x9` grid, labels every action row, and marks dimension or transparency warnings.
-- `qa/source-rows-motion-preview.html` plays each row strip with the same frame timing Nexus uses for Codex-compatible pets, so users can check whether the pet actually moves like a Codex pet before assembly.
-
-After generating the nine row strips, save them under the kit's `source-rows/` folder with these names:
+The settings UI does not walk users through this kit. After generating the nine row strips, save them under the kit's `source-rows/` folder with these names:
 
 ```text
 0-idle.png
@@ -116,18 +117,7 @@ npm run pet:assemble-kit -- ./output/pet-creator-kits/tiny-copper --force
 
 The assembler writes `final-package/pet.json`, `final-package/spritesheet.png`, `final-package/assembly-report.json`, `final-package/visual-audit.json`, and a shareable `<pet-id>.codex-pet.zip` next to `final-package/`, then validates the package with the same parser used by Nexus. It does not invent missing row art. If a row strip is absent, the command fails and tells the user which row still needs to be generated.
 
-The settings UI exposes the same step as `Assemble kit`: pick the creator-kit folder, and Nexus assembles `final-package/`, imports the generated pet into the local pet library, and switches the active avatar.
-
-After creating the kit, the settings UI shows `Open creator kit` and `Open row images folder`. Use the full kit action when the user needs prompts, layout guides, and references; use the row-images action when they are only dropping generated row strips into `source-rows/`.
-
-After assembly, the settings UI shows `Final Codex pet package` with actions to open `final-package/`, reveal the generated `.codex-pet.zip`, or install that exact package into `${CODEX_HOME:-$HOME/.codex}/pets/`. Installation is explicit and non-destructive: if a pet id already exists, Nexus writes a suffixed id instead of overwriting the existing Codex pet.
-
-After `Check kit`, the settings UI also shows the generated QA paths with direct desktop actions:
-
-- `Open QA folder` opens the kit's `qa/` directory so the user can inspect the contact sheet and reports.
-- `Open motion preview` opens `qa/source-rows-motion-preview.html`, which plays each row strip with the same frame timing used by the Codex-style runtime.
-
-Import the generated `final-package/` folder, share the generated `.codex-pet.zip`, or use the local import flow with that ZIP.
+Import the generated `final-package/` folder, share the generated `.codex-pet.zip`, or use the local import flow with that ZIP. Installation into `${CODEX_HOME:-$HOME/.codex}/pets/` stays explicit and non-destructive: if a pet id already exists, Nexus writes a suffixed id instead of overwriting the existing Codex pet.
 
 ## Community Gallery Import
 
@@ -241,7 +231,7 @@ Rows are interpreted as:
 | 7 | running | 6 | 120, 120, 120, 120, 120, 220 |
 | 8 | review | 6 | 150, 150, 150, 150, 150, 280 |
 
-Nexus maps existing companion signals onto those rows: voice listening uses `waiting`, speaking uses `review`, busy work uses `running`, touch uses `jumping`, worried/error-like moods use `failed`, and drag direction uses the directional running rows.
+Nexus-native pets use the denser wear sheet: listening, speaking, thinking, happy, shy, and sad are real rows. A leftover Codex 8x9 sheet still imports, but those extra states fall back (speaking → waving, listening → waiting). Busy work uses `running`, touch uses `jumping`, and drag direction uses the directional running rows.
 
 By default, Nexus follows the Codex-style playback pattern: a non-idle row is a transient action. A new request plays that row three times, then falls back to row `0 idle` with the idle frame durations multiplied by `6`, producing the slow resting loop Codex pets use after an action. A new action should change the `requestKey`; repeating the same state with the same `requestKey` will not restart the action.
 
@@ -254,6 +244,7 @@ The copyable clean-room runtime is split from the React component:
 - `src/features/pet/spriteAtlas.ts` defines the atlas contract, animation rows, frame timings, and state mapping.
 - `src/features/pet/spriteRuntime.ts` defines the renderer-agnostic state request and atlas-coordinate helpers.
 - `src/features/pet/components/SpritePetCanvas.tsx` is only the Nexus React wrapper.
+- `src/features/pet/spritePetWear.ts` plus `shared/spritePetWearContract.js` are the unwired wear/perform module: a denser first-class sheet, 8x9 compatibility, chat-intent detection, and a host port for later import/switch/claim. The live renderer still plays the 8x9 contract.
 
 A non-React app can drive the same pet mode with the pure runtime:
 

@@ -89,6 +89,7 @@ import {
 import { POWER_EVENT_KINDS } from '../../shared/powerEventKinds.js'
 
 const POWER_EVENT_CHANNEL = 'app:power-event'
+const PET_MODEL_LIBRARY_CHANGED_CHANNEL = 'pet-model:library-changed'
 let powerEventForwardingRegistered = false
 
 function summarizeFileDialogPayload(payload) {
@@ -131,7 +132,7 @@ async function confirmPetModelAction(event, channel, payload) {
   return approved
 }
 
-async function runAuditedPetModelAction(event, channel, payload, action) {
+async function runAuditedPetModelAction(event, channel, payload, action, options = {}) {
   audit('pet-model', 'request', summarizePetModelRequest(channel, payload))
   try {
     const approved = await confirmPetModelAction(event, channel, payload)
@@ -140,10 +141,20 @@ async function runAuditedPetModelAction(event, channel, payload, action) {
     }
     const result = await action()
     audit('pet-model', 'result', summarizePetModelResult(channel, result))
+    if (result != null && options.notifyLibraryChanged) {
+      broadcastPetModelLibraryChanged()
+    }
     return result
   } catch (error) {
     audit('pet-model', 'result', summarizePetModelResult(channel, {}, error))
     throw error
+  }
+}
+
+function broadcastPetModelLibraryChanged() {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win || win.isDestroyed?.()) continue
+    win.webContents.send(PET_MODEL_LIBRARY_CHANGED_CHANNEL)
   }
 }
 
@@ -284,15 +295,25 @@ export function register() {
 
   ipcMain.handle('pet-model:import', async (event) => {
     requireTrustedSender(event)
-    return runAuditedPetModelAction(event, 'pet-model:import', {}, () => importPetModelFromDialog())
+    return runAuditedPetModelAction(
+      event,
+      'pet-model:import',
+      {},
+      () => importPetModelFromDialog(),
+      { notifyLibraryChanged: true },
+    )
   })
 
   ipcMain.handle('pet-model:import-codex-gallery', async (event, input) => {
     requireTrustedSender(event)
     input = validatePetModelGalleryImportPayload(input)
-    return runAuditedPetModelAction(event, 'pet-model:import-codex-gallery', input, () => (
-      importSpritePetModelFromCodexGallery(input)
-    ))
+    return runAuditedPetModelAction(
+      event,
+      'pet-model:import-codex-gallery',
+      input,
+      () => importSpritePetModelFromCodexGallery(input),
+      { notifyLibraryChanged: true },
+    )
   })
 
   ipcMain.handle('pet-model:list-codex-gallery', async (event, payload = {}) => {
@@ -320,17 +341,25 @@ export function register() {
   ipcMain.handle('pet-model:assemble-creator-kit', async (event, payload = {}) => {
     requireTrustedSender(event)
     payload = validatePetModelCreatorKitOptionalPathPayload('pet-model:assemble-creator-kit', payload)
-    return runAuditedPetModelAction(event, 'pet-model:assemble-creator-kit', payload, () => (
-      assembleSpritePetCreatorKitFromDialog(payload)
-    ))
+    return runAuditedPetModelAction(
+      event,
+      'pet-model:assemble-creator-kit',
+      payload,
+      () => assembleSpritePetCreatorKitFromDialog(payload),
+      { notifyLibraryChanged: true },
+    )
   })
 
   ipcMain.handle('pet-model:install-creator-kit-codex', async (event, payload = {}) => {
     requireTrustedSender(event)
     payload = validatePetModelCreatorKitInstallPayload(payload)
-    return runAuditedPetModelAction(event, 'pet-model:install-creator-kit-codex', payload, () => (
-      installSpritePetCreatorKitPackageToCodex(payload)
-    ))
+    return runAuditedPetModelAction(
+      event,
+      'pet-model:install-creator-kit-codex',
+      payload,
+      () => installSpritePetCreatorKitPackageToCodex(payload),
+      { notifyLibraryChanged: true },
+    )
   })
 
   ipcMain.handle('pet-model:open-creator-kit-path', async (event, payload = {}) => {
@@ -343,7 +372,13 @@ export function register() {
 
   ipcMain.handle('pet-model:create-from-image', async (event) => {
     requireTrustedSender(event)
-    return runAuditedPetModelAction(event, 'pet-model:create-from-image', {}, () => createSpritePetModelFromImageDialog())
+    return runAuditedPetModelAction(
+      event,
+      'pet-model:create-from-image',
+      {},
+      () => createSpritePetModelFromImageDialog(),
+      { notifyLibraryChanged: true },
+    )
   })
 
   ipcMain.handle('dialog:confirm', async (event, message) => {

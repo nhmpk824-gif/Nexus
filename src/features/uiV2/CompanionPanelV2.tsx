@@ -13,7 +13,9 @@ import type {
 } from '../../types'
 import type { GazeTarget } from '../pet/components/live2d/types.ts'
 import type { PetModelDefinition } from '../pet/models.ts'
+import type { PetPerformanceCue } from '../pet/types.ts'
 import { SpritePetCanvas } from '../pet/components/SpritePetCanvas.tsx'
+import { PortraitPuppetCanvas } from '../pet/components/PortraitPuppetCanvas.tsx'
 import { ChatSheetV2, type ChatSheetV2Message } from './ChatSheetV2.tsx'
 import { useReadableCaption } from './caption.ts'
 import { buildMotionSafeModelDefinition } from './motionSafeModel.ts'
@@ -38,6 +40,7 @@ export type CompanionPanelV2Props = {
     petTapActive: boolean
     petTouchZone: PetTouchZone | null
     gazeTarget: GazeTarget
+    petPerformanceCue?: PetPerformanceCue | null
   }
   voice: {
     voiceState: VoiceState
@@ -208,6 +211,20 @@ export function CompanionPanelV2({
       <div className="nexus-panel-v2__live2d">
         {settings.vtsEnabled ? (
           <span className="nexus-v2-sr-only">VTube Studio</span>
+        ) : petModel.portraitPuppet ? (
+          <PortraitPuppetCanvas
+            puppet={petModel.portraitPuppet}
+            mood={pet.mood}
+            touchZone={pet.petTapActive ? pet.petTouchZone : null}
+            isListening={phase === 'listening'}
+            isSpeaking={phase === 'speaking'}
+            isBusy={phase === 'thinking'}
+            speechLevelSource={voice.speechLevelSource}
+            gazeTarget={pet.gazeTarget}
+            performanceCue={pet.petPerformanceCue ?? null}
+            placement="pet-stage"
+            label={settings.companionName}
+          />
         ) : petModel.spriteAtlas ? (
           <SpritePetCanvas
             atlas={petModel.spriteAtlas}
@@ -218,7 +235,7 @@ export function CompanionPanelV2({
             isBusy={phase === 'thinking'}
             speechLevelSource={voice.speechLevelSource}
             gazeTarget={pet.gazeTarget}
-            performanceCue={null}
+            performanceCue={pet.petPerformanceCue ?? null}
             placement="pet-stage"
             label={settings.companionName}
           />
@@ -231,7 +248,7 @@ export function CompanionPanelV2({
             isSpeaking={phase === 'speaking'}
             speechLevelSource={voice.speechLevelSource}
             gazeTarget={pet.gazeTarget}
-            performanceCue={null}
+            performanceCue={pet.petPerformanceCue ?? null}
             placement="pet-stage"
             paused={panelCollapsed || hasModalOverlay}
           />

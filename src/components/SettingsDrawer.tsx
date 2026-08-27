@@ -91,6 +91,7 @@ export type SettingsDrawerProps = {
   memories: MemoryItem[]
   dailyMemoryEntries: DailyMemoryEntry[]
   petModelPresets: PetModelDefinition[]
+  petModelPresetsReady: boolean
   reminderTasks: ReminderTask[]
   voiceState: VoiceState
   continuousVoiceActive: boolean
@@ -231,6 +232,7 @@ export function SettingsDrawer({
   memories,
   dailyMemoryEntries,
   petModelPresets,
+  petModelPresetsReady,
   reminderTasks,
   voiceState,
   continuousVoiceActive,
@@ -581,8 +583,9 @@ export function SettingsDrawer({
   }, [mergeHydratedSecrets, open, settings])
 
   useEffect(() => {
+    if (!petModelPresetsReady) return
     ensurePetModelPreset(petModelPresets)
-  }, [ensurePetModelPreset, petModelPresets])
+  }, [ensurePetModelPreset, petModelPresets, petModelPresetsReady])
 
   // Reset all transient state when drawer opens/closes or settings change
   useEffect(() => {

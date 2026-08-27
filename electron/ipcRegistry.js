@@ -5,6 +5,7 @@ import { createTtsStreamService } from './ttsStreamService.js'
 import { createCompanionPresenceTracker } from './companionPresenceTracker.js'
 import { buildRuntimeStateSnapshot, updateRuntimeState } from './windowRuntimeState.js'
 
+import { installIpcChannelBinding } from './ipc/validate.js'
 import * as windowIpc from './ipc/windowIpc.js'
 import * as chatIpc from './ipc/chatIpc.js'
 import * as audioIpc from './ipc/audioIpc.js'
@@ -78,6 +79,7 @@ function loadDeferredModules() {
 }
 
 export function registerIpc() {
+  installIpcChannelBinding()
   windowIpc.register()
 
   chatIpc.register({

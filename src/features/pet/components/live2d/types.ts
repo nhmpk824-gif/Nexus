@@ -43,6 +43,9 @@ declare global {
   interface Window {
     PIXI?: PixiRuntime & {
       live2d?: {
+        config?: {
+          sound?: boolean
+        }
         MotionPreloadStrategy?: {
           NONE?: MotionPreloadValue
           IDLE?: MotionPreloadValue

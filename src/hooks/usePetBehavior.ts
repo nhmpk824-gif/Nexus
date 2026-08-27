@@ -330,7 +330,11 @@ export function usePetBehavior(ctx: UsePetBehaviorContext) {
           queuePetPerformanceCue([cue])
         }
       },
-      { getPool: () => getPetModelPreset(ctx.settingsRef.current?.petModelId)?.idleFidgets },
+      { getPool: () => {
+        const modelId = ctx.settingsRef.current?.petModelId
+        const preset = getPetModelPreset(modelId)
+        return preset.id === modelId ? preset.idleFidgets : undefined
+      } },
     )
 
     idleControllerRef.current = controller

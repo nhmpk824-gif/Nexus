@@ -22,6 +22,10 @@ import {
   createSpritePetPackageFromImage,
 } from './spritePetMaker.js'
 import {
+  copyPortraitPuppetLayers,
+} from './portraitPuppetPackage.js'
+import { copyPortraitPuppetV4Assets } from './portraitPuppetV4Package.js'
+import {
   createSpritePetCreatorKit,
 } from './spritePetCreatorKit.js'
 import {
@@ -43,7 +47,6 @@ import {
   isKnownPetGalleryHost,
   isKnownPetGalleryZipUrl,
   parseCodexPetGalleryPageByHost,
-  resolveCodexPetFallbackSlug,
   uniqueCodexPetGalleryCandidates,
 } from './petGalleryUrls.js'
 import {
@@ -74,6 +77,12 @@ import {
 } from './live2dModelDiscoveryService.js'
 import { inspectLive2dModelFile } from './live2dModelCompatibility.js'
 import { pathExists, readJsonFile } from './fsUtils.js'
+import { getLive2dImportMessageContract } from '../../shared/live2dModelResources.js'
+import {
+  PET_IMPORT_MESSAGE_KEYS,
+  PET_IPC_ERROR_CODES,
+  buildPetIpcError,
+} from '../../shared/petErrorCodes.js'
 
 const IMPORTED_PET_MODEL_DESCRIPTION = '已导入到应用本地目录的 Live2D 模型，可直接切换。'
 const BUNDLED_SPRITE_PET_MODEL_DESCRIPTION = '内置 Sprite 宠物包，可直接切换。'
@@ -95,11 +104,11 @@ export function initPetModelService({ isDev, useDevServer, getRendererServerUrl,
 async function fetchText(url) {
   const response = await performNetworkRequest(url, {
     timeoutMs: PET_GALLERY_REQUEST_TIMEOUT_MS,
-    timeoutMessage: `请求 ${url} 超时。`,
+    timeoutMessage: PET_IPC_ERROR_CODES.NETWORK,
     followRedirectsSafely: true,
   })
   if (!response.ok) {
-    throw new Error(`请求 ${url} 没通：${response.status} ${response.statusText}`)
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.NETWORK)
   }
 
   return response.text()
@@ -110,11 +119,11 @@ async function fetchBytes(url, options = {}) {
   const label = String(options.label ?? 'spritesheet')
   const response = await performNetworkRequest(url, {
     timeoutMs: PET_GALLERY_REQUEST_TIMEOUT_MS,
-    timeoutMessage: `请求 ${url} 超时。`,
+    timeoutMessage: PET_IPC_ERROR_CODES.NETWORK,
     followRedirectsSafely: true,
   })
   if (!response.ok) {
-    throw new Error(`请求 ${url} 没通：${response.status} ${response.statusText}`)
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.NETWORK)
   }
 
   return readResponseBufferWithLimit(response, { maxBytes, label })
@@ -132,6 +141,17 @@ async function resolveUniqueChildDirectory(root, baseName) {
   return targetDirectory
 }
 
+/** Create a unique import folder and delete it if `work` throws. */
+async function withFreshImportDirectory(importedRoot, importDirectoryBaseName, work) {
+  const targetDirectory = await resolveUniqueChildDirectory(importedRoot, importDirectoryBaseName)
+  try {
+    return await work(targetDirectory)
+  } catch (error) {
+    await fs.rm(targetDirectory, { recursive: true, force: true }).catch(() => {})
+    throw error
+  }
+}
+
 async function resolveUniqueChildIdDirectory(root, baseId) {
   let id = baseId
   let targetDirectory = path.join(root, id)
@@ -144,6 +164,20 @@ async function resolveUniqueChildIdDirectory(root, baseId) {
   }
 
   return { id, targetDirectory }
+}
+
+function petUserMessage(messageKey, messageParams) {
+  return {
+    message: messageKey,
+    messageKey,
+    ...(messageParams ? { messageParams } : {}),
+  }
+}
+
+function spriteActionKey(sourceLayout, nativeAtlasPreserved) {
+  if (sourceLayout === 'atlas' && nativeAtlasPreserved) return PET_IMPORT_MESSAGE_KEYS.actionAtlasNative
+  if (sourceLayout === 'atlas') return PET_IMPORT_MESSAGE_KEYS.actionAtlas
+  return PET_IMPORT_MESSAGE_KEYS.actionImage
 }
 
 function petArtifactDisplayFields(paths = {}) {
@@ -245,16 +279,21 @@ async function importLive2dPetModelFromPath(selectedModelPath) {
   assertNotPrivateCodexPetSource(selectedModelPath)
   const inspection = await inspectLive2dModelFile(selectedModelPath)
   if (inspection.compatibility.status === 'blocked') {
+    const messageContract = getLive2dImportMessageContract(
+      'blocked',
+      inspection.compatibility.errors,
+    )
     return {
       model: null,
-      message: '',
+      message: messageContract.messageKey,
+      ...messageContract,
       compatibility: inspection.compatibility,
     }
   }
 
   const importedRoot = getImportedPetModelsRoot()
   if (isPathInsideRoot(importedRoot, selectedModelPath)) {
-    throw new Error('这个模型已经在本地模型库里，可以直接在人物模型下拉框里选择。')
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.ALREADY_IMPORTED)
   }
 
   const sourceDirectory = path.dirname(selectedModelPath)
@@ -264,79 +303,128 @@ async function importLive2dPetModelFromPath(selectedModelPath) {
   await fs.mkdir(importedRoot, { recursive: true })
   const targetDirectory = await resolveUniqueChildDirectory(importedRoot, importDirectoryBaseName)
 
-  await fs.cp(sourceDirectory, targetDirectory, { recursive: true })
+  try {
+    await fs.cp(sourceDirectory, targetDirectory, { recursive: true, dereference: true })
 
-  const importedModelPath = path.join(targetDirectory, path.basename(selectedModelPath))
-  if (!await pathExists(importedModelPath)) {
-    throw new Error('模型文件已复制到本地，但没有找到导入后的模型定义文件。')
-  }
+    const importedModelPath = path.join(targetDirectory, path.basename(selectedModelPath))
+    if (!await pathExists(importedModelPath)) {
+      throw buildPetIpcError(PET_IPC_ERROR_CODES.IMPORT_INCOMPLETE)
+    }
 
-  const importedModels = await listImportedPetModels()
-  const importedModelUrl = buildImportedPetModelUrl(
-    normalizeAssetRelativePath(importedRoot, importedModelPath),
-  )
-  const importedModel = importedModels.find((model) => model.modelPath === importedModelUrl)
+    const importedModels = await listImportedPetModels()
+    const importedModelUrl = buildImportedPetModelUrl(
+      normalizeAssetRelativePath(importedRoot, importedModelPath),
+    )
+    const importedModel = importedModels.find((model) => model.modelPath === importedModelUrl)
 
-  if (!importedModel) {
-    throw new Error('模型已导入，但未能在应用内完成注册。')
-  }
+    if (!importedModel) {
+      throw buildPetIpcError(PET_IPC_ERROR_CODES.IMPORT_INCOMPLETE)
+    }
 
-  return {
-    model: importedModel,
-    message: `已导入 ${importedModel.label}，现在可以直接切换。`,
-    compatibility: importedModel.compatibility ?? inspection.compatibility,
+    const compatibility = importedModel.compatibility ?? inspection.compatibility
+    const messageContract = getLive2dImportMessageContract(
+      compatibility.status,
+      compatibility.errors,
+    )
+    return {
+      model: importedModel,
+      message: messageContract.messageKey,
+      ...messageContract,
+      compatibility,
+    }
+  } catch (error) {
+    await fs.rm(targetDirectory, { recursive: true, force: true }).catch(() => {})
+    throw error
   }
 }
 
 async function importSpritePetModelFromPath(selectedManifestPath) {
   assertNotPrivateCodexPetSource(selectedManifestPath)
   const manifest = await readSpritePetPackage(selectedManifestPath)
-  assertNotPrivateCodexPetSource(manifest.sourceSpritePath)
+  const sourceAssetPath = manifest.kind === 'portrait-puppet'
+    ? manifest.sourcePortraitPath
+    : manifest.sourceSpritePath
+  assertNotPrivateCodexPetSource(sourceAssetPath)
   const importedRoot = getImportedSpritePetModelsRoot()
 
   if (isPathInsideRoot(importedRoot, selectedManifestPath)) {
-    throw new Error('这个宠物包已经在本地模型库里，可以直接在伙伴形象里选择。')
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.ALREADY_IMPORTED)
   }
 
   const sourceDirectory = path.dirname(selectedManifestPath)
   const importDirectoryBaseName = `${slugifyPetModelId(manifest.id || manifest.displayName || path.basename(sourceDirectory))}-${Date.now()}`
 
   await fs.mkdir(importedRoot, { recursive: true })
-  const targetDirectory = await resolveUniqueChildDirectory(importedRoot, importDirectoryBaseName)
+  return withFreshImportDirectory(importedRoot, importDirectoryBaseName, async (targetDirectory) => {
+    await fs.mkdir(targetDirectory, { recursive: true })
 
-  await fs.mkdir(targetDirectory, { recursive: true })
+    const assetExtension = path.extname(sourceAssetPath).toLowerCase()
+    const isPortrait = manifest.kind === 'portrait-puppet'
+    const isLayeredPortrait = isPortrait
+      && manifest.formatVersion === 4
+      && manifest.renderMode === 'layered-artmesh-v1'
+    const targetAssetName = isPortrait ? `portrait${assetExtension}` : `spritesheet${assetExtension}`
+    const targetAssetPath = path.join(targetDirectory, targetAssetName)
+    const copiedLayers = isPortrait && !isLayeredPortrait
+      ? await copyPortraitPuppetLayers(manifest, targetDirectory)
+      : {}
+    const copiedLayeredAssets = isLayeredPortrait
+      ? await copyPortraitPuppetV4Assets(manifest, targetDirectory)
+      : null
+    const targetManifest = isPortrait
+      ? {
+        id: slugifyPetModelId(manifest.id || manifest.displayName || path.basename(sourceDirectory)),
+        displayName: manifest.displayName,
+        description: manifest.description || 'A simple portrait companion.',
+        kind: 'portrait-puppet',
+        formatVersion: manifest.formatVersion ?? 1,
+        ...(manifest.renderMode ? { renderMode: manifest.renderMode } : {}),
+        portraitPath: targetAssetName,
+        ...(copiedLayeredAssets
+          ? {
+            qualityTier: manifest.qualityTier,
+            canvas: manifest.canvas,
+            parameters: manifest.parameters,
+            parts: copiedLayeredAssets.parts,
+            masks: copiedLayeredAssets.masks,
+            physics: manifest.physics,
+          }
+          : {}),
+        ...(manifest.rig ? { rig: manifest.rig } : {}),
+        ...(Object.keys(copiedLayers).length ? { layers: copiedLayers } : {}),
+      }
+      : {
+        id: slugifyPetModelId(manifest.id || manifest.displayName || path.basename(sourceDirectory)),
+        displayName: manifest.displayName,
+        description: manifest.description || IMPORTED_SPRITE_PET_MODEL_DESCRIPTION,
+        spritesheetPath: targetAssetName,
+      }
 
-  const spriteExtension = path.extname(manifest.sourceSpritePath).toLowerCase()
-  const targetSpriteName = `spritesheet${spriteExtension}`
-  const targetSpritePath = path.join(targetDirectory, targetSpriteName)
-  const targetManifest = {
-    id: slugifyPetModelId(manifest.id || manifest.displayName || path.basename(sourceDirectory)),
-    displayName: manifest.displayName,
-    description: manifest.description || IMPORTED_SPRITE_PET_MODEL_DESCRIPTION,
-    spritesheetPath: targetSpriteName,
-  }
+    await fs.copyFile(sourceAssetPath, targetAssetPath)
+    await fs.writeFile(
+      path.join(targetDirectory, 'pet.json'),
+      `${JSON.stringify(targetManifest, null, 2)}\n`,
+      'utf8',
+    )
 
-  await fs.copyFile(manifest.sourceSpritePath, targetSpritePath)
-  await fs.writeFile(
-    path.join(targetDirectory, 'pet.json'),
-    `${JSON.stringify(targetManifest, null, 2)}\n`,
-    'utf8',
-  )
+    const importedModels = await listImportedSpritePetModels()
+    const importedAssetUrl = buildImportedSpritePetAssetUrl(
+      normalizeAssetRelativePath(importedRoot, targetAssetPath),
+    )
+    const importedModel = importedModels.find((model) => (
+      model.spriteAtlas?.imagePath === importedAssetUrl
+      || model.portraitPuppet?.imagePath === importedAssetUrl
+    ))
 
-  const importedModels = await listImportedSpritePetModels()
-  const importedSpriteUrl = buildImportedSpritePetAssetUrl(
-    normalizeAssetRelativePath(importedRoot, targetSpritePath),
-  )
-  const importedModel = importedModels.find((model) => model.spriteAtlas?.imagePath === importedSpriteUrl)
+    if (!importedModel) {
+      throw buildPetIpcError(PET_IPC_ERROR_CODES.IMPORT_INCOMPLETE)
+    }
 
-  if (!importedModel) {
-    throw new Error('宠物包已导入，但未能在应用内完成注册。')
-  }
-
-  return {
-    model: importedModel,
-    message: `已导入 ${importedModel.label}，现在可以直接切换。`,
-  }
+    return {
+      model: importedModel,
+      ...petUserMessage(PET_IMPORT_MESSAGE_KEYS.imported, { name: importedModel.label }),
+    }
+  })
 }
 
 async function importSpritePetModelFromZipArchive(selectedArchivePath) {
@@ -363,19 +451,21 @@ async function importSpritePetModelFromRemoteZipUrl(archiveUrl, source = {}) {
       }),
     )
     const imported = await importSpritePetModelFromZipArchive(archivePath)
-    const sourceName = String(source.sourceName ?? '社区 ZIP').trim() || '社区 ZIP'
+    const sourceName = String(source.sourceName ?? '').trim()
     return {
       ...imported,
-      message: `已从 ${sourceName} 导入 ${imported.model.label}，现在可以直接切换。`,
+      ...petUserMessage(PET_IMPORT_MESSAGE_KEYS.importedFrom, sourceName
+        ? { name: imported.model.label, source: sourceName }
+        : { name: imported.model.label, sourceKey: PET_IMPORT_MESSAGE_KEYS.sourceCommunityZip }),
     }
   } finally {
     await fs.rm(temporaryDirectory, { recursive: true, force: true })
   }
 }
 
-async function importSpritePetModelFromCodexGalleryUrlCandidates(candidateUrls, fallbackContext) {
+async function importSpritePetModelFromCodexGalleryUrlCandidates(candidateUrls) {
   if (!candidateUrls.length) {
-    throw new Error(`未提供可用的 Codex 宠物详情页地址：${fallbackContext}`)
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.GALLERY_INPUT)
   }
 
   let lastError = null
@@ -388,78 +478,100 @@ async function importSpritePetModelFromCodexGalleryUrlCandidates(candidateUrls, 
     }
   }
 
-  const detailHint = candidateUrls.length > 1
-    ? '已尝试 codex-pet.com 详情页和 codex-pet.org 详情页。'
-    : ''
-  throw new Error(`没能导入 ${fallbackContext}。${detailHint}${lastError?.message ? `详情：${lastError.message}` : ''}`)
+  throw buildPetIpcError(PET_IPC_ERROR_CODES.GALLERY_FAILED, { cause: lastError })
 }
 
-async function createSpritePetModelFromImagePath(selectedImagePath) {
-  assertNotPrivateCodexPetSource(selectedImagePath)
+async function createSpritePetModelFromImagePaths(selectedImagePaths) {
+  const selectedPaths = (Array.isArray(selectedImagePaths) ? selectedImagePaths : [selectedImagePaths])
+    .filter(Boolean)
+    .map((entry) => path.resolve(entry))
+  if (!selectedPaths.length) {
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.UNSUPPORTED_FILE)
+  }
+  for (const selectedPath of selectedPaths) {
+    assertNotPrivateCodexPetSource(selectedPath)
+  }
   const importedRoot = getImportedSpritePetModelsRoot()
-  const packageId = slugifyPetModelId(path.basename(selectedImagePath, path.extname(selectedImagePath)))
+  const packageId = slugifyPetModelId(path.basename(selectedPaths[0], path.extname(selectedPaths[0])))
   const displayName = formatDiscoveredModelLabel(packageId)
   const importDirectoryBaseName = `${packageId}-${Date.now()}`
 
   await fs.mkdir(importedRoot, { recursive: true })
-  const targetDirectory = await resolveUniqueChildDirectory(importedRoot, importDirectoryBaseName)
-
-  const {
-    spritePath,
-    manifestPath,
-    targetDirectory: packageDirectory,
-    visualAuditPath,
-    archivePath,
-    sourceLayout = 'single',
-    nativeAtlasPreserved = false,
-    visualWarnings = [],
-  } = await createSpritePetPackageFromImage({
-    sourcePath: selectedImagePath,
-    targetDirectory,
-    id: packageId,
-    displayName,
-    description: '从一张图片生成的 Codex 风格 Sprite 宠物包。',
-  })
-  const importedModels = await listImportedSpritePetModels()
-  const importedSpriteUrl = buildImportedSpritePetAssetUrl(
-    normalizeAssetRelativePath(importedRoot, spritePath),
-  )
-  const importedModel = importedModels.find((model) => model.spriteAtlas?.imagePath === importedSpriteUrl)
-
-  if (!importedModel) {
-    throw new Error('宠物包已生成，但未能在应用内完成注册。')
-  }
-
-  const sourceMessage = sourceLayout === 'atlas'
-    ? nativeAtlasPreserved
-      ? '已原样导入有效 8x9 atlas'
-      : '已从 8x9 atlas 生成'
-    : '已从图片生成'
-
-  return {
-    model: importedModel,
-    packageDirectory,
-    manifestPath,
-    spritesheetPath: spritePath,
-    visualAuditPath,
-    archivePath,
-    ...petArtifactDisplayFields({
-      packageDirectory,
+  return withFreshImportDirectory(importedRoot, importDirectoryBaseName, async (targetDirectory) => {
+    const {
+      spritePath,
       manifestPath,
-      spritesheetPath: spritePath,
+      targetDirectory: packageDirectory,
       visualAuditPath,
       archivePath,
-    }),
-    message: visualWarnings.length
-      ? `${sourceMessage} ${importedModel.label}，现在可以直接切换。可分享 ZIP：${getPetArtifactDisplayPath(archivePath)}。视觉审计有 ${visualWarnings.length} 条提醒，建议预览后再分享。`
-      : `${sourceMessage} ${importedModel.label}，现在可以直接切换。可分享 ZIP：${getPetArtifactDisplayPath(archivePath)}。视觉审计通过。`,
-  }
+      sourceLayout = 'single',
+      nativeAtlasPreserved = false,
+      visualWarnings = [],
+    } = await createSpritePetPackageFromImage({
+      sourcePath: selectedPaths[0],
+      sourcePaths: selectedPaths,
+      targetDirectory,
+      id: packageId,
+      displayName,
+    })
+    const importedModels = await listImportedSpritePetModels()
+    const importedSpriteUrl = buildImportedSpritePetAssetUrl(
+      normalizeAssetRelativePath(importedRoot, spritePath),
+    )
+    const importedModel = importedModels.find((model) => (
+      model.spriteAtlas?.imagePath === importedSpriteUrl
+      || model.portraitPuppet?.imagePath === importedSpriteUrl
+    ))
+
+    if (!importedModel) {
+      throw buildPetIpcError(PET_IPC_ERROR_CODES.IMPORT_INCOMPLETE)
+    }
+
+    const isPortrait = Boolean(importedModel.portraitPuppet)
+    const isLayered = Boolean(importedModel.portraitPuppet?.layeredRig)
+    return {
+      model: importedModel,
+      packageDirectory,
+      manifestPath,
+      spritesheetPath: isPortrait ? undefined : spritePath,
+      visualAuditPath: visualAuditPath || undefined,
+      archivePath,
+      ...petArtifactDisplayFields({
+        packageDirectory,
+        manifestPath,
+        spritesheetPath: isPortrait ? undefined : spritePath,
+        visualAuditPath: visualAuditPath || undefined,
+        archivePath,
+      }),
+      ...petUserMessage(
+        isLayered
+          ? PET_IMPORT_MESSAGE_KEYS.layered
+          : isPortrait ? PET_IMPORT_MESSAGE_KEYS.portrait : PET_IMPORT_MESSAGE_KEYS.sprite,
+        isPortrait
+          ? {
+            name: importedModel.label,
+            actionKey: isLayered
+              ? PET_IMPORT_MESSAGE_KEYS.actionLayered
+              : PET_IMPORT_MESSAGE_KEYS.actionPortrait,
+          }
+          : {
+            name: importedModel.label,
+            actionKey: spriteActionKey(sourceLayout, nativeAtlasPreserved),
+            archive: getPetArtifactDisplayPath(archivePath),
+            auditKey: visualWarnings.length
+              ? PET_IMPORT_MESSAGE_KEYS.auditWarn
+              : PET_IMPORT_MESSAGE_KEYS.auditOk,
+            count: visualWarnings.length,
+          },
+      ),
+    }
+  })
 }
 
 async function importSpritePetModelFromCodexGallery(input) {
   const rawInput = String(input ?? '').trim()
   if (!rawInput) {
-    throw new Error('请输入 Codex 宠物 slug、详情页 URL 或 ZIP 下载 URL。')
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.GALLERY_INPUT)
   }
 
   if (isCodingPetsDetailUrl(rawInput)) {
@@ -485,21 +597,20 @@ async function importSpritePetModelFromCodexGallery(input) {
     && !isCodexPetGalleryDetailUrl(rawInput)
     && !isKnownPetGalleryZipUrl(rawInput)
   ) {
-    throw new Error('请粘贴具体宠物详情页 URL，或粘贴 ZIP 下载 URL。')
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.GALLERY_INPUT)
   }
 
   if (isHttpUrl(rawInput) && !isCodexPetGalleryDetailUrl(rawInput)) {
     return importSpritePetModelFromRemoteZipUrl(rawInput)
   }
 
-  const slug = resolveCodexPetFallbackSlug(rawInput)
   const candidates = uniqueCodexPetGalleryCandidates(rawInput, true)
 
   if (!candidates.length) {
-    throw new Error(`请粘贴具体宠物详情页 URL，或粘贴 ZIP 下载 URL。`)
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.GALLERY_INPUT)
   }
 
-  return importSpritePetModelFromCodexGalleryUrlCandidates(candidates, slug ? `slug ${slug}` : rawInput)
+  return importSpritePetModelFromCodexGalleryUrlCandidates(candidates)
 }
 
 async function importSpritePetModelFromParsedPage(petPage) {
@@ -508,37 +619,40 @@ async function importSpritePetModelFromParsedPage(petPage) {
   const importDirectoryBaseName = `${packageId}-${Date.now()}`
 
   await fs.mkdir(importedRoot, { recursive: true })
-  const targetDirectory = await resolveUniqueChildDirectory(importedRoot, importDirectoryBaseName)
+  return withFreshImportDirectory(importedRoot, importDirectoryBaseName, async (targetDirectory) => {
+    const targetSpriteName = `spritesheet.${petPage.spriteExtension}`
+    const targetSpritePath = path.join(targetDirectory, targetSpriteName)
+    const targetManifestPath = path.join(targetDirectory, 'pet.json')
+    const targetManifest = {
+      id: packageId,
+      displayName: petPage.displayName,
+      description: petPage.description || IMPORTED_SPRITE_PET_MODEL_DESCRIPTION,
+      spritesheetPath: targetSpriteName,
+    }
 
-  const targetSpriteName = `spritesheet.${petPage.spriteExtension}`
-  const targetSpritePath = path.join(targetDirectory, targetSpriteName)
-  const targetManifestPath = path.join(targetDirectory, 'pet.json')
-  const targetManifest = {
-    id: packageId,
-    displayName: petPage.displayName,
-    description: petPage.description || IMPORTED_SPRITE_PET_MODEL_DESCRIPTION,
-    spritesheetPath: targetSpriteName,
-  }
+    await fs.mkdir(targetDirectory, { recursive: true })
+    await fs.writeFile(targetSpritePath, await fetchBytes(petPage.spriteUrl))
+    await fs.writeFile(targetManifestPath, `${JSON.stringify(targetManifest, null, 2)}\n`, 'utf8')
+    await readSpritePetPackage(targetManifestPath)
 
-  await fs.mkdir(targetDirectory, { recursive: true })
-  await fs.writeFile(targetSpritePath, await fetchBytes(petPage.spriteUrl))
-  await fs.writeFile(targetManifestPath, `${JSON.stringify(targetManifest, null, 2)}\n`, 'utf8')
-  await readSpritePetPackage(targetManifestPath)
+    const importedModels = await listImportedSpritePetModels()
+    const importedSpriteUrl = buildImportedSpritePetAssetUrl(
+      normalizeAssetRelativePath(importedRoot, targetSpritePath),
+    )
+    const importedModel = importedModels.find((model) => model.spriteAtlas?.imagePath === importedSpriteUrl)
 
-  const importedModels = await listImportedSpritePetModels()
-  const importedSpriteUrl = buildImportedSpritePetAssetUrl(
-    normalizeAssetRelativePath(importedRoot, targetSpritePath),
-  )
-  const importedModel = importedModels.find((model) => model.spriteAtlas?.imagePath === importedSpriteUrl)
+    if (!importedModel) {
+      throw buildPetIpcError(PET_IPC_ERROR_CODES.IMPORT_INCOMPLETE)
+    }
 
-  if (!importedModel) {
-    throw new Error('Codex 宠物已下载，但未能在应用内完成注册。')
-  }
-
-  return {
-    model: importedModel,
-    message: `已从 ${petPage.sourceName || 'codex-pet'} 导入 ${importedModel.label}，现在可以直接切换。`,
-  }
+    return {
+      model: importedModel,
+      ...petUserMessage(PET_IMPORT_MESSAGE_KEYS.importedFrom, {
+        name: importedModel.label,
+        source: petPage.sourceName || 'codex-pet',
+      }),
+    }
+  })
 }
 
 async function listCodexPetGalleryCatalog(payload = {}) {
@@ -558,19 +672,70 @@ async function createSpritePetCreatorKitFromPayload(payload = {}) {
 
   await fs.mkdir(getSpritePetCreatorKitsRoot(), { recursive: true })
 
-  const created = await createSpritePetCreatorKit({
-    targetDirectory,
-    id: packageId,
-    displayName,
-    concept,
-    description: String(payload?.description ?? '').trim(),
-    styleNotes: String(payload?.styleNotes ?? '').trim(),
-  })
-  return {
-    ...created,
-    ...petArtifactDisplayFields(created),
-    message: `已创建 ${created.displayName} 的 Codex 宠物制作包：${getPetArtifactDisplayPath(created.directoryPath)}`,
+  try {
+    const created = await createSpritePetCreatorKit({
+      targetDirectory,
+      id: packageId,
+      displayName,
+      concept,
+      description: String(payload?.description ?? '').trim(),
+      styleNotes: String(payload?.styleNotes ?? '').trim(),
+    })
+    return {
+      ...created,
+      ...petArtifactDisplayFields(created),
+      ...petUserMessage(PET_IMPORT_MESSAGE_KEYS.kitCreated, {
+        name: created.displayName,
+        path: getPetArtifactDisplayPath(created.directoryPath),
+      }),
+    }
+  } catch (error) {
+    await fs.rm(targetDirectory, { recursive: true, force: true }).catch(() => {})
+    throw error
   }
+}
+
+function assembledImportResult(imported, assembled) {
+  return {
+    ...imported,
+    packageDirectory: assembled.packageDirectory,
+    manifestPath: assembled.manifestPath,
+    spritesheetPath: assembled.spritesheetPath,
+    reportPath: assembled.reportPath,
+    visualAuditPath: assembled.visualAuditPath,
+    archivePath: assembled.archivePath,
+    ...petArtifactDisplayFields(assembled),
+    ...petUserMessage(PET_IMPORT_MESSAGE_KEYS.assembled, {
+      name: imported.model.label,
+      path: getPetArtifactDisplayPath(assembled.packageDirectory),
+      auditKey: assembled.visualWarnings?.length
+        ? PET_IMPORT_MESSAGE_KEYS.auditWarn
+        : PET_IMPORT_MESSAGE_KEYS.auditOk,
+      count: assembled.visualWarnings?.length ?? 0,
+    }),
+  }
+}
+
+function inspectUserMessage(inspection) {
+  if (!inspection.ready) {
+    return petUserMessage(PET_IMPORT_MESSAGE_KEYS.kitIncomplete, {
+      name: inspection.displayName,
+      ready: inspection.readyCount,
+      missing: inspection.rows
+        .filter((row) => !row.ready)
+        .map((row) => `${row.row}-${row.state}`)
+        .join(', '),
+    })
+  }
+  if (inspection.warningCount) {
+    return petUserMessage(PET_IMPORT_MESSAGE_KEYS.kitReadyWarn, {
+      name: inspection.displayName,
+      count: inspection.warningCount,
+    })
+  }
+  return petUserMessage(PET_IMPORT_MESSAGE_KEYS.kitReady, {
+    name: inspection.displayName,
+  })
 }
 
 function normalizeOptionalKitDirectory(value) {
@@ -586,20 +751,7 @@ async function assembleSpritePetCreatorKitFromDialog(payload = {}) {
       force: true,
     })
     const imported = await importSpritePetModelFromPath(assembled.manifestPath)
-
-    return {
-      ...imported,
-      packageDirectory: assembled.packageDirectory,
-      manifestPath: assembled.manifestPath,
-      spritesheetPath: assembled.spritesheetPath,
-      reportPath: assembled.reportPath,
-      visualAuditPath: assembled.visualAuditPath,
-      archivePath: assembled.archivePath,
-      ...petArtifactDisplayFields(assembled),
-      message: assembled.visualWarnings?.length
-        ? `已组装并导入 ${imported.model.label}。制作包输出：${getPetArtifactDisplayPath(assembled.packageDirectory)}。视觉审计有 ${assembled.visualWarnings.length} 条提醒。`
-        : `已组装并导入 ${imported.model.label}。制作包输出：${getPetArtifactDisplayPath(assembled.packageDirectory)}。视觉审计通过。`,
-    }
+    return assembledImportResult(imported, assembled)
   }
 
   const panelWindow = _getPanelWindow()
@@ -623,20 +775,7 @@ async function assembleSpritePetCreatorKitFromDialog(payload = {}) {
     force: true,
   })
   const imported = await importSpritePetModelFromPath(assembled.manifestPath)
-
-  return {
-    ...imported,
-    packageDirectory: assembled.packageDirectory,
-    manifestPath: assembled.manifestPath,
-    spritesheetPath: assembled.spritesheetPath,
-    reportPath: assembled.reportPath,
-    visualAuditPath: assembled.visualAuditPath,
-    archivePath: assembled.archivePath,
-    ...petArtifactDisplayFields(assembled),
-    message: assembled.visualWarnings?.length
-      ? `已组装并导入 ${imported.model.label}。制作包输出：${getPetArtifactDisplayPath(assembled.packageDirectory)}。视觉审计有 ${assembled.visualWarnings.length} 条提醒。`
-      : `已组装并导入 ${imported.model.label}。制作包输出：${getPetArtifactDisplayPath(assembled.packageDirectory)}。视觉审计通过。`,
-  }
+  return assembledImportResult(imported, assembled)
 }
 
 async function installSpritePetCreatorKitPackageToCodex(payload = {}) {
@@ -644,7 +783,7 @@ async function installSpritePetCreatorKitPackageToCodex(payload = {}) {
   const rawManifestPath = String(payload?.manifestPath ?? '').trim()
 
   if (!rawKitDirectory || !rawManifestPath) {
-    throw new Error('请先选择一个 Codex 宠物包。')
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.KIT_PATH)
   }
 
   const kitDirectory = path.resolve(rawKitDirectory)
@@ -655,7 +794,7 @@ async function installSpritePetCreatorKitPackageToCodex(payload = {}) {
   ])
 
   if (!isPathInsideRoot(kitRealPath, manifestRealPath)) {
-    throw new Error('只能安装当前 Codex 宠物包目录内的文件。')
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.KIT_PATH)
   }
 
   const sourcePackage = await readSpritePetPackage(manifestRealPath)
@@ -667,33 +806,40 @@ async function installSpritePetCreatorKitPackageToCodex(payload = {}) {
   await fs.mkdir(petsRoot, { recursive: true })
   const { id: packageId, targetDirectory } = await resolveUniqueChildIdDirectory(petsRoot, basePackageId)
 
-  await fs.mkdir(targetDirectory, { recursive: true })
+  try {
+    await fs.mkdir(targetDirectory, { recursive: true })
 
-  const spriteExtension = path.extname(sourcePackage.sourceSpritePath).toLowerCase()
-  const targetSpriteName = `spritesheet${spriteExtension}`
-  const targetSpritePath = path.join(targetDirectory, targetSpriteName)
-  const targetManifestPath = path.join(targetDirectory, 'pet.json')
-  const targetManifest = {
-    id: packageId,
-    displayName: sourcePackage.displayName,
-    description: sourcePackage.description || IMPORTED_SPRITE_PET_MODEL_DESCRIPTION,
-    spritesheetPath: targetSpriteName,
-  }
+    const spriteExtension = path.extname(sourcePackage.sourceSpritePath).toLowerCase()
+    const targetSpriteName = `spritesheet${spriteExtension}`
+    const targetSpritePath = path.join(targetDirectory, targetSpriteName)
+    const targetManifestPath = path.join(targetDirectory, 'pet.json')
+    const targetManifest = {
+      id: packageId,
+      displayName: sourcePackage.displayName,
+      description: sourcePackage.description || IMPORTED_SPRITE_PET_MODEL_DESCRIPTION,
+      spritesheetPath: targetSpriteName,
+    }
 
-  await fs.copyFile(sourcePackage.sourceSpritePath, targetSpritePath)
-  await fs.writeFile(targetManifestPath, `${JSON.stringify(targetManifest, null, 2)}\n`, 'utf8')
-  await readSpritePetPackage(targetManifestPath)
+    await fs.copyFile(sourcePackage.sourceSpritePath, targetSpritePath)
+    await fs.writeFile(targetManifestPath, `${JSON.stringify(targetManifest, null, 2)}\n`, 'utf8')
+    await readSpritePetPackage(targetManifestPath)
 
-  return {
-    ok: true,
-    id: packageId,
-    directoryPath: targetDirectory,
-    manifestPath: targetManifestPath,
-    ...petArtifactDisplayFields({
+    return {
+      ok: true,
+      id: packageId,
       directoryPath: targetDirectory,
       manifestPath: targetManifestPath,
-    }),
-    message: `已安装到 Codex 自定义宠物目录：${getPetArtifactDisplayPath(targetDirectory)}`,
+      ...petArtifactDisplayFields({
+        directoryPath: targetDirectory,
+        manifestPath: targetManifestPath,
+      }),
+      ...petUserMessage(PET_IMPORT_MESSAGE_KEYS.kitInstalled, {
+        path: getPetArtifactDisplayPath(targetDirectory),
+      }),
+    }
+  } catch (error) {
+    await fs.rm(targetDirectory, { recursive: true, force: true }).catch(() => {})
+    throw error
   }
 }
 
@@ -706,6 +852,7 @@ async function inspectSpritePetCreatorKitFromDialog(payload = {}) {
     return {
       ...inspection,
       ...petArtifactDisplayFields(inspection),
+      ...inspectUserMessage(inspection),
     }
   }
 
@@ -731,6 +878,7 @@ async function inspectSpritePetCreatorKitFromDialog(payload = {}) {
   return {
     ...inspection,
     ...petArtifactDisplayFields(inspection),
+    ...inspectUserMessage(inspection),
   }
 }
 
@@ -740,7 +888,7 @@ async function openSpritePetCreatorKitPathFromPayload(payload = {}) {
   const mode = String(payload?.mode ?? 'open').trim()
 
   if (!rawKitDirectory || !rawTargetPath) {
-    throw new Error('请选择一个已检查的 Codex 宠物制作包路径。')
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.KIT_PATH)
   }
 
   const kitDirectory = path.resolve(rawKitDirectory)
@@ -751,7 +899,7 @@ async function openSpritePetCreatorKitPathFromPayload(payload = {}) {
   ])
 
   if (!isPathInsideRoot(kitRealPath, targetRealPath)) {
-    throw new Error('只能打开当前 Codex 宠物制作包内的文件。')
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.KIT_PATH)
   }
 
   const stats = await fs.stat(targetRealPath)
@@ -761,14 +909,17 @@ async function openSpritePetCreatorKitPathFromPayload(payload = {}) {
   const errorMessage = await shell.openPath(openTargetPath)
 
   if (errorMessage) {
-    throw new Error(`制作包路径没能打开：${errorMessage}`)
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.KIT_PATH)
   }
 
   return {
     ok: true,
-    message: stats.isDirectory()
-      ? `已打开制作包文件夹：${getPetArtifactDisplayPath(targetRealPath)}`
-      : `已打开制作包文件：${getPetArtifactDisplayPath(targetRealPath)}`,
+    ...petUserMessage(
+      stats.isDirectory()
+        ? PET_IMPORT_MESSAGE_KEYS.kitOpenedDir
+        : PET_IMPORT_MESSAGE_KEYS.kitOpenedFile,
+      { path: getPetArtifactDisplayPath(targetRealPath) },
+    ),
   }
 }
 
@@ -777,13 +928,13 @@ async function importPetModelFromDialog() {
   const mainWindow = _getMainWindow()
   const sourceWindow = BrowserWindow.getFocusedWindow() ?? panelWindow ?? mainWindow ?? undefined
   const dialogOptions = {
-    title: '选择 Live2D 模型或 Sprite 宠物包',
-    buttonLabel: '导入模型',
+    title: '选择 Live2D 模型、宠物包或角色图',
+    buttonLabel: '导入',
     properties: ['openFile'],
     filters: [
       {
-        name: 'Model or pet package',
-        extensions: ['json', 'zip'],
+        name: 'Model, pet package, or image',
+        extensions: ['json', 'zip', 'png', 'jpg', 'jpeg', 'webp'],
       },
     ],
   }
@@ -795,7 +946,9 @@ async function importPetModelFromDialog() {
     return null
   }
 
-  const selectedPath = path.resolve(selection.filePaths[0])
+  const selectedPaths = selection.filePaths.map((entry) => path.resolve(entry))
+  const selectedPath = selectedPaths[0]
+  const allImages = selectedPaths.every((entry) => /\.(?:png|jpe?g|webp)$/i.test(entry))
 
   if (/\.model3\.json$/i.test(path.basename(selectedPath))) {
     return importLive2dPetModelFromPath(selectedPath)
@@ -805,12 +958,16 @@ async function importPetModelFromDialog() {
     return importSpritePetModelFromZipArchive(selectedPath)
   }
 
+  if (allImages) {
+    return createSpritePetModelFromImagePaths(selectedPaths)
+  }
+
   const manifest = await readAndValidateJsonFile(selectedPath)
   if (path.basename(selectedPath) === 'pet.json' || isSpritePetManifest(manifest)) {
     return importSpritePetModelFromPath(selectedPath)
   }
 
-  throw new Error('请选择 Live2D 的 .model3.json 文件，或 Sprite 宠物包的 pet.json / ZIP。')
+  throw buildPetIpcError(PET_IPC_ERROR_CODES.UNSUPPORTED_FILE)
 }
 
 async function createSpritePetModelFromImageDialog() {
@@ -818,9 +975,9 @@ async function createSpritePetModelFromImageDialog() {
   const mainWindow = _getMainWindow()
   const sourceWindow = BrowserWindow.getFocusedWindow() ?? panelWindow ?? mainWindow ?? undefined
   const dialogOptions = {
-    title: '选择图片或 8x9 atlas 制作 Codex 宠物',
-    buttonLabel: '制作宠物',
-    properties: ['openFile'],
+    title: '选择分层立绘文件夹（推荐），或一张备用单图',
+    buttonLabel: '做成宠物',
+    properties: ['openFile', 'openDirectory', 'multiSelections'],
     filters: [
       {
         name: 'Image',
@@ -836,7 +993,7 @@ async function createSpritePetModelFromImageDialog() {
     return null
   }
 
-  return createSpritePetModelFromImagePath(path.resolve(selection.filePaths[0]))
+  return createSpritePetModelFromImagePaths(selection.filePaths.map((entry) => path.resolve(entry)))
 }
 
 async function saveTextFileFromDialog(sourceWindow, payload = {}) {

@@ -73,7 +73,6 @@ export async function listSpritePetModelsFromRoot({
 
     try {
       const manifest = await readSpritePetPackage(manifestPath)
-      const relativeSpritePath = normalizeSpritePetAssetRelativePath(rootPath, manifest.sourceSpritePath)
       const slugSource = manifest.id || manifest.displayName || path.basename(path.dirname(manifestPath))
       const slug = slugifySpritePetModelId(slugSource)
       const baseId = idPrefix ? `${idPrefix}-${slug}` : slug
@@ -86,24 +85,72 @@ export async function listSpritePetModelsFromRoot({
       }
 
       usedIds.add(modelId)
-      discoveredModels.push({
+      const model = {
         id: modelId,
         label: manifest.displayName,
         description: manifest.description || description,
         modelPath: '',
         fallbackImagePath: DEFAULT_PET_MODEL_FALLBACK_IMAGE_PATH,
-        spriteAtlas: {
-          imagePath: imagePathBuilder(relativeSpritePath),
-          columns: SPRITE_PET_COLUMNS,
-          rows: SPRITE_PET_ROWS,
-          cellWidth: SPRITE_PET_CELL_WIDTH,
-          cellHeight: SPRITE_PET_CELL_HEIGHT,
-          imageRendering: 'pixelated',
-        },
         motionGroups: {},
         expressionMap: {},
         mouthParams: {},
-      })
+      }
+      if (manifest.kind === 'portrait-puppet') {
+        const relativePortraitPath = normalizeSpritePetAssetRelativePath(rootPath, manifest.sourcePortraitPath)
+        const layers = {}
+        for (const [key, layerPath] of Object.entries(manifest.sourceLayerPaths ?? {})) {
+          layers[key] = imagePathBuilder(normalizeSpritePetAssetRelativePath(rootPath, layerPath))
+        }
+        model.portraitPuppet = {
+          imagePath: imagePathBuilder(relativePortraitPath),
+          formatVersion: manifest.formatVersion ?? 1,
+          ...(manifest.renderMode ? { renderMode: manifest.renderMode } : {}),
+          ...(manifest.formatVersion === 4 && manifest.renderMode === 'layered-artmesh-v1'
+            ? {
+              layeredRig: {
+                id: manifest.id,
+                displayName: manifest.displayName,
+                description: manifest.description,
+                kind: manifest.kind,
+                formatVersion: manifest.formatVersion,
+                renderMode: manifest.renderMode,
+                qualityTier: manifest.qualityTier,
+                portraitPath: imagePathBuilder(relativePortraitPath),
+                canvas: manifest.canvas,
+                parameters: manifest.parameters,
+                parts: manifest.parts.map((part) => ({
+                  ...part,
+                  path: imagePathBuilder(normalizeSpritePetAssetRelativePath(
+                    rootPath,
+                    manifest.sourcePartPaths[part.id],
+                  )),
+                })),
+                masks: manifest.masks.map((mask) => ({
+                  ...mask,
+                  path: imagePathBuilder(normalizeSpritePetAssetRelativePath(
+                    rootPath,
+                    manifest.sourceMaskPaths[mask.id],
+                  )),
+                })),
+                physics: manifest.physics,
+              },
+            }
+            : {}),
+          ...(Object.keys(layers).length ? { layers } : {}),
+          ...(manifest.rig ? { rig: manifest.rig } : {}),
+        }
+      } else {
+        const relativeSpritePath = normalizeSpritePetAssetRelativePath(rootPath, manifest.sourceSpritePath)
+        model.spriteAtlas = {
+          imagePath: imagePathBuilder(relativeSpritePath),
+          columns: SPRITE_PET_COLUMNS,
+          rows: manifest.rows ?? SPRITE_PET_ROWS,
+          cellWidth: SPRITE_PET_CELL_WIDTH,
+          cellHeight: SPRITE_PET_CELL_HEIGHT,
+          imageRendering: 'pixelated',
+        }
+      }
+      discoveredModels.push(model)
     } catch (error) {
       console.warn(`Skipping invalid Sprite pet package: ${relativeManifestPath}`, error)
     }

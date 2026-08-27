@@ -100,14 +100,6 @@ test('pet model creator-kit UI renders display paths instead of raw artifact pat
     chatStudioSource,
     /output\.packageDirectoryDisplay \?\? output\.packageDirectory/,
   )
-  assert.match(
-    chatStudioSource,
-    /props\.lastCreatorKitDirectoryDisplay \|\| props\.lastCreatorKitDirectory/,
-  )
-  assert.match(
-    chatStudioSource,
-    /props\.lastCreatorKitDirectoryDisplay \|\| props\.lastCreatorKitDirectory/,
-  )
 })
 
 test('pet model error summaries omit private error messages', () => {

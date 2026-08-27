@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { summarizeCubismDeclaredResources } from '../../shared/live2dModelResources.js'
 import { readJsonFile } from './fsUtils.js'
 
 const LIVE2D_OPTIONAL_FILE_REFERENCES = [
@@ -9,7 +10,7 @@ const LIVE2D_OPTIONAL_FILE_REFERENCES = [
   ['DisplayInfo', 'optional'],
 ]
 
-function isRecord(value) {
+function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
@@ -22,8 +23,21 @@ function isPathInsideDirectory(directoryPath, targetPath) {
   )
 }
 
+function isUnsafeDeclaredPath(resourcePath, modelDirectory) {
+  if (
+    typeof resourcePath !== 'string'
+    || !resourcePath.trim()
+    || path.isAbsolute(resourcePath)
+    || /^[a-z][a-z0-9+.-]*:/i.test(resourcePath)
+  ) {
+    return true
+  }
+
+  return !isPathInsideDirectory(modelDirectory, path.resolve(modelDirectory, resourcePath))
+}
+
 function collectDeclaredResources(modelFile) {
-  const references = isRecord(modelFile?.FileReferences) ? modelFile.FileReferences : {}
+  const references = isObject(modelFile?.FileReferences) ? modelFile.FileReferences : {}
   const resources = []
 
   if (typeof references.Moc === 'string' && references.Moc.trim()) {
@@ -42,7 +56,7 @@ function collectDeclaredResources(modelFile) {
     }
   }
 
-  if (isRecord(references.Motions)) {
+  if (isObject(references.Motions)) {
     for (const motionGroup of Object.values(references.Motions)) {
       if (!Array.isArray(motionGroup)) continue
       for (const motion of motionGroup) {
@@ -60,18 +74,11 @@ function collectDeclaredResources(modelFile) {
   return resources
 }
 
-function createCompatibilitySummary(modelFile) {
-  const references = isRecord(modelFile?.FileReferences) ? modelFile.FileReferences : {}
-  const motions = isRecord(references.Motions)
-    ? Object.values(references.Motions).reduce((count, group) => (
-      count + (Array.isArray(group) ? group.length : 0)
-    ), 0)
-    : 0
-
+function createCompatibilitySummary(declared) {
   return {
-    textureCount: Array.isArray(references.Textures) ? references.Textures.length : 0,
-    motionCount: motions,
-    expressionCount: Array.isArray(references.Expressions) ? references.Expressions.length : 0,
+    textureCount: declared.textureCount,
+    motionCount: declared.motionCount,
+    expressionCount: declared.expressionCount,
     missingMocCount: 0,
     missingTextureCount: 0,
     missingMotionCount: 0,
@@ -104,28 +111,17 @@ function incrementMissingCount(summary, kind) {
 }
 
 async function inspectDeclaredResource(modelDirectory, realModelDirectory, resource) {
-  if (
-    typeof resource.path !== 'string'
-    || !resource.path.trim()
-    || path.isAbsolute(resource.path)
-    || /^[a-z][a-z0-9+.-]*:/i.test(resource.path)
-  ) {
-    return 'unsafe'
-  }
-
-  const targetPath = path.resolve(modelDirectory, resource.path)
-  if (!isPathInsideDirectory(modelDirectory, targetPath)) {
+  if (isUnsafeDeclaredPath(resource.path, modelDirectory)) {
     return 'unsafe'
   }
 
   try {
-    const [stats, realTargetPath] = await Promise.all([
-      fs.stat(targetPath),
-      fs.realpath(targetPath),
-    ])
-    if (!stats.isFile() || !isPathInsideDirectory(realModelDirectory, realTargetPath)) {
+    const realTargetPath = await fs.realpath(path.resolve(modelDirectory, resource.path))
+    if (!isPathInsideDirectory(realModelDirectory, realTargetPath)) {
       return 'unsafe'
     }
+    const stats = await fs.stat(realTargetPath)
+    if (!stats.isFile()) return 'unsafe'
   } catch (error) {
     if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') {
       return 'missing'
@@ -138,7 +134,8 @@ async function inspectDeclaredResource(modelDirectory, realModelDirectory, resou
 
 /**
  * Inspect a Cubism model and all local files it declares without exposing
- * resource paths to renderer callers.
+ * resource paths to renderer callers. Motion Sound is not an activation
+ * requirement — this app never plays model-baked audio.
  */
 export async function inspectLive2dModelFile(filePath) {
   let modelFile
@@ -152,27 +149,50 @@ export async function inspectLive2dModelFile(filePath) {
         status: 'blocked',
         errors: ['invalid-model-file'],
         warnings: [],
-        summary: createCompatibilitySummary(null),
+        summary: createCompatibilitySummary(summarizeCubismDeclaredResources(null)),
       },
     }
   }
 
-  if (!isRecord(modelFile) || !isRecord(modelFile.FileReferences)) {
+  if (!isObject(modelFile) || !isObject(modelFile.FileReferences)) {
     return {
       modelFile,
       compatibility: {
         status: 'blocked',
         errors: ['invalid-model-file'],
         warnings: [],
-        summary: createCompatibilitySummary(modelFile),
+        summary: createCompatibilitySummary(summarizeCubismDeclaredResources(modelFile)),
       },
     }
   }
 
-  const summary = createCompatibilitySummary(modelFile)
+  const declaredSummary = summarizeCubismDeclaredResources(modelFile)
+  const summary = createCompatibilitySummary(declaredSummary)
   const errors = new Set()
   const warnings = new Set()
   const references = modelFile.FileReferences
+  const hasMalformedMotions = references.Motions !== undefined && (
+    !isObject(references.Motions)
+    || Object.values(references.Motions).some((group) => (
+      !Array.isArray(group)
+      || group.some((motion) => (
+        !isObject(motion)
+        || typeof motion.File !== 'string'
+        || !motion.File.trim()
+        || (motion.Sound !== undefined && typeof motion.Sound !== 'string')
+      ))
+    ))
+  )
+  const hasMalformedExpressions = references.Expressions !== undefined && (
+    !Array.isArray(references.Expressions)
+    || references.Expressions.some((expression) => (
+      !isObject(expression)
+      || typeof expression.Name !== 'string'
+      || !expression.Name.trim()
+      || typeof expression.File !== 'string'
+      || !expression.File.trim()
+    ))
+  )
 
   if (typeof references.Moc !== 'string' || !references.Moc.trim()) {
     errors.add('missing-moc')
@@ -182,14 +202,10 @@ export async function inspectLive2dModelFile(filePath) {
     errors.add('missing-texture')
     summary.missingTextureCount += 1
   }
-  if (
-    (references.Motions !== undefined && !isRecord(references.Motions))
-    || (isRecord(references.Motions) && Object.values(references.Motions).some((group) => !Array.isArray(group)))
-    || (references.Expressions !== undefined && !Array.isArray(references.Expressions))
-  ) {
+  if (hasMalformedMotions || hasMalformedExpressions) {
     errors.add('invalid-model-file')
   }
-  if (!isRecord(references.Motions) || summary.motionCount === 0) {
+  if (!isObject(references.Motions) || summary.motionCount === 0) {
     warnings.add('no-motions')
   }
   if (!Array.isArray(references.Expressions) || summary.expressionCount === 0) {
@@ -205,6 +221,19 @@ export async function inspectLive2dModelFile(filePath) {
     realModelDirectory = modelDirectory
   }
 
+  if (isObject(references.Motions)) {
+    for (const group of Object.values(references.Motions)) {
+      if (!Array.isArray(group)) continue
+      for (const motion of group) {
+        if (typeof motion?.Sound !== 'string' || !motion.Sound.trim()) continue
+        if (isUnsafeDeclaredPath(motion.Sound, modelDirectory)) {
+          errors.add('unsafe-resource-path')
+          summary.unsafeResourceCount += 1
+        }
+      }
+    }
+  }
+
   for (const resource of collectDeclaredResources(modelFile)) {
     const state = await inspectDeclaredResource(modelDirectory, realModelDirectory, resource)
     if (state === 'ready') continue
@@ -214,14 +243,16 @@ export async function inspectLive2dModelFile(filePath) {
       continue
     }
 
-    errors.add(missingCodeForKind(resource.kind))
+    const missingCode = missingCodeForKind(resource.kind)
+    if (!missingCode) continue
+    errors.add(missingCode)
     incrementMissingCount(summary, resource.kind)
   }
 
   return {
     modelFile,
     compatibility: {
-      status: errors.size ? 'blocked' : (warnings.size ? 'limited' : 'ready'),
+      status: errors.size ? 'blocked' : declaredSummary.status,
       errors: [...errors],
       warnings: [...warnings],
       summary,

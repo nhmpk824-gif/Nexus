@@ -96,6 +96,7 @@ type UseAppOverlaysOptions = {
   preferredMemoryFocus: ChatMemoryTraceFocusTarget | null
   setSettingsOpen: Dispatch<SetStateAction<boolean>>
   petModelPresets: PetModelDefinition[]
+  petModelPresetsReady: boolean
   petRuntimeContinuousVoiceActive: boolean
   reminderTasks: ReminderTask[]
   debugConsoleEvents: DebugConsoleEvent[]
@@ -171,6 +172,7 @@ export function useAppOverlays({
   preferredMemoryFocus,
   setSettingsOpen,
   petModelPresets,
+  petModelPresetsReady,
   petRuntimeContinuousVoiceActive,
   reminderTasks,
   debugConsoleEvents,
@@ -328,6 +330,7 @@ export function useAppOverlays({
     memories: memory.memories,
     dailyMemoryEntries: settingsDailyMemoryEntries,
     petModelPresets,
+    petModelPresetsReady,
     reminderTasks,
     voiceState: voice.voiceState,
     onStartVoiceConversation: voice.toggleVoiceConversation,

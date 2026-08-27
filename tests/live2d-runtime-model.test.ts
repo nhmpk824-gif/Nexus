@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { summarizeCubismDeclaredResources } from '../shared/live2dModelResources.js'
 
 import {
   buildRuntimePetModelDefinition,
   getPetModelPreset,
-  summarizeCubismDeclaredResources,
   type CubismModelFile,
 } from '../src/features/pet/models.ts'
 

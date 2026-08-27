@@ -5,6 +5,7 @@ import {
   SPRITE_PET_COLUMNS,
   SPRITE_PET_ROWS,
   advanceSpritePetAnimationCursor,
+  editionFromAtlasRows,
   getSpritePetFrame,
   type SpritePetAnimationCursor,
   type SpritePetAnimationState,
@@ -90,7 +91,8 @@ export function resolveSpritePetRenderFrame(
   const rows = atlas.rows ?? SPRITE_PET_ROWS
   const cellWidth = atlas.cellWidth ?? SPRITE_PET_CELL_WIDTH
   const cellHeight = atlas.cellHeight ?? SPRITE_PET_CELL_HEIGHT
-  const baseFrame = getSpritePetFrame(cursor.state, cursor.frameIndex)
+  const edition = editionFromAtlasRows(rows)
+  const baseFrame = getSpritePetFrame(cursor.state, cursor.frameIndex, edition)
   const durationMultiplier = cursor.state === 'idle'
     ? cursor.idleDurationMultiplier ?? 1
     : 1

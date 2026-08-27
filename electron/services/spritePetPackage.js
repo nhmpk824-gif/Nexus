@@ -11,6 +11,28 @@ import {
   SPRITE_PET_ROW_CONTRACT,
   SPRITE_PET_ROWS,
 } from '../../shared/spriteAtlasContract.js'
+import {
+  SPRITE_PET_DENSE_ATLAS_HEIGHT,
+  SPRITE_PET_DENSE_ATLAS_WIDTH,
+  SPRITE_PET_DENSE_ROW_CONTRACT,
+  SPRITE_PET_DENSE_ROWS,
+  detectSpritePetAtlasEdition,
+} from '../../shared/spritePetWearContract.js'
+import {
+  PORTRAIT_PUPPET_FORMAT_VERSION,
+  PORTRAIT_PUPPET_PROCEDURAL_RENDER_MODE,
+  isPortraitPuppetManifest,
+  normalizePortraitPuppetRig,
+} from '../../shared/portraitPuppetContract.js'
+import { isPortraitPuppetV4Manifest } from '../../shared/portraitPuppetV4Contract.js'
+import {
+  PET_IPC_ERROR_CODES,
+  buildPetIpcError,
+} from '../../shared/petErrorCodes.js'
+import {
+  resolvePortraitPuppetV4Package,
+  validatePortraitPuppetV4Assets,
+} from './portraitPuppetV4Package.js'
 
 // Re-exported so the other electron spritePet*.js services keep importing the
 // atlas contract through this module; the single source is
@@ -29,8 +51,6 @@ export const SPRITE_PET_MAX_BYTES = 20 * 1024 * 1024
 export const SPRITE_PET_ARCHIVE_MAX_BYTES = 50 * 1024 * 1024
 const SPRITE_PET_ARCHIVE_MAX_ENTRIES = 200
 const SPRITE_PET_ARCHIVE_MAX_UNCOMPRESSED_BYTES = 60 * 1024 * 1024
-const SPRITE_PET_USED_COLUMNS_BY_ROW = SPRITE_PET_ROW_CONTRACT.map(({ frameCount }) => frameCount)
-
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50
 const ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE = 0x02014b50
@@ -611,19 +631,24 @@ function inflatePngRgbaPixels(info) {
 
 function assertPngUnusedCellsTransparent(buffer) {
   const info = parsePngInfo(buffer)
-
-  if (
-    info.width !== SPRITE_PET_ATLAS_WIDTH
-    || info.height !== SPRITE_PET_ATLAS_HEIGHT
-  ) {
+  const edition = detectSpritePetAtlasEdition(info.width, info.height)
+  const exactLegacy = info.width === SPRITE_PET_ATLAS_WIDTH && info.height === SPRITE_PET_ATLAS_HEIGHT
+  const exactDense = info.width === SPRITE_PET_DENSE_ATLAS_WIDTH && info.height === SPRITE_PET_DENSE_ATLAS_HEIGHT
+  const rowContract = exactDense
+    ? SPRITE_PET_DENSE_ROW_CONTRACT
+    : exactLegacy
+      ? SPRITE_PET_ROW_CONTRACT
+      : null
+  if (!rowContract || (edition !== 'dense' && edition !== 'legacy-8x9')) {
     return
   }
 
   const pixels = inflatePngRgbaPixels(info)
   const rowLength = info.width * 4
 
-  for (let row = 0; row < SPRITE_PET_ROWS; row += 1) {
-    const usedColumns = SPRITE_PET_USED_COLUMNS_BY_ROW[row]
+  for (const entry of rowContract) {
+    const usedColumns = entry.frameCount
+    const row = entry.row
 
     for (let column = usedColumns; column < SPRITE_PET_COLUMNS; column += 1) {
       const startX = column * SPRITE_PET_CELL_WIDTH
@@ -742,7 +767,9 @@ async function readImageDimensions(imagePath) {
 }
 
 export function isSpritePetManifest(value) {
-  return Boolean(value && typeof value === 'object' && 'spritesheetPath' in value)
+  return Boolean(value && typeof value === 'object' && (
+    'spritesheetPath' in value || isPortraitPuppetManifest(value)
+  ))
 }
 
 const PRIVATE_CODEX_APP_PATH_PATTERNS = [
@@ -793,6 +820,66 @@ export function normalizeSpritePetManifest(manifest, manifestPath) {
   }
 
   const sourceDirectory = path.dirname(manifestPath)
+  const rawDisplayName = String(manifest.displayName ?? '').trim()
+  const rawId = String(manifest.id ?? '').trim()
+  const displayName = rawDisplayName || formatSpritePetDisplayName(rawId || path.basename(sourceDirectory))
+  const description = typeof manifest.description === 'string'
+    ? manifest.description.trim()
+    : ''
+
+  const formatVersionHint = Number(manifest.formatVersion)
+  const looksLikeV4 = isPortraitPuppetV4Manifest(manifest)
+    || formatVersionHint === 4
+    || (Array.isArray(manifest.parts) && manifest.parts.length > 0)
+    || manifest.renderMode === 'layered-artmesh-v1'
+  if (looksLikeV4) {
+    if (!isPortraitPuppetV4Manifest(manifest)) {
+      throw buildPetIpcError(PET_IPC_ERROR_CODES.UNSUPPORTED_FILE)
+    }
+    return resolvePortraitPuppetV4Package(manifest, manifestPath)
+  }
+
+  if (isPortraitPuppetManifest(manifest)) {
+    const rawPortraitPath = String(manifest.portraitPath ?? 'portrait.png').trim()
+    if (!rawPortraitPath) {
+      throw new Error('pet.json 缺少 portraitPath。')
+    }
+    const sourcePortraitPath = path.resolve(sourceDirectory, rawPortraitPath)
+    if (!isPathInsideRoot(sourceDirectory, sourcePortraitPath)) {
+      throw new Error('portraitPath 不能指向 pet.json 所在目录之外。')
+    }
+    const sourceLayerPaths = {}
+    const rawLayers = manifest.layers && typeof manifest.layers === 'object' ? manifest.layers : {}
+    for (const [key, relativePath] of Object.entries(rawLayers)) {
+      const layerPath = path.resolve(sourceDirectory, String(relativePath ?? '').trim())
+      if (!String(relativePath ?? '').trim() || !isPathInsideRoot(sourceDirectory, layerPath)) {
+        continue
+      }
+      sourceLayerPaths[key] = layerPath
+    }
+    const formatVersion = Math.min(
+      PORTRAIT_PUPPET_FORMAT_VERSION,
+      Math.max(1, Math.floor(Number(manifest.formatVersion) || 1)),
+    )
+    return {
+      id: rawId,
+      displayName,
+      description,
+      kind: 'portrait-puppet',
+      formatVersion,
+      ...(formatVersion >= 3
+        ? {
+          renderMode: manifest.renderMode === PORTRAIT_PUPPET_PROCEDURAL_RENDER_MODE
+            ? manifest.renderMode
+            : PORTRAIT_PUPPET_PROCEDURAL_RENDER_MODE,
+        }
+        : {}),
+      sourcePortraitPath,
+      sourceLayerPaths,
+      rig: normalizePortraitPuppetRig(manifest.rig),
+    }
+  }
+
   const rawSpritePath = String(manifest.spritesheetPath ?? 'spritesheet.webp').trim()
   if (!rawSpritePath) {
     throw new Error('pet.json 缺少 spritesheetPath。')
@@ -803,17 +890,11 @@ export function normalizeSpritePetManifest(manifest, manifestPath) {
     throw new Error('spritesheetPath 不能指向 pet.json 所在目录之外。')
   }
 
-  const rawDisplayName = String(manifest.displayName ?? '').trim()
-  const rawId = String(manifest.id ?? '').trim()
-  const displayName = rawDisplayName || formatSpritePetDisplayName(rawId || path.basename(sourceDirectory))
-  const description = typeof manifest.description === 'string'
-    ? manifest.description.trim()
-    : ''
-
   return {
     id: rawId,
     displayName,
     description,
+    kind: 'sprite',
     sourceSpritePath,
   }
 }
@@ -834,11 +915,11 @@ export async function validateSpritePetAsset(spritePath) {
   }
 
   const dimensions = await readImageDimensions(spritePath)
-  if (
-    dimensions.width !== SPRITE_PET_ATLAS_WIDTH
-    || dimensions.height !== SPRITE_PET_ATLAS_HEIGHT
-  ) {
-    throw new Error(`spritesheet 尺寸必须是 ${SPRITE_PET_ATLAS_WIDTH}x${SPRITE_PET_ATLAS_HEIGHT}。`)
+  const edition = detectSpritePetAtlasEdition(dimensions.width, dimensions.height)
+  if (edition === 'unknown') {
+    throw new Error(
+      `spritesheet 尺寸必须是 ${SPRITE_PET_DENSE_ATLAS_WIDTH}x${SPRITE_PET_DENSE_ATLAS_HEIGHT}（Nexus 动作表）或 ${SPRITE_PET_ATLAS_WIDTH}x${SPRITE_PET_ATLAS_HEIGHT}（兼容 8x9）。`,
+    )
   }
 
   const buffer = await fs.readFile(spritePath)
@@ -857,6 +938,31 @@ export async function readSpritePetPackage(manifestPath) {
     await readJsonFile(manifestPath),
     manifestPath,
   )
+  if (manifest.kind === 'portrait-puppet') {
+    if (manifest.formatVersion === 4 && manifest.renderMode === 'layered-artmesh-v1') {
+      await validatePortraitPuppetV4Assets(manifest)
+      return manifest
+    }
+    const extension = path.extname(manifest.sourcePortraitPath).toLowerCase()
+    if (extension !== '.png' && extension !== '.webp') {
+      throw new Error('立绘傀儡只支持 PNG 或 WebP。')
+    }
+    const stats = await fs.stat(manifest.sourcePortraitPath)
+    if (!stats.isFile()) {
+      throw new Error('portraitPath 必须指向一个文件。')
+    }
+    if (stats.size > SPRITE_PET_MAX_BYTES) {
+      throw new Error('立绘文件不能超过 20MB。')
+    }
+    return manifest
+  }
+
   await validateSpritePetAsset(manifest.sourceSpritePath)
-  return manifest
+  const dimensions = await readImageDimensions(manifest.sourceSpritePath)
+  const edition = detectSpritePetAtlasEdition(dimensions.width, dimensions.height)
+  return {
+    ...manifest,
+    edition,
+    rows: edition === 'dense' ? SPRITE_PET_DENSE_ROWS : SPRITE_PET_ROWS,
+  }
 }

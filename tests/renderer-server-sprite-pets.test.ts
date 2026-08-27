@@ -89,6 +89,45 @@ test('renderer server allows Pixi ImageBitmap capability probes in its CSP', asy
     const contentSecurityPolicy = response.headers.get('content-security-policy')
 
     assert.equal(response.status, 200)
-    assert.match(contentSecurityPolicy ?? '', /connect-src 'self' data: https: http:/)
+    assert.match(contentSecurityPolicy ?? '', /connect-src 'self' data: https:/)
+    assert.doesNotMatch(contentSecurityPolicy ?? '', /connect-src [^"]*\bhttp:/)
+  })
+})
+
+test('renderer server grants generated image reads only to the configured local dev origin', async () => {
+  await withTempDirectory(async (directoryPath) => {
+    const importedSpriteRoot = path.join(directoryPath, 'imported-sprites')
+    const portraitPath = path.join(importedSpriteRoot, 'layered', 'preview.png')
+    await fs.mkdir(path.dirname(portraitPath), { recursive: true })
+    await fs.writeFile(portraitPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+
+    initRendererServer({
+      isDev: true,
+      useDevServer: true,
+      devServerUrl: 'http://127.0.0.1:47821',
+      getPanelSection: () => 'chat',
+      getImportedPetModelsRoot: () => path.join(directoryPath, 'live2d'),
+      getImportedSpritePetModelsRoot: () => importedSpriteRoot,
+      getCodexCustomSpritePetModelsRoot: () => path.join(directoryPath, 'codex-pets'),
+      isPathInsideRoot: (rootPath: string, candidatePath: string) => {
+        const relativePath = path.relative(rootPath, candidatePath)
+        return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+      },
+      importedPetModelsRoute: '/__imported_live2d__',
+      importedSpritePetModelsRoute: '/__imported_sprite_pets__',
+      codexCustomSpritePetModelsRoute: '/__codex_sprite_pets__',
+    })
+
+    const serverUrl = await ensureRendererServer()
+    const allowed = await fetch(`${serverUrl}/__imported_sprite_pets__/layered/preview.png`, {
+      headers: { Origin: 'http://127.0.0.1:47821' },
+    })
+    const rejected = await fetch(`${serverUrl}/__imported_sprite_pets__/layered/preview.png`, {
+      headers: { Origin: 'https://untrusted.example' },
+    })
+
+    assert.equal(allowed.headers.get('access-control-allow-origin'), 'http://127.0.0.1:47821')
+    assert.equal(rejected.headers.get('access-control-allow-origin'), serverUrl)
+    assert.equal(allowed.headers.get('vary'), 'Origin')
   })
 })

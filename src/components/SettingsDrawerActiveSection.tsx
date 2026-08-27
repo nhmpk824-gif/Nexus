@@ -171,7 +171,7 @@ export function SettingsDrawerActiveSection({
 }: SettingsDrawerActiveSectionProps) {
   const routeParams = new URLSearchParams(window.location.search)
   const isPetView = routeParams.get('view') === 'pet'
-  const supportsPanelCompanionV2 = draft.vtsEnabled || Boolean(petModel.spriteAtlas) || Boolean(petModel.modelPath)
+  const supportsPanelCompanionV2 = draft.vtsEnabled || Boolean(petModel.spriteAtlas) || Boolean(petModel.portraitPuppet) || Boolean(petModel.modelPath)
   // PetView can only use V2 for a local Live2D model. Settings intentionally
   // treats configured VTS as legacy even before its asynchronous bridge becomes
   // ready, so VTS/sprite users never lose controls that their active path uses.

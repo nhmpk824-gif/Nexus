@@ -16,8 +16,27 @@ import {
   writeSpritePetZipArchive,
 } from './spritePetPackage.js'
 import {
+  SPRITE_PET_DENSE_ATLAS_HEIGHT,
+  SPRITE_PET_DENSE_ATLAS_WIDTH,
+  detectSpritePetAtlasEdition,
+} from '../../shared/spritePetWearContract.js'
+import {
+  createPortraitPuppetPackageFromImage,
+  createPortraitPuppetPackageFromImages,
+  expandPortraitImageSources,
+} from './portraitPuppetPackage.js'
+import {
+  createPortraitPuppetV4PackageFromLayerSources,
+  isFlatPortraitPuppetV4ImageSet,
+  resolvePortraitPuppetV4LayerRoot,
+} from './portraitPuppetV4Package.js'
+import {
   auditSpritePetPackage,
 } from './spritePetVisualAudit.js'
+import {
+  PET_IPC_ERROR_CODES,
+  buildPetIpcError,
+} from '../../shared/petErrorCodes.js'
 
 const SOURCE_FRAME_SIZE = {
   width: 156,
@@ -198,15 +217,17 @@ async function detectSpritePetImageSourceLayout(sourcePath) {
   const metadata = await sharp(sourcePath).metadata()
   const width = metadata.width ?? 0
   const height = metadata.height ?? 0
-
-  if (width === SPRITE_PET_ATLAS_WIDTH && height === SPRITE_PET_ATLAS_HEIGHT) {
+  const edition = detectSpritePetAtlasEdition(width, height)
+  if (edition === 'dense' || edition === 'legacy-8x9') {
     return 'atlas'
   }
 
   if (width >= 560 && height >= 600) {
-    const sourceRatio = width / height
-    const atlasRatio = SPRITE_PET_ATLAS_WIDTH / SPRITE_PET_ATLAS_HEIGHT
-    if (Math.abs(sourceRatio - atlasRatio) <= 0.055) {
+    const cellWidth = width / SPRITE_PET_COLUMNS
+    const cellHeight = height / SPRITE_PET_ROWS
+    const cellRatio = cellWidth / cellHeight
+    const expectedRatio = SPRITE_PET_CELL_WIDTH / SPRITE_PET_CELL_HEIGHT
+    if (cellWidth >= 64 && Math.abs(cellRatio - expectedRatio) <= 0.06) {
       return 'atlas'
     }
   }
@@ -349,7 +370,7 @@ async function buildAtlasCellsFromAtlasSource(sourcePath) {
   const sourceHeight = metadata.height ?? 0
 
   if (!sourceWidth || !sourceHeight) {
-    throw new Error('来源图片尺寸没读出来。')
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.UNSUPPORTED_FILE)
   }
 
   const cells = []
@@ -377,13 +398,18 @@ async function buildAtlasCellsFromAtlasSource(sourcePath) {
 
 async function tryWriteNativeAtlas(sourcePath, targetSpritePath) {
   const metadata = await sharp(sourcePath).metadata()
-  if (metadata.width !== SPRITE_PET_ATLAS_WIDTH || metadata.height !== SPRITE_PET_ATLAS_HEIGHT) {
+  const edition = detectSpritePetAtlasEdition(metadata.width ?? 0, metadata.height ?? 0)
+  if (edition === 'unknown') {
     return false
   }
+
+  const width = edition === 'dense' ? SPRITE_PET_DENSE_ATLAS_WIDTH : SPRITE_PET_ATLAS_WIDTH
+  const height = edition === 'dense' ? SPRITE_PET_DENSE_ATLAS_HEIGHT : SPRITE_PET_ATLAS_HEIGHT
 
   await sharp(sourcePath)
     .rotate()
     .ensureAlpha()
+    .resize({ width, height, fit: 'fill' })
     .png({ compressionLevel: 9, adaptiveFiltering: false, progressive: false })
     .toFile(targetSpritePath)
 
@@ -428,6 +454,7 @@ Package id: \`${packageId}\`
 
 export async function createSpritePetPackageFromImage({
   sourcePath,
+  sourcePaths,
   targetDirectory,
   id = '',
   displayName = '',
@@ -435,21 +462,24 @@ export async function createSpritePetPackageFromImage({
   sourceLayout = 'auto',
   force = false,
 }) {
-  const resolvedSourcePath = path.resolve(sourcePath)
-  assertNotPrivateCodexPetSource(resolvedSourcePath)
-  const sourceStats = await fs.stat(resolvedSourcePath)
-  if (!sourceStats.isFile()) {
-    throw new Error(`Source image is not a file: ${resolvedSourcePath}`)
+  const incoming = (Array.isArray(sourcePaths) && sourcePaths.length ? sourcePaths : [sourcePath])
+    .filter(Boolean)
+    .map((entry) => path.resolve(entry))
+  for (const incomingPath of incoming) {
+    assertNotPrivateCodexPetSource(incomingPath)
+  }
+  const expanded = await expandPortraitImageSources(incoming)
+  if (!expanded.length) {
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.UNSUPPORTED_FILE)
   }
 
+  const resolvedSourcePath = expanded[0]
   const packageId = slugifySpritePetId(id || path.basename(resolvedSourcePath))
   const packageDisplayName = String(displayName || formatSpritePetDisplayName(packageId)).trim()
-  const packageDescription = String(
-    description || 'Created from one image with the Nexus Codex-style sprite pet maker.',
-  ).trim()
+  const packageDescription = String(description || '').trim()
   const requestedSourceLayout = String(sourceLayout || 'auto').trim()
   if (!SUPPORTED_SOURCE_LAYOUTS.has(requestedSourceLayout)) {
-    throw new Error(`不支持的来源布局：${requestedSourceLayout}。`)
+    throw buildPetIpcError(PET_IPC_ERROR_CODES.UNSUPPORTED_FILE)
   }
   const resolvedSourceLayout = requestedSourceLayout === 'auto'
     ? await detectSpritePetImageSourceLayout(resolvedSourcePath)
@@ -467,6 +497,40 @@ export async function createSpritePetPackageFromImage({
     }
   }
 
+  const v4LayerRoot = await resolvePortraitPuppetV4LayerRoot(incoming)
+  if (v4LayerRoot || isFlatPortraitPuppetV4ImageSet(expanded)) {
+    return createPortraitPuppetV4PackageFromLayerSources({
+      sourceDirectory: v4LayerRoot,
+      sourcePaths: expanded,
+      targetDirectory,
+      id: packageId,
+      displayName: packageDisplayName,
+      description: packageDescription
+        || 'Layered portrait puppet with independent eyes, mouth, hair, and cloth.',
+    })
+  }
+
+  if (expanded.length > 1) {
+    return createPortraitPuppetPackageFromImages({
+      sourcePaths: expanded,
+      targetDirectory,
+      id: packageId,
+      displayName: packageDisplayName,
+      description: packageDescription,
+    })
+  }
+
+  if (resolvedSourceLayout === 'single') {
+    return createPortraitPuppetPackageFromImage({
+      sourcePath: resolvedSourcePath,
+      targetDirectory,
+      id: packageId,
+      displayName: packageDisplayName,
+      description: packageDescription
+        || 'Locally animated from one portrait by Nexus — no LLM or online image generation.',
+    })
+  }
+
   await fs.mkdir(targetDirectory, { recursive: true })
 
   const targetSpritePath = path.join(targetDirectory, 'spritesheet.png')
@@ -478,6 +542,10 @@ export async function createSpritePetPackageFromImage({
     : false
 
   if (!nativeAtlasPreserved) {
+    const sourceMeta = await sharp(resolvedSourcePath).metadata()
+    if (detectSpritePetAtlasEdition(sourceMeta.width, sourceMeta.height) === 'dense') {
+      throw buildPetIpcError(PET_IPC_ERROR_CODES.UNSUPPORTED_FILE)
+    }
     const atlasBuffer = await sharp({
       create: {
         width: SPRITE_PET_ATLAS_WIDTH,

@@ -1,12 +1,16 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useTranslation } from '../../i18n/useTranslation.ts'
+import { humanizeError } from '../../lib/humanizeError.ts'
 import { getRedactedLogErrorMessage } from '../../lib/logRedaction.ts'
-import type {
-  CodexPetGalleryCatalogResult,
-  PetModelImportResult,
-  PetModelDefinition,
-  SpritePetCreatorKitInspection,
+import { extractPetIpcErrorCode } from '../../../shared/petErrorCodes.js'
+import {
+  formatPetModelImportPresentation,
+  type PetUserMessageResult,
+  type CodexPetGalleryCatalogResult,
+  type PetModelImportResult,
+  type PetModelDefinition,
+  type SpritePetCreatorKitInspection,
 } from '../../features/pet'
 import type { ConnectionResult } from '../settingsDrawerSupport.ts'
 import type { AppSettings } from '../../types'
@@ -99,6 +103,7 @@ export function usePetModelImport({
   setDraft,
 }: UsePetModelImportOptions) {
   const { t } = useTranslation()
+  const importingPetModelRef = useRef(false)
   const [importingPetModel, setImportingPetModel] = useState(false)
   const [petModelStatus, setPetModelStatus] = useState<ConnectionResult | null>(null)
   const [codexPetCatalog, setCodexPetCatalog] = useState<CodexPetGalleryCatalogResult | null>(null)
@@ -134,62 +139,45 @@ export function usePetModelImport({
   } | null>(null)
 
   function getPetImportErrorMessage(error: unknown) {
+    if (extractPetIpcErrorCode(error)) {
+      return humanizeError(error, 'pet')
+    }
     return getRedactedLogErrorMessage(error) || t('settings.pet.import_error')
   }
 
-  function getLive2dCompatibilityMessage(result: PetModelImportResult) {
-    const compatibility = result.compatibility
-    if (!compatibility) return result.message
+  function presentPetUserMessage(result: PetUserMessageResult) {
+    return formatPetModelImportPresentation(result, t).message
+  }
 
-    if (compatibility.status === 'blocked') {
-      const resourceLabels = [
-        compatibility.errors.includes('invalid-model-file') ? t('settings.pet.compatibility_resource.model') : '',
-        compatibility.errors.includes('missing-moc') ? t('settings.pet.compatibility_resource.moc') : '',
-        compatibility.errors.includes('missing-texture') ? t('settings.pet.compatibility_resource.textures') : '',
-        compatibility.errors.includes('missing-motion') ? t('settings.pet.compatibility_resource.motions') : '',
-        compatibility.errors.includes('missing-expression') ? t('settings.pet.compatibility_resource.expressions') : '',
-        compatibility.errors.includes('missing-optional-resource') ? t('settings.pet.compatibility_resource.optional') : '',
-        compatibility.errors.includes('unsafe-resource-path') ? t('settings.pet.compatibility_resource.unsafe') : '',
-      ].filter(Boolean).join(', ')
-
-      return t('settings.pet.compatibility_blocked', { resources: resourceLabels })
-    }
-
-    if (compatibility.status === 'limited') {
-      const capabilities = [
-        compatibility.warnings.includes('no-motions') ? t('settings.pet.compatibility_resource.motions') : '',
-        compatibility.warnings.includes('no-expressions') ? t('settings.pet.compatibility_resource.expressions') : '',
-      ].filter(Boolean).join(', ')
-      return t('settings.pet.compatibility_limited', {
-        name: result.model?.label ?? '',
-        capabilities,
+  async function runPetModelImport(work: () => Promise<void>) {
+    if (importingPetModelRef.current) return
+    importingPetModelRef.current = true
+    setImportingPetModel(true)
+    setPetModelStatus(null)
+    try {
+      await work()
+    } catch (error) {
+      setPetModelStatus({
+        ok: false,
+        message: getPetImportErrorMessage(error),
       })
+    } finally {
+      importingPetModelRef.current = false
+      setImportingPetModel(false)
     }
-
-    return t('settings.pet.compatibility_ready', {
-      name: result.model?.label ?? '',
-      textures: compatibility.summary.textureCount,
-      motions: compatibility.summary.motionCount,
-      expressions: compatibility.summary.expressionCount,
-    })
   }
 
   async function handleImportPetModel() {
-    setImportingPetModel(true)
-    setPetModelStatus(null)
-
-    try {
+    await runPetModelImport(async () => {
       const result = await onImportPetModel()
+      if (!result) return
 
-      if (!result) {
-        return
-      }
-
-      const compatibilityMessage = getLive2dCompatibilityMessage(result)
+      const presentation = formatPetModelImportPresentation(result, t)
       if (!result.model) {
         setPetModelStatus({
           ok: false,
-          message: compatibilityMessage,
+          message: presentation.message,
+          recommendation: presentation.recommendation,
         })
         return
       }
@@ -202,16 +190,10 @@ export function usePetModelImport({
       await onSelectImportedPetModel?.(importedModel.id)
       setPetModelStatus({
         ok: true,
-        message: compatibilityMessage,
+        message: presentation.message,
+        recommendation: presentation.recommendation,
       })
-    } catch (error) {
-      setPetModelStatus({
-        ok: false,
-        message: getPetImportErrorMessage(error),
-      })
-    } finally {
-      setImportingPetModel(false)
-    }
+    })
   }
 
   async function handleImportCodexPetGallery(input: string) {
@@ -219,10 +201,7 @@ export function usePetModelImport({
       return
     }
 
-    setImportingPetModel(true)
-    setPetModelStatus(null)
-
-    try {
+    await runPetModelImport(async () => {
       const result = await onImportCodexPetGallery(input)
 
       setDraft((current) => ({
@@ -232,16 +211,9 @@ export function usePetModelImport({
       await onSelectImportedPetModel?.(result.model.id)
       setPetModelStatus({
         ok: true,
-        message: result.message,
+        message: presentPetUserMessage(result),
       })
-    } catch (error) {
-      setPetModelStatus({
-        ok: false,
-        message: getPetImportErrorMessage(error),
-      })
-    } finally {
-      setImportingPetModel(false)
-    }
+    })
   }
 
   async function handleLoadCodexPetGallery(query = '') {
@@ -278,15 +250,9 @@ export function usePetModelImport({
       return
     }
 
-    setImportingPetModel(true)
-    setPetModelStatus(null)
-
-    try {
+    await runPetModelImport(async () => {
       const result = await onCreateSpritePetFromImage()
-
-      if (!result) {
-        return
-      }
+      if (!result) return
 
       setDraft((current) => ({
         ...current,
@@ -307,16 +273,9 @@ export function usePetModelImport({
       }
       setPetModelStatus({
         ok: true,
-        message: result.message,
+        message: presentPetUserMessage(result),
       })
-    } catch (error) {
-      setPetModelStatus({
-        ok: false,
-        message: getPetImportErrorMessage(error),
-      })
-    } finally {
-      setImportingPetModel(false)
-    }
+    })
   }
 
   async function handleCreateCodexPetCreatorKit(payload: {
@@ -340,7 +299,7 @@ export function usePetModelImport({
       setAssembledCreatorKitPackage(null)
       setPetModelStatus({
         ok: true,
-        message: result.message,
+        message: presentPetUserMessage(result),
       })
     } catch (error) {
       setPetModelStatus({
@@ -375,7 +334,7 @@ export function usePetModelImport({
       setLastCreatorKitSourceRowsDirectoryDisplay(result.sourceRowsDirectoryDisplay ?? result.sourceRowsDirectory ?? '')
       setPetModelStatus({
         ok: result.ready,
-        message: result.message,
+        message: presentPetUserMessage(result),
       })
     } catch (error) {
       setPetModelStatus({
@@ -422,7 +381,7 @@ export function usePetModelImport({
       }
       setPetModelStatus({
         ok: true,
-        message: result.message,
+        message: presentPetUserMessage(result),
       })
     } catch (error) {
       setPetModelStatus({
@@ -449,7 +408,7 @@ export function usePetModelImport({
       const result = await onOpenCodexPetCreatorKitPath(payload)
       setPetModelStatus({
         ok: result.ok,
-        message: result.message,
+        message: presentPetUserMessage(result),
       })
     } catch (error) {
       setPetModelStatus({
@@ -473,7 +432,7 @@ export function usePetModelImport({
       })
       setPetModelStatus({
         ok: result.ok,
-        message: result.message,
+        message: presentPetUserMessage(result),
       })
     } catch (error) {
       setPetModelStatus({
@@ -497,7 +456,7 @@ export function usePetModelImport({
       })
       setPetModelStatus({
         ok: result.ok,
-        message: result.message,
+        message: presentPetUserMessage(result),
       })
     } catch (error) {
       setPetModelStatus({
@@ -508,6 +467,7 @@ export function usePetModelImport({
   }
 
   function resetPetModelImport() {
+    importingPetModelRef.current = false
     setPetModelStatus(null)
     setImportingPetModel(false)
     setCodexPetCatalog(null)

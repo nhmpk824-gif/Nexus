@@ -27,6 +27,7 @@ import {
   getPetModelPresets,
   type PetModelDefinition,
 } from '../src/features/pet/models.ts'
+import { resolveCompanionActivityState } from '../src/features/pet/activityState.ts'
 import {
   SPRITE_PET_ROW_CONTRACT,
 } from '../electron/services/spritePetPackage.js'
@@ -307,12 +308,21 @@ test('sprite pet debug query parsing only accepts known animation states', () =>
   assert.equal(getSpritePetDebugImagePathFromSearch('?spritePetImage=pets/../secret.png'), null)
 })
 
+test('dense sheets play speaking on its own row; 8x9 sheets fall back to waving', () => {
+  assert.equal(getSpritePetFrame('speaking', 0, 'dense').row, 2)
+  assert.equal(getSpritePetFrame('listening', 0, 'dense').row, 1)
+  assert.equal(getSpritePetFrame('speaking', 0, 'legacy-8x9').row, 3)
+  assert.equal(getSpritePetFrame('listening', 0, 'legacy-8x9').row, 6)
+})
+
 test('sprite pet state mapper follows voice, work, and touch signals', () => {
-  assert.equal(mapPetInputsToSpriteState({ mood: 'idle', isListening: true }), 'waiting')
-  assert.equal(mapPetInputsToSpriteState({ mood: 'idle', isSpeaking: true }), 'review')
-  assert.equal(mapPetInputsToSpriteState({ mood: 'idle', isBusy: true }), 'running')
+  assert.equal(mapPetInputsToSpriteState({ mood: 'idle', isListening: true }), 'listening')
+  assert.equal(mapPetInputsToSpriteState({ mood: 'idle', isSpeaking: true }), 'speaking')
+  assert.equal(mapPetInputsToSpriteState({ mood: 'idle', isBusy: true }), 'thinking')
   assert.equal(mapPetInputsToSpriteState({ mood: 'idle', touchZone: 'head' }), 'jumping')
-  assert.equal(mapPetInputsToSpriteState({ mood: 'worried' }), 'failed')
+  assert.equal(mapPetInputsToSpriteState({ mood: 'worried' }), 'sad')
+  assert.equal(mapPetInputsToSpriteState({ mood: 'happy' }), 'happy')
+  assert.equal(mapPetInputsToSpriteState({ mood: 'thinking' }), 'thinking')
   assert.equal(mapPetInputsToSpriteState({
     mood: 'idle',
     performanceCue: {
@@ -322,6 +332,10 @@ test('sprite pet state mapper follows voice, work, and touch signals', () => {
       stageDirection: '(wave)',
     },
   }), 'waving')
+  assert.equal(
+    mapPetInputsToSpriteState({ mood: 'idle', isBusy: true }),
+    resolveCompanionActivityState({ mood: 'idle', chatBusy: true, now: '2026-06-20T00:00:00.000Z' }).spriteState,
+  )
 })
 
 test('discovered bundled sprite packages merge without duplicating built-in presets', () => {

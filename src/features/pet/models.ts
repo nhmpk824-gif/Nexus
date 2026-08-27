@@ -1,5 +1,12 @@
 import type { TranslationKey } from '../../types/i18n.ts'
+import type { TranslationParams } from '../../types/i18n.ts'
+import type {
+  Live2dImportMessageKey,
+  Live2dImportRecommendationKey,
+} from '../../../shared/live2dModelResources.js'
+import type { PetImportMessageKey } from '../../../shared/petErrorCodes.js'
 import type { PetExpressionSlot, SpritePetAtlasDefinition } from './types.ts'
+import type { PortraitPuppetDefinition } from './portraitPuppet.ts'
 
 /** @deprecated Import from `./types` — re-exported for backward compatibility. */
 export type { PetExpressionSlot } from './types.ts'
@@ -50,6 +57,7 @@ export interface PetModelDefinition {
   modelPath: string
   fallbackImagePath: string
   spriteAtlas?: SpritePetAtlasDefinition
+  portraitPuppet?: PortraitPuppetDefinition
   motionGroups: {
     idle?: string
     interaction?: string
@@ -68,6 +76,7 @@ export interface PetModelDefinition {
     round?: string
     narrow?: string
     smile?: string
+    down?: string
   }
   rigParams?: {
     angleX?: string
@@ -77,9 +86,22 @@ export interface PetModelDefinition {
     bodyAngleY?: string
     eyeBallX?: string
     eyeBallY?: string
+    eyeBallForm?: string
     eyeLOpen?: string
     eyeROpen?: string
+    eyeLSmile?: string
+    eyeRSmile?: string
+    eyeLForm?: string
+    eyeRForm?: string
     browForm?: string
+    browLY?: string
+    browRY?: string
+    browLX?: string
+    browRX?: string
+    browLAngle?: string
+    browRAngle?: string
+    browLForm?: string
+    browRForm?: string
     cheek?: string
     breath?: string
   }
@@ -136,6 +158,9 @@ export interface Live2dModelCompatibility {
 export interface PetModelImportResult {
   model: PetModelDefinition | null
   message: string
+  messageKey?: Live2dImportMessageKey | PetImportMessageKey
+  messageParams?: TranslationParams
+  recommendationKey?: Live2dImportRecommendationKey
   compatibility?: Live2dModelCompatibility
 }
 
@@ -147,45 +172,16 @@ export interface CubismModelFile {
       Name: string
       File: string
     }>
-    Motions?: Record<string, unknown[]>
+    Motions?: Record<string, Array<{
+      File?: string
+      Sound?: string
+      [key: string]: unknown
+    }>>
   }
   Groups?: Array<{
     Name?: string
     Ids?: string[]
   }>
-}
-
-export interface CubismDeclaredResourceSummary {
-  status: 'ready' | 'limited' | 'blocked'
-  mocDeclared: boolean
-  textureCount: number
-  motionCount: number
-  expressionCount: number
-}
-
-/** Summarize the resource declarations used by runtime and smoke diagnostics. */
-export function summarizeCubismDeclaredResources(
-  modelFile?: CubismModelFile,
-): CubismDeclaredResourceSummary {
-  const references = modelFile?.FileReferences
-  const mocDeclared = Boolean(references?.Moc?.trim())
-  const textureCount = Array.isArray(references?.Textures) ? references.Textures.length : 0
-  const expressionCount = Array.isArray(references?.Expressions) ? references.Expressions.length : 0
-  const motionCount = references?.Motions
-    ? Object.values(references.Motions).reduce((count, group) => (
-      count + (Array.isArray(group) ? group.length : 0)
-    ), 0)
-    : 0
-
-  return {
-    status: !mocDeclared || textureCount === 0
-      ? 'blocked'
-      : (motionCount === 0 || expressionCount === 0 ? 'limited' : 'ready'),
-    mocDeclared,
-    textureCount,
-    motionCount,
-    expressionCount,
-  }
 }
 
 function pickMotionGroup(motions: Record<string, unknown[]> | undefined, candidates: string[]) {
@@ -217,9 +213,22 @@ const DEFAULT_RIG_PARAMS = {
   bodyAngleY: 'ParamBodyAngleY',
   eyeBallX: 'ParamEyeBallX',
   eyeBallY: 'ParamEyeBallY',
+  eyeBallForm: 'ParamEyeBallForm',
   eyeLOpen: 'ParamEyeLOpen',
   eyeROpen: 'ParamEyeROpen',
+  eyeLSmile: 'ParamEyeLSmile',
+  eyeRSmile: 'ParamEyeRSmile',
+  eyeLForm: 'ParamEyeLForm',
+  eyeRForm: 'ParamEyeRForm',
   browForm: 'ParamBrowForm',
+  browLY: 'ParamBrowLY',
+  browRY: 'ParamBrowRY',
+  browLX: 'ParamBrowLX',
+  browRX: 'ParamBrowRX',
+  browLAngle: 'ParamBrowLAngle',
+  browRAngle: 'ParamBrowRAngle',
+  browLForm: 'ParamBrowLForm',
+  browRForm: 'ParamBrowRForm',
   cheek: 'ParamCheek',
   breath: 'ParamBreath',
 } as const
@@ -276,6 +285,7 @@ export const PET_MODEL_PRESETS: PetModelDefinition[] = [
       round: 'ParamO',
       narrow: 'ParamI',
       smile: 'ParamMouthUp',
+      down: 'ParamMouthDown',
     },
     rigParams: {
       angleX: 'ParamAngleX',
@@ -285,9 +295,22 @@ export const PET_MODEL_PRESETS: PetModelDefinition[] = [
       bodyAngleY: 'ParamBodyAngleY',
       eyeBallX: 'ParamEyeBallX',
       eyeBallY: 'ParamEyeBallY',
+      eyeBallForm: 'ParamEyeBallForm',
       eyeLOpen: 'ParamEyeLOpen',
       eyeROpen: 'ParamEyeROpen',
+      eyeLSmile: 'ParamEyeLSmile',
+      eyeRSmile: 'ParamEyeRSmile',
+      eyeLForm: 'ParamEyeLForm',
+      eyeRForm: 'ParamEyeRForm',
       browForm: 'ParamBrowForm',
+      browLY: 'ParamBrowLY',
+      browRY: 'ParamBrowRY',
+      browLX: 'ParamBrowLX',
+      browRX: 'ParamBrowRX',
+      browLAngle: 'ParamBrowLAngle',
+      browRAngle: 'ParamBrowRAngle',
+      browLForm: 'ParamBrowLForm',
+      browRForm: 'ParamBrowRForm',
       cheek: 'ParamCheek',
       breath: 'ParamBreath',
     },
@@ -499,6 +522,50 @@ export function getPetModelPreset(modelId?: string, additionalModels: PetModelDe
   return presets.find((preset) => preset.id === modelId) ?? presets[0]
 }
 
+export type PetModelDiscoveryStatus = 'pending' | 'ready' | 'failed'
+
+type PetModelDiscoverySnapshot<T> = {
+  status: PetModelDiscoveryStatus
+  models: T[]
+}
+
+/** Do not blank an already-visible library while a refresh is in flight. */
+export function nextPetModelDiscoveryBeforeLoad<T>(
+  current: PetModelDiscoverySnapshot<T>,
+): PetModelDiscoverySnapshot<T> {
+  return current.models.length > 0
+    ? current
+    : { ...current, status: 'pending' }
+}
+
+/** Keep the last good list on a refresh failure; only an empty first load is failed. */
+export function nextPetModelDiscoveryAfterError<T>(
+  current: PetModelDiscoverySnapshot<T>,
+): PetModelDiscoverySnapshot<T> {
+  return current.models.length > 0
+    ? { status: 'ready', models: current.models }
+    : { ...current, status: 'failed' }
+}
+
+/** Built-ins are immediately available; imported selections wait for discovery. */
+export function isPetModelSelectionResolved(
+  status: PetModelDiscoveryStatus,
+  modelId: string,
+): boolean {
+  return PET_MODEL_PRESETS.some((preset) => preset.id === modelId) || status === 'ready'
+}
+
+/** Repair a persisted model id only after a successful discovery proves it is absent. */
+export function shouldRepairPetModelSelection(
+  status: PetModelDiscoveryStatus,
+  modelId: string,
+  presets: readonly Pick<PetModelDefinition, 'id'>[],
+): boolean {
+  return status === 'ready'
+    && presets.length > 0
+    && !presets.some((preset) => preset.id === modelId)
+}
+
 export function buildRuntimePetModelDefinition(
   modelDefinition: PetModelDefinition,
   modelFile?: CubismModelFile,
@@ -544,6 +611,7 @@ export function buildRuntimePetModelDefinition(
       round: modelDefinition.mouthParams?.round,
       narrow: modelDefinition.mouthParams?.narrow,
       smile: modelDefinition.mouthParams?.smile ?? 'ParamMouthForm',
+      down: modelDefinition.mouthParams?.down ?? 'ParamMouthDown',
     },
     rigParams: {
       ...DEFAULT_RIG_PARAMS,

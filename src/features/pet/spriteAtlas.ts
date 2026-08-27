@@ -1,6 +1,13 @@
 import type { PetMood, PetTouchZone } from '../../types/index.ts'
 import type { PetExpressionSlot, PetPerformanceCue } from './types.ts'
 import { SPRITE_PET_ROW_CONTRACT } from '../../../shared/spriteAtlasContract.js'
+import {
+  SPRITE_PET_DENSE_ROW_CONTRACT,
+  SPRITE_PET_DENSE_ROWS,
+  type SpritePetAtlasEdition,
+  resolveSpritePetWearState,
+  getSpritePetWearRow,
+} from '../../../shared/spritePetWearContract.js'
 
 /** @deprecated Import from `./types` — re-exported for backward compatibility. */
 export type { SpritePetAtlasDefinition } from './types.ts'
@@ -19,8 +26,11 @@ export const SPRITE_PET_ACTIVE_LOOP_COUNT = 3
 const SPRITE_PET_SLOW_IDLE_DURATION_MULTIPLIER = 2
 
 export const SPRITE_PET_ANIMATION_STATES = SPRITE_PET_ROW_CONTRACT.map((entry) => entry.state)
+export const SPRITE_PET_WEAR_STATES = SPRITE_PET_DENSE_ROW_CONTRACT.map((entry) => entry.state)
 
-export type SpritePetAnimationState = (typeof SPRITE_PET_ANIMATION_STATES)[number]
+export type SpritePetAnimationState =
+  | (typeof SPRITE_PET_ANIMATION_STATES)[number]
+  | (typeof SPRITE_PET_WEAR_STATES)[number]
 
 export type SpritePetFrame = {
   row: number
@@ -58,30 +68,40 @@ export const SPRITE_PET_ANIMATIONS: Record<SpritePetAnimationState, SpritePetAni
   ]),
 ) as Record<SpritePetAnimationState, SpritePetAnimationDefinition>
 
-export function getSpritePetFrame(state: SpritePetAnimationState, frameIndex: number): SpritePetFrame {
-  const animation = SPRITE_PET_ANIMATIONS[state]
-  const safeIndex = animation.columns.length
-    ? Math.abs(frameIndex) % animation.columns.length
+export function editionFromAtlasRows(rows?: number): SpritePetAtlasEdition {
+  return rows === SPRITE_PET_DENSE_ROWS ? 'dense' : 'legacy-8x9'
+}
+
+export function getSpritePetFrame(
+  state: SpritePetAnimationState,
+  frameIndex: number,
+  edition: SpritePetAtlasEdition = 'legacy-8x9',
+): SpritePetFrame {
+  const playable = resolveSpritePetWearState(edition, state)
+  const row = getSpritePetWearRow(edition, playable)
+  const safeIndex = row.frameCount
+    ? Math.abs(frameIndex) % row.frameCount
     : 0
 
   return {
-    row: animation.row,
-    column: animation.columns[safeIndex] ?? 0,
-    durationMs: animation.durationsMs[safeIndex] ?? animation.durationsMs.at(-1) ?? 120,
+    row: row.row,
+    column: safeIndex,
+    durationMs: row.durationsMs[safeIndex] ?? row.durationsMs.at(-1) ?? 120,
   }
 }
 
-function getSpritePetFrameCount(state: SpritePetAnimationState): number {
-  return SPRITE_PET_ANIMATIONS[state].columns.length
+function getSpritePetFrameCount(state: SpritePetAnimationState, edition: SpritePetAtlasEdition = 'legacy-8x9'): number {
+  const playable = resolveSpritePetWearState(edition, state)
+  return getSpritePetWearRow(edition, playable).frameCount
 }
 
 export function advanceSpritePetAnimationCursor(
   current: SpritePetAnimationCursor,
   requestedState: SpritePetAnimationState,
   requestKey: string,
-  options: SpritePetAdvanceOptions = {},
+  options: SpritePetAdvanceOptions & { edition?: SpritePetAtlasEdition } = {},
 ): SpritePetAnimationCursor {
-  const frameCount = getSpritePetFrameCount(current.state)
+  const frameCount = getSpritePetFrameCount(current.state, options.edition ?? 'legacy-8x9')
   const nextFrameIndex = current.frameIndex + 1
 
   if (nextFrameIndex < frameCount) {
@@ -125,16 +145,20 @@ export function advanceSpritePetAnimationCursor(
 }
 
 export function isSpritePetAnimationState(value: unknown): value is SpritePetAnimationState {
-  return typeof value === 'string'
-    && SPRITE_PET_ANIMATION_STATES.includes(value.trim() as SpritePetAnimationState)
+  if (typeof value !== 'string') {
+    return false
+  }
+  const normalized = value.trim()
+  return SPRITE_PET_ANIMATION_STATES.includes(normalized as (typeof SPRITE_PET_ANIMATION_STATES)[number])
+    || SPRITE_PET_WEAR_STATES.includes(normalized as (typeof SPRITE_PET_WEAR_STATES)[number])
 }
 
 function mapExpressionSlotToState(slot?: PetExpressionSlot): SpritePetAnimationState | null {
   switch (slot) {
     case 'thinking':
-      return 'running'
+      return 'thinking'
     case 'happy':
-      return 'review'
+      return 'happy'
     case 'sleepy':
       return 'waiting'
     case 'surprised':
@@ -142,11 +166,11 @@ function mapExpressionSlotToState(slot?: PetExpressionSlot): SpritePetAnimationS
     case 'confused':
       return 'failed'
     case 'embarrassed':
-      return 'waving'
+      return 'shy'
     case 'listening':
-      return 'waiting'
+      return 'listening'
     case 'speaking':
-      return 'review'
+      return 'speaking'
     case 'touchHead':
     case 'touchFace':
     case 'touchBody':
@@ -160,22 +184,23 @@ function mapPetMoodToSpriteState(mood: PetMood): SpritePetAnimationState {
   switch (mood) {
     case 'thinking':
     case 'curious':
-      return 'running'
+      return 'thinking'
     case 'happy':
     case 'excited':
     case 'proud':
     case 'playful':
-      return 'review'
+      return 'happy'
     case 'sleepy':
       return 'waiting'
     case 'surprised':
       return 'jumping'
     case 'confused':
-    case 'worried':
       return 'failed'
+    case 'worried':
+      return 'sad'
     case 'embarrassed':
     case 'affectionate':
-      return 'waving'
+      return 'shy'
     default:
       return 'idle'
   }
@@ -203,15 +228,15 @@ export function mapPetInputsToSpriteState(input: {
   }
 
   if (input.isSpeaking) {
-    return 'review'
+    return 'speaking'
   }
 
   if (input.isListening) {
-    return 'waiting'
+    return 'listening'
   }
 
   if (input.isBusy) {
-    return 'running'
+    return 'thinking'
   }
 
   if (input.touchZone) {

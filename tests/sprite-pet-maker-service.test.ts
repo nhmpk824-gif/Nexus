@@ -7,6 +7,10 @@ import sharp from 'sharp'
 
 import { createSpritePetPackageFromImage } from '../electron/services/spritePetMaker.js'
 import {
+  PET_IPC_ERROR_CODES,
+  extractPetIpcErrorCode,
+} from '../shared/petErrorCodes.js'
+import {
   SPRITE_PET_ATLAS_HEIGHT,
   SPRITE_PET_ATLAS_WIDTH,
   SPRITE_PET_CELL_HEIGHT,
@@ -100,7 +104,29 @@ async function assertArchiveRoundTrips(archivePath: string, directoryPath: strin
   assert.equal(packageInfo.id, expectedId)
 }
 
-test('sprite pet maker service creates a valid local package from one image', async () => {
+test('sprite pet maker service throws a stable code when no image is usable', async () => {
+  await withTempDirectory(async (directoryPath) => {
+    await assert.rejects(
+      () => createSpritePetPackageFromImage({
+        sourcePaths: [],
+        targetDirectory: path.join(directoryPath, 'empty-pet'),
+      }),
+      (error) => extractPetIpcErrorCode(error) === PET_IPC_ERROR_CODES.UNSUPPORTED_FILE,
+    )
+    const sourcePath = path.join(directoryPath, 'pet.png')
+    await writeCodexStyleSourceImage(sourcePath)
+    await assert.rejects(
+      () => createSpritePetPackageFromImage({
+        sourcePath,
+        targetDirectory: path.join(directoryPath, 'bad-layout'),
+        sourceLayout: 'sheet',
+      }),
+      (error) => extractPetIpcErrorCode(error) === PET_IPC_ERROR_CODES.UNSUPPORTED_FILE,
+    )
+  })
+})
+
+test('sprite pet maker service creates a portrait puppet from one character image', async () => {
   await withTempDirectory(async (directoryPath) => {
     const sourcePath = path.join(directoryPath, 'mini-pet.png')
     const targetDirectory = path.join(directoryPath, 'generated-pet')
@@ -113,21 +139,19 @@ test('sprite pet maker service creates a valid local package from one image', as
       displayName: 'Mini Pet',
     })
     const packageInfo = await readSpritePetPackage(result.manifestPath)
-    const readme = await fs.readFile(path.join(targetDirectory, 'README.md'), 'utf8')
-    const visualAudit = JSON.parse(await fs.readFile(result.visualAuditPath, 'utf8')) as {
-      visual?: { ok?: boolean }
-    }
-    const sprite = await fs.readFile(result.spritePath)
+    const portrait = await fs.readFile(result.portraitPath || result.spritePath)
+    const dimensions = readPngDimensions(portrait)
 
+    assert.equal(packageInfo.kind, 'portrait-puppet')
     assert.equal(packageInfo.id, 'mini-pet')
     assert.equal(packageInfo.displayName, 'Mini Pet')
-    assert.deepEqual(readPngDimensions(sprite), {
-      width: SPRITE_PET_ATLAS_WIDTH,
-      height: SPRITE_PET_ATLAS_HEIGHT,
-    })
-    assert.match(readme, /does not add speed lines/)
-    assert.equal(visualAudit.visual?.ok, true)
-    assert.ok(result.archivePath.endsWith('mini-pet.codex-pet.zip'))
+    assert.equal(packageInfo.formatVersion, 3)
+    assert.equal(packageInfo.renderMode, 'procedural-rig-v1')
+    assert.match(packageInfo.description, /no LLM or online image generation/)
+    assert.deepEqual(Object.keys(packageInfo.sourceLayerPaths), [])
+    assert.ok(dimensions.width <= 768)
+    assert.ok(dimensions.height <= 1024)
+    assert.ok(result.archivePath.endsWith('mini-pet.nexus-portrait.zip'))
     await assertArchiveRoundTrips(result.archivePath, directoryPath, 'mini-pet')
   })
 })

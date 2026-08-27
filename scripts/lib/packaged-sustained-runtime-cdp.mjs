@@ -51,21 +51,22 @@ export function isLive2DFirstFrameReady(phase) {
   return phase === LIVE2D_READY_PHASE
 }
 
-export const LIVE2D_SNAPSHOT_SCRIPT = `(() => {
-  const shells = Array.from(document.querySelectorAll('.live2d-shell'))
-  const canvases = Array.from(document.querySelectorAll('canvas'))
-  const live2dCanvases = Array.from(document.querySelectorAll('.live2d-canvas canvas'))
-  const container = document.querySelector('.live2d-canvas') || null
-  const debug = window.__desktopPetLive2DDebug || null
-  const probe = window.__packagedSustainedRuntimeProbe || null
+/** Stringified into CDP page.evaluate — must stay closure-free. */
+export function collectLive2dSnapshot({ documentRef, locationRef, windowRef, readyPhase }) {
+  const shells = Array.from(documentRef.querySelectorAll('.live2d-shell'))
+  const canvases = Array.from(documentRef.querySelectorAll('canvas'))
+  const live2dCanvases = Array.from(documentRef.querySelectorAll('.live2d-canvas canvas'))
+  const container = documentRef.querySelector('.live2d-canvas') || null
+  const debug = windowRef.__desktopPetLive2DDebug || null
+  const probe = windowRef.__packagedSustainedRuntimeProbe || null
   const phase = container?.dataset?.live2dPhase
     || debug?.phase
     || null
-  const ready = phase === ${JSON.stringify(LIVE2D_READY_PHASE)}
+  const ready = phase === readyPhase
   return {
-    url: location.href,
-    visibilityState: document.visibilityState,
-    hidden: document.visibilityState === 'hidden',
+    url: locationRef.href,
+    visibilityState: documentRef.visibilityState,
+    hidden: documentRef.visibilityState === 'hidden',
     shellCount: shells.length,
     canvasCount: live2dCanvases.length,
     allCanvasCount: canvases.length,
@@ -80,15 +81,22 @@ export const LIVE2D_SNAPSHOT_SCRIPT = `(() => {
     motionCount: container?.dataset?.live2dMotionCount || null,
     expressionCount: container?.dataset?.live2dExpressionCount || null,
     ready,
-    hasErrorFallback: Boolean(document.querySelector('.app-error-fallback')),
-    hasOnboarding: Boolean(document.querySelector('.onboarding-backdrop, .onboarding-card')),
-    hasModelSetup: Boolean(document.querySelector('.model-setup-backdrop, .model-setup-card')),
+    hasErrorFallback: Boolean(documentRef.querySelector('.app-error-fallback')),
+    hasOnboarding: Boolean(documentRef.querySelector('.onboarding-backdrop, .onboarding-card')),
+    hasModelSetup: Boolean(documentRef.querySelector('.model-setup-backdrop, .model-setup-card')),
     debugPhase: debug?.phase ?? null,
     probeInstalled: probe?.installed === true,
     modelUpdateCount: Number.isFinite(probe?.modelUpdateCount) ? probe.modelUpdateCount : null,
     tickerTickCount: Number.isFinite(probe?.tickerTickCount) ? probe.tickerTickCount : null,
   }
-})()`
+}
+
+export const LIVE2D_SNAPSHOT_SCRIPT = `(${collectLive2dSnapshot.toString()})({
+  documentRef: document,
+  locationRef: location,
+  windowRef: window,
+  readyPhase: ${JSON.stringify(LIVE2D_READY_PHASE)}
+})`
 
 /**
  * Attach a page-local probe to the actual model.update and owning app ticker.

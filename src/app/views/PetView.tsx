@@ -13,6 +13,7 @@ type PetViewProps = UseAppControllerResult['petView'] & {
 export function PetView({
   settings,
   petModel,
+  petModelSelectionResolved,
   pet,
   voice,
   chat,
@@ -39,7 +40,9 @@ export function PetView({
   onboardingGuide,
 }: PetViewProps) {
   const characterPreset = useMemo(() => resolveCharacterPreset(), [])
-  const roamCapable = !settings.vtsEnabled && Boolean(petModel.spriteAtlas)
+  const roamCapable = petModelSelectionResolved
+    && !settings.vtsEnabled
+    && Boolean(petModel.spriteAtlas)
 
   useEffect(() => {
     const pending = window.desktopPet?.updatePetWindowState?.({ roamCapable })
@@ -48,6 +51,7 @@ export function PetView({
 
   const hasModalOverlay = Boolean(settingsDrawer) || Boolean(onboardingGuide)
   const useCompanionV2 = new URLSearchParams(window.location.search).get('uiV2') !== '0'
+    && petModelSelectionResolved
     && !settings.vtsEnabled
     && !petModel.spriteAtlas
     && Boolean(petModel.modelPath)
@@ -55,7 +59,7 @@ export function PetView({
   return (
     <div className={`desktop-pet-root desktop-pet-root--pet ${useCompanionV2 ? 'nexus-ui-v2' : ''} ${characterPreset.themeClassName} ${hasModalOverlay ? 'desktop-pet-root--pet-modal-open' : ''}`}>
       <div aria-hidden={hasModalOverlay ? true : undefined} inert={hasModalOverlay ? true : undefined}>
-        {useCompanionV2 ? (
+        {!petModelSelectionResolved ? null : useCompanionV2 ? (
           <FramelessCompanionSurface
             settings={settings}
             petModel={petModel}
@@ -76,6 +80,7 @@ export function PetView({
             <LegacyPetView
               settings={settings}
               petModel={petModel}
+              petModelSelectionResolved={petModelSelectionResolved}
               pet={pet}
               voice={voice}
               chat={chat}

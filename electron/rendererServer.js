@@ -112,6 +112,17 @@ function getRendererContentType(filePath) {
   }
 }
 
+function getAssetAccessControlOrigin(request) {
+  const requestOrigin = String(request.headers.origin ?? '').trim()
+  const allowedOrigins = new Set([
+    rendererServerUrl,
+    ...(_isDev && _useDevServer ? [new URL(_devServerUrl).origin] : []),
+  ].filter(Boolean))
+  return allowedOrigins.has(requestOrigin)
+    ? requestOrigin
+    : rendererServerUrl || `http://${rendererServerHost}:${rendererServerPreferredPort}`
+}
+
 export async function ensureRendererServer() {
   if (rendererServerUrl) {
     return rendererServerUrl
@@ -131,6 +142,7 @@ export async function ensureRendererServer() {
       try {
         const requestUrl = new URL(request.url ?? '/', `http://${rendererServerHost}`)
         let filePath = ''
+        let servedRoot = rendererRoot
 
         if (requestUrl.pathname.startsWith(`${_importedPetModelsRoute}/`)) {
           const rawImportedPath = decodeURIComponent(
@@ -138,46 +150,48 @@ export async function ensureRendererServer() {
           )
           const normalizedImportedPath = path.normalize(rawImportedPath).replace(/^(\.\.(\/|\\|$))+/, '')
           filePath = path.resolve(importedRoot, normalizedImportedPath)
-
-          if (!_isPathInsideRoot(importedRoot, filePath)) {
-            response.writeHead(403)
-            response.end('Forbidden')
-            return
-          }
+          servedRoot = importedRoot
         } else if (requestUrl.pathname.startsWith(`${_importedSpritePetModelsRoute}/`)) {
           const rawImportedPath = decodeURIComponent(
             requestUrl.pathname.slice(_importedSpritePetModelsRoute.length + 1),
           )
           const normalizedImportedPath = path.normalize(rawImportedPath).replace(/^(\.\.(\/|\\|$))+/, '')
           filePath = path.resolve(importedSpriteRoot, normalizedImportedPath)
-
-          if (!_isPathInsideRoot(importedSpriteRoot, filePath)) {
-            response.writeHead(403)
-            response.end('Forbidden')
-            return
-          }
+          servedRoot = importedSpriteRoot
         } else if (requestUrl.pathname.startsWith(`${_codexCustomSpritePetModelsRoute}/`)) {
           const rawCodexPath = decodeURIComponent(
             requestUrl.pathname.slice(_codexCustomSpritePetModelsRoute.length + 1),
           )
           const normalizedCodexPath = path.normalize(rawCodexPath).replace(/^(\.\.(\/|\\|$))+/, '')
           filePath = path.resolve(codexCustomSpriteRoot, normalizedCodexPath)
-
-          if (!_isPathInsideRoot(codexCustomSpriteRoot, filePath)) {
-            response.writeHead(403)
-            response.end('Forbidden')
-            return
-          }
+          servedRoot = codexCustomSpriteRoot
         } else {
           const rawPath = decodeURIComponent(requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname)
           const normalizedPath = path.normalize(rawPath).replace(/^(\.\.(\/|\\|$))+/, '')
           filePath = path.resolve(rendererRoot, `.${normalizedPath}`)
+          servedRoot = rendererRoot
+        }
 
-          if (!_isPathInsideRoot(rendererRoot, filePath)) {
-            response.writeHead(403)
-            response.end('Forbidden')
-            return
-          }
+        if (!_isPathInsideRoot(servedRoot, filePath)) {
+          response.writeHead(403)
+          response.end('Forbidden')
+          return
+        }
+
+        let realRoot = servedRoot
+        try {
+          realRoot = await fs.realpath(servedRoot)
+          filePath = await fs.realpath(filePath)
+        } catch {
+          response.writeHead(404)
+          response.end('Not Found')
+          return
+        }
+
+        if (!_isPathInsideRoot(realRoot, filePath)) {
+          response.writeHead(403)
+          response.end('Forbidden')
+          return
         }
 
         let fileStats
@@ -190,15 +204,28 @@ export async function ensureRendererServer() {
         }
 
         if (fileStats.isDirectory()) {
-          filePath = path.join(filePath, 'index.html')
+          const indexPath = path.join(filePath, 'index.html')
+          try {
+            filePath = await fs.realpath(indexPath)
+          } catch {
+            response.writeHead(404)
+            response.end('Not Found')
+            return
+          }
+          if (!_isPathInsideRoot(realRoot, filePath)) {
+            response.writeHead(403)
+            response.end('Forbidden')
+            return
+          }
         }
 
         const content = await fs.readFile(filePath)
         const isHashedAsset = /[-_.][a-zA-Z0-9]{7,}\.(js|css|wasm)$/.test(filePath)
         const headers = {
-          'Access-Control-Allow-Origin': rendererServerUrl || `http://${rendererServerHost}:${rendererServerPreferredPort}`,
+          'Access-Control-Allow-Origin': getAssetAccessControlOrigin(request),
           'Cache-Control': isHashedAsset ? 'max-age=31536000, immutable' : 'no-store',
           'Content-Type': getRendererContentType(filePath),
+          Vary: 'Origin',
         }
         if (filePath.endsWith('.html')) {
           // `'unsafe-eval'` is required by pixi.js's runtime shader path that
@@ -219,7 +246,7 @@ export async function ensureRendererServer() {
             "font-src 'self' data:",
             // PixiJS fetches a tiny data URL once to detect ImageBitmap
             // support before choosing its texture upload path.
-            "connect-src 'self' data: https: http:",
+            "connect-src 'self' data: https:",
             "media-src 'self' blob:",
             "worker-src 'self' blob:",
             "object-src 'none'",

@@ -164,7 +164,7 @@
   object-fit: contain;
 }
 
-.nexus-panel-v2__live2d :is(.live2d-canvas, .sprite-pet) {
+.nexus-panel-v2__live2d :is(.live2d-canvas, .sprite-pet, .portrait-puppet) {
   filter:
     drop-shadow(0 1px 1px rgb(255 255 255 / 16%))
     drop-shadow(0 -1px 1px rgb(28 22 33 / 14%));

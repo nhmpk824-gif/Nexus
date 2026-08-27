@@ -122,17 +122,17 @@ const COMPANION_ACTIVITY_METADATA: Record<CompanionActivityPhase, CompanionActiv
   },
   thinking: {
     motionToken: 'think',
-    spriteState: 'running',
+    spriteState: 'thinking',
     statusKey: 'pet.status.thinking',
   },
   listening: {
     motionToken: 'listen',
-    spriteState: 'waiting',
+    spriteState: 'listening',
     statusKey: 'voice_state.listening',
   },
   speaking: {
     motionToken: 'speak',
-    spriteState: 'review',
+    spriteState: 'speaking',
     statusKey: 'voice_state.speaking',
   },
   waiting: {

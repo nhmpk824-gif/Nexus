@@ -154,6 +154,85 @@ test('Live2D compatibility inspection blocks malformed motion and expression dec
   }
 })
 
+test('Live2D compatibility inspection rejects expression entries without a usable name', async () => {
+  const fixture = createModelFixture({
+    Version: 3,
+    FileReferences: {
+      Moc: 'Example.moc3',
+      Textures: ['texture.png'],
+      Expressions: [{ File: 'smile.exp3.json' }],
+      Motions: { Idle: [{ File: 'idle.motion3.json' }] },
+    },
+  }, [
+    'Example.moc3',
+    'texture.png',
+    'smile.exp3.json',
+    'idle.motion3.json',
+  ])
+
+  try {
+    const inspection = await inspectLive2dModelFile(fixture.modelPath)
+    assert.equal(inspection.compatibility.status, 'blocked')
+    assert.deepEqual(inspection.compatibility.errors, ['invalid-model-file'])
+    assert.deepEqual(inspection.compatibility.warnings, [])
+  } finally {
+    fixture.cleanup()
+  }
+})
+
+test('Live2D compatibility inspection ignores blank or missing motion sound and blocks unsafe sound paths', async () => {
+  const blankSound = createModelFixture({
+    Version: 3,
+    FileReferences: {
+      Moc: 'Example.moc3',
+      Textures: ['texture.png'],
+      Expressions: [{ Name: 'smile', File: 'smile.exp3.json' }],
+      Motions: {
+        Idle: [
+          { File: 'idle.motion3.json', Sound: '' },
+          { File: 'tap.motion3.json', Sound: 'sounds/missing.wav' },
+        ],
+      },
+    },
+  }, [
+    'Example.moc3',
+    'texture.png',
+    'smile.exp3.json',
+    'idle.motion3.json',
+    'tap.motion3.json',
+  ])
+  const unsafeSound = createModelFixture({
+    Version: 3,
+    FileReferences: {
+      Moc: 'Example.moc3',
+      Textures: ['texture.png'],
+      Expressions: [{ Name: 'smile', File: 'smile.exp3.json' }],
+      Motions: {
+        Idle: [{ File: 'idle.motion3.json', Sound: 'https://private.example/sound.wav' }],
+      },
+    },
+  }, [
+    'Example.moc3',
+    'texture.png',
+    'smile.exp3.json',
+    'idle.motion3.json',
+  ])
+
+  try {
+    const blankInspection = await inspectLive2dModelFile(blankSound.modelPath)
+    assert.equal(blankInspection.compatibility.status, 'ready')
+    assert.deepEqual(blankInspection.compatibility.errors, [])
+
+    const unsafeInspection = await inspectLive2dModelFile(unsafeSound.modelPath)
+    assert.equal(unsafeInspection.compatibility.status, 'blocked')
+    assert.deepEqual(unsafeInspection.compatibility.errors, ['unsafe-resource-path'])
+    assert.ok(!JSON.stringify(unsafeInspection.compatibility).includes('private'))
+  } finally {
+    blankSound.cleanup()
+    unsafeSound.cleanup()
+  }
+})
+
 test('Live2D compatibility inspection rejects resources outside the model folder', async () => {
   const fixture = createModelFixture({
     Version: 3,
@@ -169,6 +248,34 @@ test('Live2D compatibility inspection rejects resources outside the model folder
     assert.deepEqual(inspection.compatibility.errors, ['unsafe-resource-path'])
     assert.equal(inspection.compatibility.summary.unsafeResourceCount, 2)
     assert.ok(!JSON.stringify(inspection.compatibility).includes('outside'))
+  } finally {
+    fixture.cleanup()
+  }
+})
+
+test('Live2D compatibility inspection treats null motion sound as a schema error', async () => {
+  const fixture = createModelFixture({
+    Version: 3,
+    FileReferences: {
+      Moc: 'Example.moc3',
+      Textures: ['texture.png'],
+      Expressions: [{ Name: 'smile', File: 'smile.exp3.json' }],
+      Motions: {
+        Idle: [{ File: 'idle.motion3.json', Sound: null }],
+      },
+    },
+  }, [
+    'Example.moc3',
+    'texture.png',
+    'smile.exp3.json',
+    'idle.motion3.json',
+  ])
+
+  try {
+    const inspection = await inspectLive2dModelFile(fixture.modelPath)
+    assert.equal(inspection.compatibility.status, 'blocked')
+    assert.deepEqual(inspection.compatibility.errors, ['invalid-model-file'])
+    assert.equal(inspection.compatibility.summary.unsafeResourceCount, 0)
   } finally {
     fixture.cleanup()
   }

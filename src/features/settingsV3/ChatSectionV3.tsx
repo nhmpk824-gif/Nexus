@@ -1,5 +1,7 @@
 import { memo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
+import { PORTRAIT_PUPPET_IMAGE_GENERATION_PROMPT } from '../../../shared/portraitPuppetContract.js'
+import { PORTRAIT_PUPPET_V4_IMAGE_GENERATION_PROMPT } from '../../../shared/portraitPuppetV4Contract.js'
 import { RELATIONSHIP_OPTIONS } from '../../lib/relationshipTypes.ts'
 import { ChatStudioV3 } from './ChatStudioV3.tsx'
 import type {
@@ -19,6 +21,7 @@ import {
   SettingsV3Row,
   SettingsV3Section,
   SettingsV3Switch,
+  SettingsV3Toolbar,
 } from './SettingsV3Primitives.tsx'
 import './settings-v3-collection.css'
 import './chat-section-v3.css'
@@ -26,6 +29,7 @@ import './chat-section-v3.css'
 type StatusMessage = {
   ok: boolean
   message: string
+  recommendation?: string
 } | null
 
 export type ChatSectionV3Props = {
@@ -95,6 +99,7 @@ export const ChatSectionV3 = memo(function ChatSectionV3(props: ChatSectionV3Pro
   const petModelLabel = translatePetText(petModel?.label)
     || petModel?.label
     || ti('settings.chat.sprite_pet_fallback_label')
+  const importStatus = props.petModelStatus ?? props.codexPetCatalogStatus
   function selectRelationshipType(value: CompanionRelationshipType) {
     setDraft((prev) => ({ ...prev, companionRelationshipType: value }))
   }
@@ -143,6 +148,82 @@ export const ChatSectionV3 = memo(function ChatSectionV3(props: ChatSectionV3Pro
             </select>
           </SettingsV3Field>
         </SettingsV3Row>
+        <SettingsV3Row
+          icon="image"
+          label={ti('settings.chat.import_model')}
+          hint={ti('settings.chat.model_import_hint')}
+        >
+          <button
+            type="button"
+            className="settings-v3-action"
+            disabled={props.importingPetModel}
+            onClick={props.onImportPetModel}
+          >
+            {props.importingPetModel ? ti('settings.chat.importing_model') : ti('settings.chat.import_model')}
+          </button>
+        </SettingsV3Row>
+        <SettingsV3Row
+          icon="image"
+          label={ti('settings.chat.create_sprite_pet_from_image')}
+          hint={ti('settings.chat.create_sprite_pet_from_image_hint')}
+        >
+          <button
+            type="button"
+            className="settings-v3-action"
+            disabled={props.importingPetModel}
+            onClick={props.onCreateSpritePetFromImage}
+          >
+            {props.importingPetModel ? ti('settings.chat.importing_model') : ti('settings.chat.create_sprite_pet_from_image')}
+          </button>
+        </SettingsV3Row>
+        <SettingsV3Disclosure
+          title={ti('settings.chat.portrait_layered_prompt_title')}
+          description={ti('settings.chat.portrait_layered_prompt_hint')}
+        >
+          <SettingsV3Notice
+            tone="info"
+            title={ti('settings.chat.portrait_layered_prompt_notice')}
+          />
+          <SettingsV3Field label={ti('settings.chat.portrait_layered_prompt_title')}>
+            <textarea
+              readOnly
+              rows={18}
+              spellCheck={false}
+              value={PORTRAIT_PUPPET_V4_IMAGE_GENERATION_PROMPT}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </SettingsV3Field>
+          <SettingsV3Toolbar>
+            <button
+              type="button"
+              onClick={() => void navigator.clipboard?.writeText(PORTRAIT_PUPPET_V4_IMAGE_GENERATION_PROMPT)}
+            >
+              {ti('settings.chat.portrait_image_prompt_copy')}
+            </button>
+          </SettingsV3Toolbar>
+        </SettingsV3Disclosure>
+        <SettingsV3Disclosure
+          title={ti('settings.chat.portrait_image_prompt_title')}
+          description={ti('settings.chat.portrait_image_prompt_hint')}
+        >
+          <SettingsV3Field label={ti('settings.chat.portrait_image_prompt_title')}>
+            <textarea
+              readOnly
+              rows={9}
+              spellCheck={false}
+              value={PORTRAIT_PUPPET_IMAGE_GENERATION_PROMPT}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </SettingsV3Field>
+          <SettingsV3Toolbar>
+            <button
+              type="button"
+              onClick={() => void navigator.clipboard?.writeText(PORTRAIT_PUPPET_IMAGE_GENERATION_PROMPT)}
+            >
+              {ti('settings.chat.portrait_image_prompt_copy')}
+            </button>
+          </SettingsV3Toolbar>
+        </SettingsV3Disclosure>
       </SettingsV3Section>
 
       <SettingsV3Section
@@ -190,12 +271,14 @@ export const ChatSectionV3 = memo(function ChatSectionV3(props: ChatSectionV3Pro
         </SettingsV3Row>
       </SettingsV3Disclosure>
 
-      {(props.petModelStatus || props.codexPetCatalogStatus) ? (
+      {importStatus ? (
         <SettingsV3Notice
-          tone={(props.petModelStatus ?? props.codexPetCatalogStatus)?.ok ? 'success' : 'error'}
-          title={(props.petModelStatus ?? props.codexPetCatalogStatus)?.message ?? ''}
+          tone={importStatus.ok ? 'success' : 'error'}
+          title={importStatus.message}
           announce
-        />
+        >
+          {importStatus.recommendation}
+        </SettingsV3Notice>
       ) : null}
 
       <SettingsV3Disclosure

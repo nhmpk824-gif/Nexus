@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import {
@@ -19,7 +20,12 @@ import {
   DEFAULT_PET_MODEL_ID,
   getPetModelPreset,
   getPetModelPresets,
+  isPetModelSelectionResolved,
+  nextPetModelDiscoveryAfterError,
+  nextPetModelDiscoveryBeforeLoad,
+  shouldRepairPetModelSelection,
   type PetModelDefinition,
+  type PetModelDiscoveryStatus,
 } from '../../features/pet'
 import {
   CHAT_STORAGE_KEY,
@@ -42,6 +48,8 @@ import {
   DEFAULT_RUNTIME_SNAPSHOT,
   normalizePlatformProfile,
 } from './desktopBridgeDefaults.ts'
+
+const PET_MODEL_LOAD_RETRY_DELAYS_MS = [400, 1200, 3000] as const
 
 type MemoryController = ReturnType<typeof import('../../hooks/useMemory').useMemory>
 type ChatController = ReturnType<typeof import('../../hooks/useChat').useChat>
@@ -153,7 +161,14 @@ export function useDesktopBridge({
   pet,
   voice,
 }: UseDesktopBridgeOptions) {
-  const [discoveredPetModels, setDiscoveredPetModels] = useState<PetModelDefinition[]>([])
+  const [petModelDiscovery, setPetModelDiscovery] = useState<{
+    status: PetModelDiscoveryStatus
+    models: PetModelDefinition[]
+  }>({ status: 'pending', models: [] })
+  const discoveredPetModels = petModelDiscovery.models
+  const petModelDiscoveryStatus = petModelDiscovery.status
+  const petModelLoadGenerationRef = useRef(0)
+  const petModelRetryAttemptRef = useRef(0)
   const [petRuntimeContinuousVoiceActive, setPetRuntimeContinuousVoiceActive] = useState(false)
   const [remotePanelSettingsOpen, setRemotePanelSettingsOpen] = useState(false)
   const [platformProfile, setPlatformProfile] = useState<PlatformProfile>(DEFAULT_PLATFORM_PROFILE)
@@ -194,9 +209,11 @@ export function useDesktopBridge({
     window.localStorage.setItem(VOICE_TRIGGER_DIRECT_SEND_MIGRATION_KEY, '1')
     const timerId = window.setTimeout(() => {
       void commitSettingsUpdate((current) => {
+        if (current.voiceTriggerMode === 'wake_word' || current.wakeWordEnabled) {
+          return current
+        }
         if (
           current.voiceTriggerMode === 'direct_send'
-          && !current.wakeWordEnabled
           && getDirectSendFallbackWakeWord(current) === current.wakeWord
         ) {
           return current
@@ -223,12 +240,38 @@ export function useDesktopBridge({
     () => getPetModelPreset(settings.petModelId, discoveredPetModels),
     [discoveredPetModels, settings.petModelId],
   )
+  const petModelSelectionResolved = isPetModelSelectionResolved(
+    petModelDiscoveryStatus,
+    settings.petModelId,
+  )
 
   const loadPetModels = useCallback(async () => {
-    const models = await window.desktopPet?.listPetModels?.().catch(() => []) ?? []
-    const nextModels = Array.isArray(models) ? models : []
-    setDiscoveredPetModels(nextModels)
-    return nextModels
+    const generation = petModelLoadGenerationRef.current + 1
+    petModelLoadGenerationRef.current = generation
+    setPetModelDiscovery(nextPetModelDiscoveryBeforeLoad)
+    const listPetModels = window.desktopPet?.listPetModels
+    if (!listPetModels) {
+      if (generation === petModelLoadGenerationRef.current) {
+        petModelRetryAttemptRef.current = 0
+        setPetModelDiscovery({ status: 'ready', models: [] })
+      }
+      return []
+    }
+
+    try {
+      const models = await listPetModels()
+      const nextModels = Array.isArray(models) ? models : []
+      if (generation === petModelLoadGenerationRef.current) {
+        petModelRetryAttemptRef.current = 0
+        setPetModelDiscovery({ status: 'ready', models: nextModels })
+      }
+      return nextModels
+    } catch {
+      if (generation === petModelLoadGenerationRef.current) {
+        setPetModelDiscovery(nextPetModelDiscoveryAfterError)
+      }
+      return []
+    }
   }, [])
 
   useEffect(() => {
@@ -240,13 +283,39 @@ export function useDesktopBridge({
   }, [loadPetModels])
 
   useEffect(() => {
-    if (!petModelPresets.length || petModelPresets.some((preset) => preset.id === settings.petModelId)) {
+    if (petModelDiscoveryStatus !== 'failed') return undefined
+    const delayMs = PET_MODEL_LOAD_RETRY_DELAYS_MS[petModelRetryAttemptRef.current]
+    if (delayMs == null) return undefined
+    petModelRetryAttemptRef.current += 1
+    const timerId = window.setTimeout(() => {
+      void loadPetModels()
+    }, delayMs)
+    return () => window.clearTimeout(timerId)
+  }, [loadPetModels, petModelDiscoveryStatus])
+
+  useEffect(() => (
+    window.desktopPet?.subscribePetModelLibraryChanged?.(() => {
+      petModelRetryAttemptRef.current = 0
+      void loadPetModels()
+    })
+  ), [loadPetModels])
+
+  useEffect(() => {
+    if (!shouldRepairPetModelSelection(
+      petModelDiscoveryStatus,
+      settings.petModelId,
+      petModelPresets,
+    )) {
       return
     }
 
     const timerId = window.setTimeout(() => {
       setSettings((current) => {
-        if (petModelPresets.some((preset) => preset.id === current.petModelId)) {
+        if (!shouldRepairPetModelSelection(
+          petModelDiscoveryStatus,
+          current.petModelId,
+          petModelPresets,
+        )) {
           return current
         }
 
@@ -258,7 +327,7 @@ export function useDesktopBridge({
     }, 0)
 
     return () => window.clearTimeout(timerId)
-  }, [petModelPresets, setSettings, settings.petModelId])
+  }, [petModelDiscoveryStatus, petModelPresets, setSettings, settings.petModelId])
 
   useEffect(() => {
     document.documentElement.dataset.windowView = view
@@ -376,14 +445,17 @@ export function useDesktopBridge({
 
     const pending = window.desktopPet?.updateRuntimeState?.(nextRuntimeState)
     pending?.catch(() => undefined)
+  }, [chat.assistantActivity, reminderTasks, settingsOpen, view, voice.continuousVoiceActive, voice.hearingRuntime, voice.voiceState, voice.wakewordState])
 
+  useEffect(() => {
+    if (view !== 'panel') return undefined
     return () => {
       const cleanup = window.desktopPet?.updateRuntimeState?.({
         panelSettingsOpen: false,
       })
       cleanup?.catch(() => undefined)
     }
-  }, [chat.assistantActivity, reminderTasks, settingsOpen, view, voice.continuousVoiceActive, voice.hearingRuntime, voice.voiceState, voice.wakewordState])
+  }, [view])
 
   // `setPetHotspotActive` is a stable useState setter; depending on it
   // (rather than the whole pet memo) prevents the subscriber from being
@@ -526,6 +598,8 @@ export function useDesktopBridge({
     petRuntimeContinuousVoiceActive,
     remotePanelSettingsOpen,
     petModelPresets,
+    petModelPresetsReady: petModelDiscoveryStatus === 'ready',
+    petModelSelectionResolved,
     petModel,
     loadPetModels,
   }

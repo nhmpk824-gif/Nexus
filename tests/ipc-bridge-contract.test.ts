@@ -179,6 +179,25 @@ test('preload power event subscription forwards payloads and unregisters handler
   assert.equal(removedChannels[0]?.handler, handler)
 })
 
+test('pet model library subscription forwards changes and unregisters handlers', () => {
+  const { desktopPet, subscribedChannels, removedChannels } = loadPreloadDesktopPetApi()
+  let changeCount = 0
+  const subscribe = desktopPet.subscribePetModelLibraryChanged as ((listener: () => void) => () => void) | undefined
+
+  assert.equal(typeof subscribe, 'function')
+  const unsubscribe = subscribe(() => { changeCount += 1 })
+  const handlers = subscribedChannels.get('pet-model:library-changed')
+
+  assert.equal(handlers?.size, 1)
+  const [handler] = [...handlers ?? []]
+  handler({})
+  assert.equal(changeCount, 1)
+
+  unsubscribe()
+  assert.equal(subscribedChannels.get('pet-model:library-changed')?.size ?? 0, 0)
+  assert.equal(removedChannels.find((item) => item.channel === 'pet-model:library-changed')?.handler, handler)
+})
+
 test('power event kinds stay aligned between main bridge and renderer types', () => {
   const windowIpc = fs.readFileSync(WINDOW_IPC_PATH, 'utf8')
   const autonomyTypes = fs.readFileSync(AUTONOMY_TYPES_PATH, 'utf8')

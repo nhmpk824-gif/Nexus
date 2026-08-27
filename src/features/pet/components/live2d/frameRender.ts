@@ -14,6 +14,9 @@ import {
   resolvePerformanceAccentWindowMs,
 } from './accentStyle.ts'
 import { updateBlink, type BlinkState } from './blink.ts'
+import { RIGHT_BLINK_LAG_MS, createBlinkLane } from '../../blink.ts'
+import { createSaccadeState, stepIdleSaccade, type SaccadeState } from '../../idleSaccades.ts'
+import { resolveSpeechVisemes } from '../../speechVisemes.ts'
 import { clamp } from '../../../../lib/common.ts'
 import type {
   CubismCoreModel,
@@ -42,6 +45,8 @@ export type FrameRenderState = {
   smoothedGaze: GazeTarget
   smoothedSpeechLevel: number
   blink: BlinkState
+  blinkRight?: BlinkState
+  saccade?: SaccadeState
 }
 
 export type FrameRenderInputs = {
@@ -73,6 +78,7 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
   const roundParam = modelDefinition.mouthParams?.round
   const narrowParam = modelDefinition.mouthParams?.narrow
   const smileParam = modelDefinition.mouthParams?.smile
+  const downParam = modelDefinition.mouthParams?.down
   const now = performance.now()
   const seconds = now / 1000
 
@@ -98,14 +104,25 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
     y: state.smoothedGaze.y + (targetGazeY - state.smoothedGaze.y) * gazeInterpolation,
   }
 
-  let gazeX = state.smoothedGaze.x
-  let gazeY = state.smoothedGaze.y
+  const saccade = stepIdleSaccade(
+    state.saccade ?? (state.saccade = createSaccadeState()),
+    now,
+    activeExpressionSlot === 'idle' && speechLevelTarget < 0.015,
+  )
+  let gazeX = clamp(state.smoothedGaze.x + saccade.x, -1, 1)
+  let gazeY = clamp(state.smoothedGaze.y + saccade.y, -1, 1)
   let angleZ = Math.sin(seconds * 0.95) * 0.65
   let bodyAngleX = Math.sin(seconds * 0.82) * 0.55 + gazeX * 1.9
-  const bodyAngleY = 0
   let smileLevel = 0
   let cheekLevel = 0
   let browFormLevel = 0
+  let browLYLevel = 0
+  let browRYLevel = 0
+  let browLAngleLevel = 0
+  let browRAngleLevel = 0
+  let eyeSmileLevel = 0
+  let eyeFormLevel = 0
+  let mouthDownLevel = 0
   let breathLevel = 0.22 + (Math.sin(seconds * 2.1) + 1) * 0.1
 
   // ── Base expression-slot rig overlays ────────────────────────────────
@@ -114,6 +131,7 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
       angleZ += Math.sin(seconds * 3.4) * 0.9
       bodyAngleX += gazeX * 1.8
       smileLevel += 0.08
+      eyeSmileLevel += 0.1
       breathLevel += 0.06
       break
     case 'thinking':
@@ -122,6 +140,12 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
       angleZ += Math.sin(seconds * 1.8) * 2.4
       bodyAngleX += Math.sin(seconds * 0.9) * 1.15
       browFormLevel -= 0.18
+      browLYLevel += 0.06
+      browRYLevel += 0.1
+      browLAngleLevel += 0.18
+      browRAngleLevel += 0.14
+      eyeFormLevel -= 0.1
+      mouthDownLevel += 0.1
       breathLevel -= 0.04
       break
     case 'speaking':
@@ -129,12 +153,17 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
       bodyAngleX += Math.sin(seconds * 4.9) * 0.95
       smileLevel += 0.14 + clamp(speechLevelTarget, 0, 1) * 0.22
       cheekLevel += clamp(speechLevelTarget, 0, 1) * 0.06
+      eyeSmileLevel += 0.12 + clamp(speechLevelTarget, 0, 1) * 0.1
       breathLevel += 0.08
       break
     case 'happy':
       angleZ += 1.8
       smileLevel += 0.18
       cheekLevel += 0.1
+      eyeSmileLevel += 0.55
+      browLAngleLevel -= 0.06
+      browRAngleLevel -= 0.06
+      eyeFormLevel -= 0.08
       breathLevel += 0.04
       break
     case 'sleepy':
@@ -142,6 +171,11 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
       gazeY = clamp(gazeY + 0.26, -1, 1)
       angleZ += Math.sin(seconds * 0.66) * 1.15
       bodyAngleX *= 0.58
+      browLYLevel -= 0.14
+      browRYLevel -= 0.14
+      browLAngleLevel += 0.1
+      browRAngleLevel += 0.1
+      eyeFormLevel -= 0.12
       breathLevel -= 0.08
       smileLevel -= 0.05
       break
@@ -150,23 +184,31 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
       gazeY = clamp(gazeY - 0.2, -1, 1)
       smileLevel += 0.16
       cheekLevel += 0.1
+      eyeSmileLevel += 0.55
       break
     case 'touchFace':
       angleZ += Math.sin(seconds * 7.2) * 0.6
       gazeX *= 0.28
       smileLevel += 0.19
       cheekLevel += 0.12
+      eyeSmileLevel += 0.62
       break
     case 'touchBody':
       angleZ += 1.3
       bodyAngleX += gazeX * 2.2
       smileLevel += 0.1
+      eyeSmileLevel += 0.18
       break
     case 'surprised':
       gazeY = clamp(gazeY - 0.15, -1, 1)
       angleZ += Math.sin(seconds * 6.2) * 1.6
       breathLevel += 0.12
       browFormLevel += 0.22
+      browLYLevel += 0.32
+      browRYLevel += 0.32
+      browLAngleLevel -= 0.1
+      browRAngleLevel -= 0.1
+      eyeFormLevel += 0.28
       break
     case 'confused':
       gazeX *= 0.5
@@ -174,6 +216,12 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
       angleZ += Math.sin(seconds * 1.4) * 3.2
       bodyAngleX += Math.sin(seconds * 0.7) * 1.4
       browFormLevel -= 0.24
+      browLYLevel += 0.12
+      browRYLevel -= 0.16
+      browLAngleLevel += 0.22
+      browRAngleLevel -= 0.2
+      eyeFormLevel -= 0.06
+      mouthDownLevel += 0.22
       breathLevel -= 0.02
       break
     case 'embarrassed':
@@ -182,6 +230,9 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
       angleZ += 2.6
       smileLevel += 0.12
       cheekLevel += 0.18
+      eyeSmileLevel += 0.38
+      browLYLevel -= 0.04
+      browRYLevel -= 0.06
       breathLevel += 0.06
       break
     case 'idle':
@@ -199,6 +250,7 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
         bodyAngleX += performanceCuePulse * 4.2
         smileLevel += 0.24 * performanceCueAccent
         cheekLevel += 0.16 * performanceCueAccent
+        eyeSmileLevel += 0.18 * performanceCueAccent
         break
       case 'thinking':
         gazeY = clamp(gazeY + 0.12 * performanceCueAccent, -1, 1)
@@ -216,6 +268,7 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
         bodyAngleX += performanceCuePulse * 4.8
         smileLevel += 0.18 * performanceCueAccent
         cheekLevel += 0.16 * performanceCueAccent
+        eyeSmileLevel += 0.12 * performanceCueAccent
         break
       case 'touchFace':
         gazeX *= 0.18
@@ -273,6 +326,8 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
 
   internalModel.focusController?.focus(gazeX, gazeY)
 
+  const bodyAngleY = gazeY * -6 * (activeExpressionSlot === 'sleepy' ? 0.55 : 1)
+
   if (!coreModel?.addParameterValueById) return
 
   // ── Speech-driven mouth animation ────────────────────────────────────
@@ -281,12 +336,13 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
     targetSpeechLevel > state.smoothedSpeechLevel ? 0.34 : 0.2
   )
 
-  const mouthLevel = state.smoothedSpeechLevel < 0.015 ? 0 : state.smoothedSpeechLevel
+  const visemes = resolveSpeechVisemes(state.smoothedSpeechLevel, now)
 
-  addParameterValue(coreModel, openParam, mouthLevel * 0.95)
-  addParameterValue(coreModel, roundParam, mouthLevel * 0.24)
-  addParameterValue(coreModel, narrowParam, mouthLevel * 0.08)
+  addParameterValue(coreModel, openParam, visemes.open * 0.95)
+  addParameterValue(coreModel, roundParam, visemes.round)
+  addParameterValue(coreModel, narrowParam, visemes.narrow)
   addParameterValue(coreModel, smileParam, smileLevel)
+  addParameterValue(coreModel, downParam, mouthDownLevel)
   addParameterValue(coreModel, rigParams?.angleX, gazeX * 18)
   addParameterValue(coreModel, rigParams?.angleY, gazeY * -12)
   addParameterValue(coreModel, rigParams?.angleZ, angleZ)
@@ -294,25 +350,42 @@ export function applyLive2DFrame(inputs: FrameRenderInputs) {
   addParameterValue(coreModel, rigParams?.bodyAngleY, bodyAngleY)
   addParameterValue(coreModel, rigParams?.eyeBallX, gazeX)
   addParameterValue(coreModel, rigParams?.eyeBallY, gazeY)
+  addParameterValue(coreModel, rigParams?.eyeBallForm, eyeSmileLevel * 0.4)
   addParameterValue(coreModel, rigParams?.browForm, browFormLevel)
+  addParameterValue(coreModel, rigParams?.browLY, browLYLevel)
+  addParameterValue(coreModel, rigParams?.browRY, browRYLevel)
+  addParameterValue(coreModel, rigParams?.browLX, gazeX * 0.16)
+  addParameterValue(coreModel, rigParams?.browRX, gazeX * 0.16)
+  addParameterValue(coreModel, rigParams?.browLAngle, browLAngleLevel)
+  addParameterValue(coreModel, rigParams?.browRAngle, browRAngleLevel)
+  addParameterValue(coreModel, rigParams?.browLForm, browFormLevel)
+  addParameterValue(coreModel, rigParams?.browRForm, browFormLevel)
   addParameterValue(coreModel, rigParams?.cheek, cheekLevel)
   addParameterValue(coreModel, rigParams?.breath, breathLevel)
+  addParameterValue(coreModel, rigParams?.eyeLSmile, eyeSmileLevel)
+  addParameterValue(coreModel, rigParams?.eyeRSmile, eyeSmileLevel)
+  addParameterValue(coreModel, rigParams?.eyeLForm, eyeFormLevel)
+  addParameterValue(coreModel, rigParams?.eyeRForm, eyeFormLevel)
 
   // ── Eye blink ─────────────────────────────────────────────────────────
-  let eyeOpen = updateBlink(state.blink, now)
-  if (activeExpressionSlot === 'thinking') {
-    eyeOpen *= 0.9
+  const blinkRight = state.blinkRight ?? createBlinkLane(
+    state.blink.phaseStartedAt,
+    state.blink.nextBlinkAt + RIGHT_BLINK_LAG_MS,
+  )
+  state.blinkRight = blinkRight
+  const scaleLid = (eyeOpen: number) => {
+    let open = eyeOpen
+    if (activeExpressionSlot === 'thinking') open *= 0.9
+    if (activeExpressionSlot === 'sleepy') open *= 0.72
+    if (performanceCueAccentStyle === 'sparkle') {
+      open = clamp(open + performanceCueAccent * 0.16, 0, 1.12)
+    }
+    if (performanceCueAccentStyle === 'write') open *= 0.94
+    return open
   }
-  if (activeExpressionSlot === 'sleepy') {
-    eyeOpen *= 0.72
-  }
-  if (performanceCueAccentStyle === 'sparkle') {
-    eyeOpen = clamp(eyeOpen + performanceCueAccent * 0.16, 0, 1.12)
-  }
-  if (performanceCueAccentStyle === 'write') {
-    eyeOpen *= 0.94
-  }
+  const eyeOpenLeft = scaleLid(updateBlink(state.blink, now))
+  const eyeOpenRight = scaleLid(updateBlink(blinkRight, now))
 
-  addParameterValue(coreModel, rigParams?.eyeLOpen, eyeOpen - 1)
-  addParameterValue(coreModel, rigParams?.eyeROpen, eyeOpen - 1)
+  addParameterValue(coreModel, rigParams?.eyeLOpen, eyeOpenLeft - 1)
+  addParameterValue(coreModel, rigParams?.eyeROpen, eyeOpenRight - 1)
 }

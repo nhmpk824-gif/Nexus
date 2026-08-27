@@ -18,6 +18,7 @@ import {
   auditSpritePetPackage,
 } from './spritePetVisualAudit.js'
 import { pathExists, readJsonFile } from './fsUtils.js'
+import { escapeXml, normalizeWhitespace as normalizeText } from '../textNormalize.js'
 
 const DEFAULT_PACKAGE_DIRNAME = 'final-package'
 const DEFAULT_CREATOR_KIT_QA_DIRNAME = 'qa'
@@ -39,19 +40,6 @@ const IMAGE_MIME_TYPES = {
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
   '.webp': 'image/webp',
-}
-
-function normalizeText(value) {
-  return String(value ?? '').trim().replace(/\s+/g, ' ')
-}
-
-function escapeXml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
 }
 
 function getImageMimeType(sourcePath) {

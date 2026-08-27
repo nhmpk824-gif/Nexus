@@ -11,6 +11,7 @@ import {
   formatSpritePetDisplayName,
 } from './spritePetPackage.js'
 import { pathExists } from './fsUtils.js'
+import { escapeXml, normalizeWhitespace as normalizeText } from '../textNormalize.js'
 
 const DEFAULT_OUTPUT_DIR = 'output/pet-creator-kits'
 
@@ -70,19 +71,6 @@ function slugifySpritePetId(value) {
     .toLowerCase()
 
   return normalized || 'sprite-pet'
-}
-
-function normalizeText(value) {
-  return String(value ?? '').trim().replace(/\s+/g, ' ')
-}
-
-function escapeXml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
 }
 
 function buildBasePrompt({ displayName, concept, styleNotes }) {

@@ -51,6 +51,11 @@ contextBridge.exposeInMainWorld('desktopPet', {
     return () => ipcRenderer.removeListener('app:power-event', handler)
   },
   listPetModels: () => ipcRenderer.invoke('pet-model:list'),
+  subscribePetModelLibraryChanged: (listener) => {
+    const handler = () => listener()
+    ipcRenderer.on('pet-model:library-changed', handler)
+    return () => ipcRenderer.removeListener('pet-model:library-changed', handler)
+  },
   importPetModel: () => ipcRenderer.invoke('pet-model:import'),
   importCodexPetGallery: (input) => ipcRenderer.invoke('pet-model:import-codex-gallery', input),
   listCodexPetGallery: (payload) => ipcRenderer.invoke('pet-model:list-codex-gallery', payload),

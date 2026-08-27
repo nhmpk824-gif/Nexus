@@ -1,55 +1,38 @@
-// Eye-blink state machine for the Live2D model.  A blink runs through three
-// phases (idle → closing → opening) on a randomized timer; updateBlink
-// returns the current eye-open level (1 = fully open, 0 = fully closed) which
-// the canvas applies to the rig parameters.
+// Live2D wrapper around the shared eyelid timeline. Interval spacing stays
+// randomized here; v4 uses a hashed interval so tests stay deterministic.
 
-import { clamp } from '../../../../lib/common.ts'
+import {
+  BLINK_DOUBLE_CHANCE,
+  RIGHT_BLINK_LAG_MS,
+  blinkHash,
+  createBlinkLane,
+  stepBlinkLane,
+  type BlinkLane,
+} from '../../blink.ts'
 
-const BLINK_CLOSE_MS = 88
-const BLINK_OPEN_MS = 136
+export type BlinkState = BlinkLane
 
-export type BlinkState = {
-  phaseStartedAt: number
-  phase: 'idle' | 'closing' | 'opening'
-  nextBlinkAt: number
+export function createBlinkState(lagMs = 0): BlinkState {
+  const now = performance.now()
+  return createBlinkLane(now, now + 1_500 + Math.random() * 2_400 + lagMs)
 }
 
-export function createBlinkState(): BlinkState {
+export function createBlinkPair() {
+  const left = createBlinkState()
   return {
-    phaseStartedAt: performance.now(),
-    phase: 'idle',
-    nextBlinkAt: performance.now() + 1_500 + Math.random() * 2_400,
+    left,
+    right: createBlinkLane(left.phaseStartedAt, left.nextBlinkAt + RIGHT_BLINK_LAG_MS),
   }
-}
-
-function scheduleNextBlink(blinkState: BlinkState) {
-  blinkState.phase = 'idle'
-  blinkState.phaseStartedAt = performance.now()
-  blinkState.nextBlinkAt = blinkState.phaseStartedAt + 2_400 + Math.random() * 3_600
 }
 
 export function updateBlink(blinkState: BlinkState, now: number) {
-  if (blinkState.phase === 'idle' && now >= blinkState.nextBlinkAt) {
-    blinkState.phase = 'closing'
-    blinkState.phaseStartedAt = now
-  }
-
-  if (blinkState.phase === 'closing') {
-    const progress = clamp((now - blinkState.phaseStartedAt) / BLINK_CLOSE_MS, 0, 1)
-    if (progress >= 1) {
-      blinkState.phase = 'opening'
-      blinkState.phaseStartedAt = now
-    }
-    return 1 - progress
-  }
-
-  if (blinkState.phase === 'opening') {
-    const progress = clamp((now - blinkState.phaseStartedAt) / BLINK_OPEN_MS, 0, 1)
-    if (progress >= 1) {
-      scheduleNextBlink(blinkState)
-    }
-    return progress
-  }
-
-  return 1
+  return stepBlinkLane(
+    blinkState,
+    now,
+    (nowMs) => nowMs + 2_400 + Math.random() * 3_600,
+    {
+      doubleChance: BLINK_DOUBLE_CHANCE,
+      random: () => blinkHash(Math.floor(now / 250) * 7 + 40),
+    },
+  )
 }

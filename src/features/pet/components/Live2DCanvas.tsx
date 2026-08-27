@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Live2DModel as Live2DModelType } from '@jannchie/pixi-live2d-display/cubism4'
+import { summarizeCubismDeclaredResources } from '../../../../shared/live2dModelResources.js'
 import type { PetMood, PetTouchZone, SpeechLevelSource } from '../../../types/index.ts'
 import {
   buildRuntimePetModelDefinition,
-  summarizeCubismDeclaredResources,
   type CubismModelFile,
   type PetModelDefinition,
   type PetExpressionSlot,
 } from '../models.ts'
 import type { PetPerformanceCue } from '../performance.ts'
-import { createBlinkState } from './live2d/blink.ts'
+import { createBlinkPair } from './live2d/blink.ts'
+import { createSaccadeState } from '../idleSaccades.ts'
 import { resolveExpressionSlot, resolveGestureGroup, resolveMotionGroup } from './live2d/expressions.ts'
 import { applyLive2DFrame, type FrameRenderState } from './live2d/frameRender.ts'
 import { layoutLive2DModel, MIN_CANVAS_HEIGHT, MIN_CANVAS_WIDTH } from './live2d/layout.ts'
@@ -41,6 +42,17 @@ import { ensureLive2DVendorScripts } from './live2d/vendor.ts'
 const MODEL_LOAD_TIMEOUT_MS = 15_000
 const MODEL_LOAD_MAX_ATTEMPTS = 3
 const MOTION_TRIGGER_COOLDOWN_MS = 1500
+
+function createPetFrameState(): FrameRenderState {
+  const pair = createBlinkPair()
+  return {
+    smoothedGaze: { x: 0, y: 0 },
+    smoothedSpeechLevel: 0,
+    blink: pair.left,
+    blinkRight: pair.right,
+    saccade: createSaccadeState(),
+  }
+}
 
 type Live2DCanvasProps = {
   modelDefinition: PetModelDefinition
@@ -91,16 +103,17 @@ export function Live2DCanvas({
     x: clamp(gazeTarget.x, -1, 1),
     y: clamp(gazeTarget.y, -1, 1),
   })
-  const frameStateRef = useRef<FrameRenderState>({
-    smoothedGaze: { x: 0, y: 0 },
-    smoothedSpeechLevel: 0,
-    blink: createBlinkState(),
-  })
+  const frameStateRef = useRef<FrameRenderState>(createPetFrameState())
   const contextRecoveryAttemptsRef = useRef(0)
+  const modelDefinitionRef = useRef(modelDefinition)
   const activeModelDefinitionRef = useRef(buildRuntimePetModelDefinition(modelDefinition))
   const [error, setError] = useState<string | null>(null)
   const [modelReady, setModelReady] = useState(false)
   const [runtimeRevision, setRuntimeRevision] = useState(0)
+
+  useEffect(() => {
+    modelDefinitionRef.current = modelDefinition
+  }, [modelDefinition])
 
   const syncPlayback = useCallback((app: PixiApplication | null, disposed: boolean) => {
     syncLive2DPlayback(app, {
@@ -309,6 +322,7 @@ export function Live2DCanvas({
 
   useEffect(() => {
     const ownership = createLive2DAsyncOwnershipCoordinator()
+    const modelDefinitionAtBoot = modelDefinitionRef.current
     let attempts = 0
     let handleVisibilityChange: (() => void) | null = null
     let detachContextLossListener: (() => void) | null = null
@@ -316,6 +330,7 @@ export function Live2DCanvas({
     const pendingRafIds = new Set<number>()
     const frameState = frameStateRef.current
     const bootStartedAt = performance.now()
+    let runtimeDestroyScheduled = false
 
     function isDisposed() {
       return ownership.isDisposed
@@ -352,7 +367,11 @@ export function Live2DCanvas({
       return promise
     }
 
-    function destroyOwnedRuntime() {
+    function destroyOwnedRuntime(deferUntilNextFrame = false) {
+      if (runtimeDestroyScheduled) return
+      const activeApp = appRef.current
+      const activeModel = modelRef.current
+      activeApp?.stop()
       detachContextLossListener?.()
       detachContextLossListener = null
       resizeObserverRef.current?.disconnect()
@@ -365,13 +384,41 @@ export function Live2DCanvas({
       modelTickerCleanupRef.current = null
       cleanupBeforeModelUpdateRef.current?.()
       cleanupBeforeModelUpdateRef.current = null
-      // Teardown policy lives in LIVE2D_TEARDOWN / ownership.destroyOwnedRuntime.
-      ownership.destroyOwnedRuntime({
-        model: modelRef.current,
-        app: appRef.current,
-      })
+      if (activeApp && activeModel && activeModel.parent === activeApp.stage) {
+        activeApp.stage.removeChild(activeModel)
+      }
       modelRef.current = null
       appRef.current = null
+
+      const finalizeDestroy = () => {
+        // Flush one empty stage while the WebGL context is still valid. Waiting
+        // until the next browser frame lets Pixi finish the render that was
+        // already in flight when React removed the Live2D component.
+        if (activeApp) {
+          try {
+            activeApp.renderer.render(activeApp.stage)
+          } catch {
+            // Cleanup must remain idempotent even after context loss.
+          }
+        }
+        // Teardown policy lives in LIVE2D_TEARDOWN / ownership.destroyOwnedRuntime.
+        ownership.destroyOwnedRuntime({
+          model: activeModel,
+          app: activeApp,
+        })
+      }
+
+      if (deferUntilNextFrame && activeApp) {
+        runtimeDestroyScheduled = true
+        // A settings commit can unmount Live2D while Pixi's current ticker
+        // callback is still unwinding. Two frame boundaries guarantee that
+        // callback and its queued renderer pass have both finished before the
+        // Cubism renderer releases WebGL objects.
+        window.requestAnimationFrame(() => window.requestAnimationFrame(finalizeDestroy))
+        return
+      }
+      runtimeDestroyScheduled = true
+      finalizeDestroy()
     }
 
     async function boot() {
@@ -510,10 +557,10 @@ export function Live2DCanvas({
         delete bootContainer.dataset.live2dMotionCount
         delete bootContainer.dataset.live2dExpressionCount
         bootContainer.dataset.live2dPhase = 'booting'
-        bootContainer.dataset.live2dModelId = modelDefinition.id
+        bootContainer.dataset.live2dModelId = modelDefinitionAtBoot.id
         bootContainer.dataset.live2dError = '0'
         currentExpressionRef.current = null
-        activeModelDefinitionRef.current = buildRuntimePetModelDefinition(modelDefinition)
+        activeModelDefinitionRef.current = buildRuntimePetModelDefinition(modelDefinitionAtBoot)
 
         await ensureLive2DVendorScripts()
         const containerAfterVendor = containerRef.current
@@ -528,11 +575,11 @@ export function Live2DCanvas({
           if (modelResponse.ok) {
             const modelFile = (await modelResponse.json()) as CubismModelFile
             if (shouldAbortLive2DBoot(isDisposed(), Boolean(containerRef.current))) return
-            activeModelDefinitionRef.current = buildRuntimePetModelDefinition(modelDefinition, modelFile)
+            activeModelDefinitionRef.current = buildRuntimePetModelDefinition(modelDefinitionAtBoot, modelFile)
             const resourceSummary = summarizeCubismDeclaredResources(modelFile)
             const resourceContainer = containerRef.current
             if (resourceContainer) {
-              resourceContainer.dataset.live2dResourceStatus = modelDefinition.compatibility?.status
+              resourceContainer.dataset.live2dResourceStatus = modelDefinitionAtBoot.compatibility?.status
                 ?? resourceSummary.status
               resourceContainer.dataset.live2dMocDeclared = resourceSummary.mocDeclared ? '1' : '0'
               resourceContainer.dataset.live2dTextureCount = String(resourceSummary.textureCount)
@@ -542,13 +589,17 @@ export function Live2DCanvas({
           }
         } catch {
           if (shouldAbortLive2DBoot(isDisposed(), Boolean(containerRef.current))) return
-          activeModelDefinitionRef.current = buildRuntimePetModelDefinition(modelDefinition)
+          activeModelDefinitionRef.current = buildRuntimePetModelDefinition(modelDefinitionAtBoot)
         }
         if (shouldAbortLive2DBoot(isDisposed(), Boolean(containerRef.current))) return
 
         const pixiRuntime = window.PIXI
         if (!pixiRuntime) {
           throw new Error('PIXI runtime is not available.')
+        }
+        // from() does not accept sound; motion audio is gated by this global.
+        if (pixiRuntime.live2d?.config) {
+          pixiRuntime.live2d.config.sound = false
         }
         if (!window.Live2DCubismCore) {
           throw new Error('Live2D Cubism Core is not available.')
@@ -568,8 +619,13 @@ export function Live2DCanvas({
         // Browser global build still exposes Application on window.PIXI.
         const app = new pixiRuntime.Application()
         const initOptions = createLive2DApplicationOptions(hostContainer)
-        if (typeof (app as { init?: (opts: typeof initOptions) => Promise<void> }).init === 'function') {
-          await (app as { init: (opts: typeof initOptions) => Promise<void> }).init(initOptions)
+        try {
+          if (typeof (app as { init?: (opts: typeof initOptions) => Promise<void> }).init === 'function') {
+            await (app as { init: (opts: typeof initOptions) => Promise<void> }).init(initOptions)
+          }
+        } catch (error) {
+          ownership.destroyApplication(app)
+          throw error
         }
 
         // Effect cleanup can only interleave at await points; still destroy any
@@ -686,8 +742,7 @@ export function Live2DCanvas({
           readyMs: modelReadyAt - bootStartedAt,
         })
         setModelReady(true)
-        frameState.blink = createBlinkState()
-        frameState.smoothedGaze = { x: 0, y: 0 }
+        Object.assign(frameState, createPetFrameState())
 
         resizeObserverRef.current = new ResizeObserver(() => {
           if (isDisposed()) return
@@ -749,15 +804,14 @@ export function Live2DCanvas({
     return () => {
       // Cleanup only invalidates ownership and destroys resources — no React state.
       clearPendingBootWork()
-      destroyOwnedRuntime()
+      destroyOwnedRuntime(true)
       currentExpressionRef.current = null
       currentExpressionSlotRef.current = 'idle'
       lastMotionKeyRef.current = ''
       lastMotionAtRef.current = 0
       performanceCueRef.current = null
       performanceCueStartedAtRef.current = 0
-      frameState.smoothedGaze = { x: 0, y: 0 }
-      frameState.blink = createBlinkState()
+      Object.assign(frameState, createPetFrameState())
       window.__desktopPetLive2DDebug = {
         phase: 'destroyed',
         error: null,
@@ -768,7 +822,6 @@ export function Live2DCanvas({
   }, [
     bindModelRuntime,
     layoutModel,
-    modelDefinition,
     resolvedModelPath,
     runtimeRevision,
     syncPlayback,

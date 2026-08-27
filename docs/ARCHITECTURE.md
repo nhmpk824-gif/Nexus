@@ -18,15 +18,22 @@ electron/
 src/
   app/          App composition, providers, top-level controllers, stores, views
   components/   Shared UI components and settings sections
+  core/         Process-agnostic stores: sessions, budget, auth routing, skills
   features/     Domain modules (models, voice, tools, tasks, memory, pet, ...)
   hooks/        React-facing composition hooks built on top of features
   i18n/         Locale runtime, dictionaries, translation hook, OpenCC adapter
-  lib/          Pure utilities, compatibility exports, persistence helpers
+  lib/          Pure utilities, coreRuntime factory, persistence helpers
   app/styles/   Global styles, panel layers, settings layers, and token CSS
   features/onboarding/styles/
                 Onboarding shell, responsive, and calm CSS loaded with the lazy guide
   types/        Domain type definitions
 ```
+
+`createCoreRuntime()` in `src/lib/coreRuntime.ts` builds the process-wide
+store graph without importing integration permission or allowlist modules.
+Outbound reminder broadcast stays on the host path
+(`src/features/integrations/channelBroadcast.ts`) and still applies
+`isActionAllowed('send')` plus the owner/allowlist gates.
 
 Product architecture note: Nexus should remain a desktop companion first. The
 storage, IPC, audit, and permission work in the v1.0 track exists to make
@@ -511,7 +518,6 @@ tools/
 updater/
 vision/
 voice/
-yearbook/
 ```
 
 ### `src/hooks/`

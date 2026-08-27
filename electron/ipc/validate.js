@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import {
   isTopLevelRendererFrame,
   isTrustedRendererFrameUrl,
@@ -8,6 +8,25 @@ import {
   getRequiredWindowCapability,
   isWindowChannelAllowed,
 } from './windowCapabilities.js'
+
+let ipcChannelBindingInstalled = false
+
+/**
+ * Electron's IpcMainInvokeEvent has no `channel` field. Bind the registered
+ * name onto each invoke event so window capability checks can see it.
+ */
+export function installIpcChannelBinding() {
+  if (ipcChannelBindingInstalled) return
+  ipcChannelBindingInstalled = true
+  const originalHandle = ipcMain.handle.bind(ipcMain)
+  ipcMain.handle = (channel, listener) => originalHandle(channel, (event, ...args) => {
+    Object.defineProperty(event, 'channel', {
+      value: channel,
+      configurable: true,
+    })
+    return listener(event, ...args)
+  })
+}
 
 /**
  * Lightweight IPC payload validators.
@@ -19,8 +38,9 @@ import {
  * Rejects requests from rogue or injected webContents that are not part
  * of the application's known window set.
  * @param {Electron.IpcMainInvokeEvent} event
+ * @param {unknown} [channel]
  */
-export function requireTrustedSender(event) {
+export function requireTrustedSender(event, channel) {
   const sender = event?.sender
   if (!sender) throw new Error('IPC sender missing')
   const ownerWindow = BrowserWindow.fromWebContents(sender)
@@ -35,9 +55,14 @@ export function requireTrustedSender(event) {
   }
 
   const viewKind = getRendererViewKind(ownerUrl)
-  const channel = Reflect.get(event ?? {}, 'channel')
-  if (!isWindowChannelAllowed(channel, viewKind)) {
-    const capability = getRequiredWindowCapability(channel)
+  const resolvedChannel = typeof channel === 'string' && channel
+    ? channel
+    : Reflect.get(event ?? {}, 'channel')
+  if (typeof resolvedChannel !== 'string' || !resolvedChannel) {
+    throw new Error('IPC rejected: channel capability is unavailable')
+  }
+  if (!isWindowChannelAllowed(resolvedChannel, viewKind)) {
+    const capability = getRequiredWindowCapability(resolvedChannel)
     throw new Error(`IPC rejected: ${capability} capability is unavailable to ${viewKind} window`)
   }
 }

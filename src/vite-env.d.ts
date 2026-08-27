@@ -523,6 +523,7 @@ declare global {
       setLaunchOnStartup: (value: boolean) => Promise<boolean>
       getPlatformProfile: () => Promise<PlatformProfile>
       listPetModels: () => Promise<PetModelDefinition[]>
+      subscribePetModelLibraryChanged: (listener: () => void) => () => void
       importPetModel: () => Promise<PetModelImportResult | null>
       importCodexPetGallery: (input: string) => Promise<{
         model: PetModelDefinition

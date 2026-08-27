@@ -7,10 +7,12 @@ import type { GazeTarget } from './live2d/types.ts'
 import type { PetPerformanceCue } from '../performance.ts'
 import {
   SPRITE_PET_ACTIVE_LOOP_COUNT,
+  editionFromAtlasRows,
   mapPetInputsToSpriteState,
   type SpritePetAnimationState,
   type SpritePetAtlasDefinition,
 } from '../spriteAtlas.ts'
+import { resolveSpritePetWearState } from '../../../../shared/spritePetWearContract.js'
 import {
   SPRITE_PET_INITIAL_CURSOR,
   advanceSpritePetAnimationCursor,
@@ -60,14 +62,18 @@ export function SpritePetCanvas({
   }), [])
   const subscribedSpeechLevel = useSpeechLevelSnapshot(speechLevelSource ?? emptySpeechLevelSource)
   const prefersReducedMotion = usePrefersReducedMotion()
-  const requestedState = overrideState ?? mapPetInputsToSpriteState({
-    mood,
-    touchZone,
-    isListening,
-    isSpeaking,
-    isBusy,
-    performanceCue,
-  })
+  const edition = editionFromAtlasRows(atlas.rows)
+  const requestedState = resolveSpritePetWearState(
+    edition,
+    overrideState ?? mapPetInputsToSpriteState({
+      mood,
+      touchZone,
+      isListening,
+      isSpeaking,
+      isBusy,
+      performanceCue,
+    }),
+  ) as SpritePetAnimationState
   const requestKey = createSpritePetRequestKey([
     overrideState ?? requestedState,
     performanceCue?.id ?? '',
@@ -141,7 +147,10 @@ export function SpritePetCanvas({
             next,
             requestedStateRef.current,
             requestKeyRef.current,
-            { loopRequestedState: loopRequestedStateRef.current },
+            {
+              loopRequestedState: loopRequestedStateRef.current,
+              edition: editionFromAtlasRows(atlasRef.current.rows),
+            },
           )
           currentFrame = resolveSpritePetRenderFrame(atlasRef.current, next).frame
           guard += 1

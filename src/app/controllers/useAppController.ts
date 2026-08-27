@@ -411,6 +411,8 @@ export function useAppController() {
     petRuntimeContinuousVoiceActive,
     remotePanelSettingsOpen,
     petModelPresets,
+    petModelPresetsReady,
+    petModelSelectionResolved,
     petModel,
     loadPetModels,
   } = useDesktopBridge({
@@ -599,6 +601,7 @@ export function useAppController() {
     preferredMemoryFocus,
     setSettingsOpen,
     petModelPresets,
+    petModelPresetsReady,
     petRuntimeContinuousVoiceActive,
     reminderTasks: reminderTaskStore.reminderTasks,
     debugConsoleEvents: debugConsole.debugConsoleEvents,
@@ -621,6 +624,7 @@ export function useAppController() {
   const petView = useMemo(() => ({
     settings,
     petModel,
+    petModelSelectionResolved,
     pet,
     voice,
     chat: chatWithAutonomy,
@@ -646,6 +650,7 @@ export function useAppController() {
   }), [
     settings,
     petModel,
+    petModelSelectionResolved,
     pet,
     voice,
     chatWithAutonomy,

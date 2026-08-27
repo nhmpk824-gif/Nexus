@@ -30,6 +30,7 @@ import {
 import {
   LIVE2D_READY_PHASE,
   LIVE2D_SNAPSHOT_SCRIPT,
+  collectLive2dSnapshot,
   isLive2DFirstFrameReady,
 } from '../scripts/lib/packaged-sustained-runtime-cdp.mjs'
 
@@ -584,14 +585,66 @@ test('smoke report starts fail-closed and records cleanup fields', () => {
 })
 
 test('packaged CDP snapshot reads real canvas markers and only first-frame is ready', () => {
+  const container = {
+    dataset: {
+      live2dPhase: 'first-frame',
+      live2dModelId: 'mao',
+      live2dError: '0',
+      live2dReadyMs: '1250.5',
+      live2dFirstFrameMs: '1300.5',
+      live2dResourceStatus: 'ready',
+      live2dMocDeclared: '1',
+      live2dTextureCount: '1',
+      live2dMotionCount: '8',
+      live2dExpressionCount: '8',
+    },
+  }
+  const live2dCanvas = { id: 'live2d' }
+  const documentRef = {
+    visibilityState: 'visible',
+    querySelectorAll(selector: string) {
+      if (selector === '.live2d-shell') return [{ id: 'shell' }]
+      if (selector === '.live2d-canvas canvas') return [live2dCanvas]
+      if (selector === 'canvas') return [live2dCanvas, { id: 'other' }]
+      return []
+    },
+    querySelector(selector: string) {
+      return selector === '.live2d-canvas' ? container : null
+    },
+  }
+  const snapshot = collectLive2dSnapshot({
+    documentRef,
+    locationRef: { href: 'nexus://packaged' },
+    windowRef: {
+      __desktopPetLive2DDebug: { phase: 'model-ready' },
+      __packagedSustainedRuntimeProbe: {
+        installed: true,
+        modelUpdateCount: 12,
+        tickerTickCount: 15,
+      },
+    },
+    readyPhase: LIVE2D_READY_PHASE,
+  })
+
   assert.equal(LIVE2D_READY_PHASE, 'first-frame')
+  assert.ok(LIVE2D_SNAPSHOT_SCRIPT.startsWith('(function collectLive2dSnapshot'))
   assert.equal(isLive2DFirstFrameReady('first-frame'), true)
   assert.equal(isLive2DFirstFrameReady('model-ready'), false)
   assert.equal(isLive2DFirstFrameReady(null), false)
-  assert.match(LIVE2D_SNAPSHOT_SCRIPT, /document\.querySelector\('\.live2d-canvas'\)/)
-  assert.match(LIVE2D_SNAPSHOT_SCRIPT, /document\.querySelectorAll\('\.live2d-canvas canvas'\)/)
-  assert.match(LIVE2D_SNAPSHOT_SCRIPT, /live2dTextureCount/)
-  assert.match(LIVE2D_SNAPSHOT_SCRIPT, /const ready = phase === "first-frame"/)
-  assert.doesNotMatch(LIVE2D_SNAPSHOT_SCRIPT, /phase === 'model-ready'/)
-  assert.doesNotMatch(LIVE2D_SNAPSHOT_SCRIPT, /Boolean\(container\?\.dataset\?\.live2dReadyMs\)/)
+  assert.equal(snapshot.ready, true)
+  assert.equal(snapshot.phase, 'first-frame')
+  assert.equal(snapshot.canvasCount, 1)
+  assert.equal(snapshot.allCanvasCount, 2)
+  assert.equal(snapshot.textureCount, '1')
+  assert.equal(snapshot.motionCount, '8')
+  assert.equal(snapshot.expressionCount, '8')
+  assert.equal(snapshot.probeInstalled, true)
+
+  container.dataset.live2dPhase = 'model-ready'
+  assert.equal(collectLive2dSnapshot({
+    documentRef,
+    locationRef: { href: 'nexus://packaged' },
+    windowRef: {},
+    readyPhase: LIVE2D_READY_PHASE,
+  }).ready, false)
 })

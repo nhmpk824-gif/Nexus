@@ -417,6 +417,51 @@
   }
 }
 
+.portrait-puppet-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: end center;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.portrait-puppet {
+  position: relative;
+  width: var(--portrait-puppet-size, min(68%, 280px));
+  min-width: var(--portrait-puppet-min-size, min(40vw, 160px));
+  aspect-ratio: 3 / 4;
+  transform-origin: center bottom;
+  contain: layout paint;
+}
+
+.portrait-puppet-shell--pet-stage .portrait-puppet {
+  --portrait-puppet-size: clamp(168px, 28vmin, 220px);
+  --portrait-puppet-min-size: 168px;
+  margin-bottom: clamp(44px, 8vh, 72px);
+}
+
+.portrait-puppet__canvas,
+.portrait-puppet__fallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.portrait-puppet__fallback {
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portrait-puppet {
+    transform: none !important;
+  }
+}
+
 .panel-window__hint {
   margin-top: 6px;
   color: var(--text-soft);

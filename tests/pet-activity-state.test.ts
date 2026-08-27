@@ -77,7 +77,7 @@ test('resolveCompanionActivityState keeps confirmation, voice, and thinking prio
   assert.equal(speaking.phase, 'speaking')
   assert.equal(speaking.isSpeaking, true)
   assert.equal(speaking.motionToken, 'speak')
-  assert.equal(speaking.spriteState, 'review')
+  assert.equal(speaking.spriteState, 'speaking')
   assert.equal(speaking.displayAction, 'speaking')
 
   const listening = resolveCompanionActivityState({
@@ -89,7 +89,7 @@ test('resolveCompanionActivityState keeps confirmation, voice, and thinking prio
   assert.equal(listening.phase, 'listening')
   assert.equal(listening.isListening, true)
   assert.equal(listening.motionToken, 'listen')
-  assert.equal(listening.spriteState, 'waiting')
+  assert.equal(listening.spriteState, 'listening')
 
   const thinking = resolveCompanionActivityState({
     mood: 'curious',
@@ -101,7 +101,7 @@ test('resolveCompanionActivityState keeps confirmation, voice, and thinking prio
   assert.equal(thinking.displayAction, 'summarizing')
   assert.equal(thinking.displayActionSource, 'assistant_activity')
   assert.equal(thinking.motionToken, 'think')
-  assert.equal(thinking.spriteState, 'running')
+  assert.equal(thinking.spriteState, 'thinking')
   assert.equal(thinking.statusKey, 'pet.status.thinking')
   assert.equal(thinking.displayStatusKey, 'pet.status.summarizing')
 })
@@ -228,7 +228,7 @@ test('resolveCompanionActivityPreviewState covers every desktop presence state',
       displayActionSource: 'runtime_reflection',
       displayStatusKey: 'pet.status.thinking',
       motionToken: 'think',
-      spriteState: 'running',
+      spriteState: 'thinking',
       statusKey: 'pet.status.thinking',
       updatedAt: now,
     },
@@ -239,7 +239,7 @@ test('resolveCompanionActivityPreviewState covers every desktop presence state',
       displayActionSource: 'runtime_reflection',
       displayStatusKey: 'voice_state.listening',
       motionToken: 'listen',
-      spriteState: 'waiting',
+      spriteState: 'listening',
       statusKey: 'voice_state.listening',
       updatedAt: now,
     },
@@ -250,7 +250,7 @@ test('resolveCompanionActivityPreviewState covers every desktop presence state',
       displayActionSource: 'runtime_reflection',
       displayStatusKey: 'voice_state.speaking',
       motionToken: 'speak',
-      spriteState: 'review',
+      spriteState: 'speaking',
       statusKey: 'voice_state.speaking',
       updatedAt: now,
     },

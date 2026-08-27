@@ -41,6 +41,8 @@ export type SpritePetCreatorKitInspection = {
   motionPreviewPathDisplay?: string
   rows: SpritePetCreatorKitRowStatus[]
   message: string
+  messageKey?: string
+  messageParams?: Record<string, string | number | boolean | null | undefined>
 }
 
 export type CodexPetCreatorPromptOptions = {

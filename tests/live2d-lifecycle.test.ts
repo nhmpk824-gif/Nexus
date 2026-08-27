@@ -322,15 +322,18 @@ test('owned model/app destruction is idempotent and uses intentional texture fla
   let modelOptions: unknown
   let appRemoveView: unknown
   let appStageOptions: unknown
+  const destroyOrder: string[] = []
 
   const model = {
     destroy(options?: unknown) {
+      destroyOrder.push('model')
       modelDestroyCount += 1
       modelOptions = options
     },
   }
   const app = {
     destroy(removeView?: boolean, stageOptions?: unknown) {
+      destroyOrder.push('app')
       appDestroyCount += 1
       appRemoveView = removeView
       appStageOptions = stageOptions
@@ -347,8 +350,9 @@ test('owned model/app destruction is idempotent and uses intentional texture fla
   assert.deepEqual(modelOptions, LIVE2D_TEARDOWN.ownedModel)
   assert.equal(appRemoveView, true)
   assert.deepEqual(appStageOptions, LIVE2D_TEARDOWN.appStage)
-  assert.equal(LIVE2D_TEARDOWN.ownedModel.texture, true)
-  assert.equal(LIVE2D_TEARDOWN.ownedModel.baseTexture, true)
+  assert.deepEqual(destroyOrder, ['model', 'app'])
+  assert.equal(LIVE2D_TEARDOWN.ownedModel.texture, false)
+  assert.equal(LIVE2D_TEARDOWN.ownedModel.baseTexture, false)
   assert.equal(LIVE2D_TEARDOWN.appStage.texture, false)
   assert.equal(LIVE2D_TEARDOWN.appStage.baseTexture, false)
 })
@@ -382,7 +386,11 @@ test('Live2DCanvas wires ownership coordinator and does not set React state in c
   // Cleanup must invalidate ownership / destroy resources only — no React setters.
   assert.match(
     canvasSource,
-    /return \(\) => \{[\s\S]*?clearPendingBootWork\(\)[\s\S]*?destroyOwnedRuntime\(\)/,
+    /return \(\) => \{[\s\S]*?clearPendingBootWork\(\)[\s\S]*?destroyOwnedRuntime\(true\)/,
+  )
+  assert.match(
+    canvasSource,
+    /requestAnimationFrame\(\(\) => window\.requestAnimationFrame\(finalizeDestroy\)\)/,
   )
   assert.doesNotMatch(
     canvasSource,
