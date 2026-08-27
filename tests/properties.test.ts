@@ -25,23 +25,14 @@ import {
   compareAffectSnapshots,
   type AffectSnapshot,
 } from '../src/features/autonomy/affectDynamics.ts'
-import {
-  classifyCoRegulation,
-  computeCoRegulationSnapshot,
-} from '../src/features/autonomy/coregulation.ts'
-import { binSamplesByDay } from '../src/features/autonomy/moodMapBinning.ts'
 import { detectRupture } from '../src/features/autonomy/ruptureDetection.ts'
 import { buildRepairGuidance } from '../src/features/autonomy/repairGuidance.ts'
 import { decideNextCheckIn } from '../src/features/arc/openArcPolicy.ts'
 import { buildArcCheckIn } from '../src/features/arc/openArcDelivery.ts'
-import { aggregateYearbook, scoreMemoryForHighlight } from '../src/features/yearbook/yearbookAggregator.ts'
-import { renderYearbookHtml } from '../src/features/yearbook/yearbookRender.ts'
 import { analyzeGuidance } from '../src/features/autonomy/guidanceAnalysis.ts'
 import type { UserAffectSample } from '../src/features/autonomy/userAffectTimeline.ts'
-import type { EmotionSample } from '../src/features/autonomy/stateTimeline.ts'
 import type { OpenArcRecord } from '../src/features/arc/openArcStore.ts'
 import type { GuidanceTelemetryEntry } from '../src/features/autonomy/guidanceTelemetry.ts'
-import type { MemoryItem } from '../src/types/memory.ts'
 
 const UI_LANGUAGES = ['en-US', 'zh-CN', 'zh-TW', 'ja', 'ko'] as const
 const arbUiLanguage = fc.constantFrom(...UI_LANGUAGES)
@@ -60,14 +51,6 @@ const arbUserSample: fc.Arbitrary<UserAffectSample> = fc.record({
   arousal: arbArousal,
   source: fc.constantFrom('voice_prosody', 'text_signal', 'relationship'),
   confidence: fc.float({ min: 0, max: 1, noNaN: true }),
-})
-
-const arbCompanionSample: fc.Arbitrary<EmotionSample> = fc.record({
-  ts: arbIsoTs,
-  energy: fc.float({ min: 0, max: 1, noNaN: true }),
-  warmth: fc.float({ min: 0, max: 1, noNaN: true }),
-  curiosity: fc.float({ min: 0, max: 1, noNaN: true }),
-  concern: fc.float({ min: 0, max: 1, noNaN: true }),
 })
 
 // ── affectDynamics.computeAffectSnapshot ──────────────────────────────────
@@ -216,84 +199,6 @@ test('property: buildRepairGuidance returns either empty or wrapped-tag prose fo
   )
 })
 
-// ── coregulation ──────────────────────────────────────────────────────────
-
-test('property: computeCoRegulationSnapshot — counterBalance in [-1, 1] when defined', () => {
-  fc.assert(
-    fc.property(
-      fc.array(arbUserSample, { maxLength: 60 }),
-      fc.array(arbCompanionSample, { maxLength: 60 }),
-      (u, c) => {
-        const snap = computeCoRegulationSnapshot(u, c)
-        if (snap.counterBalance != null) {
-          assert.ok(snap.counterBalance >= -1 - 1e-9 && snap.counterBalance <= 1 + 1e-9)
-        }
-        if (snap.warmthValenceCorrelation != null) {
-          assert.ok(snap.warmthValenceCorrelation >= -1 - 1e-9 && snap.warmthValenceCorrelation <= 1 + 1e-9)
-        }
-      },
-    ),
-    { numRuns: 200 },
-  )
-})
-
-test('property: classifyCoRegulation returns one of 4 categories on any snapshot', () => {
-  fc.assert(
-    fc.property(
-      fc.array(arbUserSample, { maxLength: 30 }),
-      fc.array(arbCompanionSample, { maxLength: 30 }),
-      (u, c) => {
-        const out = classifyCoRegulation(computeCoRegulationSnapshot(u, c))
-        assert.ok(['co-regulating', 'mirroring', 'flat', 'unknown'].includes(out))
-      },
-    ),
-    { numRuns: 200 },
-  )
-})
-
-// ── moodMapBinning ────────────────────────────────────────────────────────
-
-test('property: binSamplesByDay — bin count sum equals input length minus malformed timestamps', () => {
-  fc.assert(
-    fc.property(fc.array(arbUserSample, { maxLength: 200 }), (samples) => {
-      const bins = binSamplesByDay(samples)
-      const totalCount = bins.reduce((a, b) => a + b.count, 0)
-      assert.equal(totalCount, samples.length)
-    }),
-    { numRuns: 200 },
-  )
-})
-
-test('property: binSamplesByDay output is sorted ascending by day key', () => {
-  fc.assert(
-    fc.property(fc.array(arbUserSample, { maxLength: 200 }), (samples) => {
-      const bins = binSamplesByDay(samples)
-      for (let i = 1; i < bins.length; i += 1) {
-        assert.ok(bins[i - 1].day <= bins[i].day)
-      }
-    }),
-    { numRuns: 200 },
-  )
-})
-
-test('property: binSamplesByDay with malformed ISO drops gracefully', () => {
-  fc.assert(
-    fc.property(fc.array(fc.string({ maxLength: 30 }), { maxLength: 50 }), (badTimestamps) => {
-      const samples = badTimestamps.map<UserAffectSample>((ts) => ({
-        ts,
-        valence: 0,
-        arousal: 0.5,
-        source: 'text_signal',
-        confidence: 0.5,
-      }))
-      const bins = binSamplesByDay(samples)
-      // Whatever bins emerge, total count ≤ input length
-      assert.ok(bins.reduce((a, b) => a + b.count, 0) <= samples.length)
-    }),
-    { numRuns: 200 },
-  )
-})
-
 // ── openArcPolicy ─────────────────────────────────────────────────────────
 
 const arbOpenArc: fc.Arbitrary<OpenArcRecord> = fc.record({
@@ -334,70 +239,6 @@ test('property: buildArcCheckIn returns non-empty body for valid milestone day',
       assert.ok(out.title.length > 0)
       assert.ok(out.body.length > 0)
       assert.ok(out.body.includes(arc.theme.slice(0, 80)) || out.body.includes('…'))
-    }),
-    { numRuns: 200 },
-  )
-})
-
-// ── yearbook aggregation + render ─────────────────────────────────────────
-
-const arbMemory: fc.Arbitrary<MemoryItem> = fc.record({
-  id: fc.string({ minLength: 1 }),
-  content: fc.string({ maxLength: 300 }),
-  category: fc.constantFrom('profile', 'preference', 'goal', 'habit', 'manual', 'feedback', 'project', 'reference'),
-  source: fc.string({ maxLength: 20 }),
-  createdAt: arbIsoTs,
-  importance: fc.option(fc.constantFrom('low', 'normal', 'high', 'pinned', 'reflection'), { nil: undefined }),
-  importanceScore: fc.option(fc.float({ min: 0, max: 2, noNaN: true }), { nil: undefined }),
-  recallCount: fc.option(fc.integer({ min: 0, max: 50 }), { nil: undefined }),
-  significance: fc.option(fc.float({ min: 0, max: 1, noNaN: true }), { nil: undefined }),
-})
-
-test('property: aggregateYearbook produces exactly 12 monthly buckets', () => {
-  fc.assert(
-    fc.property(
-      fc.array(arbUserSample, { maxLength: 30 }),
-      fc.array(arbCompanionSample, { maxLength: 30 }),
-      fc.array(arbMemory, { maxLength: 20 }),
-      (u, c, m) => {
-        const snap = aggregateYearbook(u, c, [], m, [], new Date('2026-04-28T12:00:00Z'))
-        assert.equal(snap.months.length, 12)
-        assert.ok(snap.highlights.length <= 8)
-      },
-    ),
-    { numRuns: 200 },
-  )
-})
-
-test('property: renderYearbookHtml is total — never throws on any aggregated input', () => {
-  fc.assert(
-    fc.property(
-      fc.array(arbUserSample, { maxLength: 20 }),
-      fc.array(arbCompanionSample, { maxLength: 20 }),
-      fc.array(arbMemory, { maxLength: 10 }),
-      arbUiLanguage,
-      (u, c, m, ui) => {
-        const snap = aggregateYearbook(u, c, [], m, [], new Date('2026-04-28T12:00:00Z'))
-        const html = renderYearbookHtml(snap, ui)
-        assert.ok(html.startsWith('<!DOCTYPE html>'))
-        assert.ok(html.includes('</html>'))
-        // Defence-in-depth: no raw script tags from random memory content
-        assert.ok(!html.includes('<script'))
-      },
-    ),
-    { numRuns: 100 },
-  )
-})
-
-test('property: scoreMemoryForHighlight is monotonic w.r.t. importance bucket', () => {
-  // For two memories identical except importance, pinned > high > reflection > normal > low
-  const order = ['low', 'normal', 'reflection', 'high', 'pinned'] as const
-  fc.assert(
-    fc.property(arbMemory, (mem) => {
-      const scores = order.map((imp) => scoreMemoryForHighlight({ ...mem, importance: imp }))
-      for (let i = 1; i < scores.length; i += 1) {
-        assert.ok(scores[i] > scores[i - 1] - 1e-9, `${order[i]} (${scores[i]}) < ${order[i - 1]} (${scores[i - 1]})`)
-      }
     }),
     { numRuns: 200 },
   )

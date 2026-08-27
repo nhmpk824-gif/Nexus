@@ -3,8 +3,8 @@
  *
  * Pure functions: take a sample window in, return a snapshot out. No
  * IO, no clock, no React. Calling code (Sunday letter aggregator,
- * monthly mood map, annual yearbook, weekly recap panel) decides which
- * window to feed and how to render the result.
+ * weekly recap panel) decides which window to feed and how to render
+ * the result.
  *
  * Grounded in:
  *   - **Russell (1980)** circumplex — valence × arousal as the primary

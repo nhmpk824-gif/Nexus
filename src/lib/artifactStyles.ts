@@ -1,8 +1,8 @@
 /**
  * Shared font / typography constants for exported HTML artifacts
- * (Sunday letter + 12-month yearbook). Kept in one place so a font-
- * license change or a new locale's recommended face only touches one
- * file. Both renderers inline this into their `<style>` block.
+ * (Sunday letter). Kept in one place so a font-license change or a
+ * new locale's recommended face only touches one file. The letter
+ * renderer inlines this into its `<style>` block.
  */
 
 /**

@@ -12,11 +12,6 @@ import {
   parseTelegramChatIdList,
 } from '../src/features/integrations/allowlists.ts'
 import {
-  getInspectableIntegrationModules,
-  getRoadmapIntegrationModules,
-  listIntegrationModules,
-} from '../src/features/integrations/registry.ts'
-import {
   parseCsvIdSet,
   resolveBridgeReplyTarget,
 } from '../src/app/controllers/bridgeUtils.ts'
@@ -56,23 +51,6 @@ test('unknown integrations default to confirm mode instead of silent auto', () =
   const result = checkPermission(s, 'unknown-service', 'execute')
   assert.equal(result.allowed, false)
   if (!result.allowed) assert.equal(result.reason, 'needs_confirmation')
-})
-
-test('integration registry keeps inspectable, roadmap, and hidden modules separated', () => {
-  const all = listIntegrationModules()
-  const ids = all.map((module) => module.id)
-  assert.equal(new Set(ids).size, ids.length)
-  assert.ok(ids.includes('mcp'))
-  assert.ok(ids.includes('minecraft'))
-
-  const inspectable = getInspectableIntegrationModules()
-  assert.ok(inspectable.every((module) => module.inspectable && !module.hidden))
-  assert.ok(inspectable.some((module) => module.id === 'mcp'))
-  assert.equal(inspectable.some((module) => module.id === 'minecraft'), false)
-
-  const roadmap = getRoadmapIntegrationModules()
-  assert.ok(roadmap.every((module) => !module.inspectable && !module.hidden))
-  assert.ok(roadmap.some((module) => module.id === 'vision'))
 })
 
 test('integration allowlist parsers keep only valid target ids and dedupe them', () => {

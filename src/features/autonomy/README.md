@@ -16,14 +16,11 @@ src/features/autonomy/          ← pure engine, no React, no Electron
     tickLoop.ts                      awake/drowsy/sleeping/dreaming state machine
     focusAwareness.ts                quiet-hours / locked-screen gates
     memoryDream.ts                   nightly consolidation cycle
-    goalTracker.ts                   explicit user goals
-    proactiveEngine.ts               (LEGACY v1) rule-based decision tree
-    innerMonologue.ts                (LEGACY v1) inner-voice LLM calls
-    intentPredictor.ts               (LEGACY v1) "what will the user say next"
     contextScheduler.ts              context-triggered task runner
-    decisionFeedback.ts              learns from user reactions
     skillDistillation.ts             autoskill extraction
-    v2/                          ← NEW, LLM-driven decision engine (Phase 2+)
+    stateTimeline.ts                 emotion/relationship sample history
+    userAffectTimeline.ts            user-affect sample history
+    v2/                          ← LLM-driven decision engine
         contextGatherer.ts           pure signal aggregator
 
 src/app/controllers/            ← React bindings that hold refs + persistence

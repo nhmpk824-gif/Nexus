@@ -9,11 +9,7 @@
     "tests/helpers/electron-main-stub-hooks.mjs"
   ],
   "ignore": [
-    "shared/**/*.d.ts",
-    "src/features/autonomy/coregulation.ts",
-    "src/features/autonomy/moodMapBinning.ts",
-    "src/features/integrations/registry.ts",
-    "src/features/yearbook/**"
+    "shared/**/*.d.ts"
   ],
   "ignoreDependencies": [
     "onnxruntime-web"

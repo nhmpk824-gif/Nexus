@@ -409,7 +409,6 @@ stage('D', 'Asset integrity', () => {
       'src/features/autonomy/affectGuidance.ts',
       'src/features/autonomy/repairGuidance.ts',
       'src/features/letter/letterExport.ts',
-      'src/features/yearbook/yearbookRender.ts',
       'src/features/arc/openArcDelivery.ts',
       'src/features/futureCapsule/futureCapsuleDelivery.ts',
     ]
