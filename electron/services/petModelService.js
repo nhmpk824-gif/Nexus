@@ -77,6 +77,7 @@ import {
   IMPORTED_SPRITE_PET_MODELS_ROUTE,
 } from './petModelUrlBuilders.js'
 import {
+  formatDiscoveredModelLabel,
   listPetModelsFromRoot,
 } from './live2dModelDiscoveryService.js'
 import { inspectLive2dModelFile } from './live2dModelCompatibility.js'
@@ -176,12 +177,6 @@ function petUserMessage(messageKey, messageParams) {
     messageKey,
     ...(messageParams ? { messageParams } : {}),
   }
-}
-
-function spriteActionKey(sourceLayout, nativeAtlasPreserved) {
-  if (sourceLayout === 'atlas' && nativeAtlasPreserved) return PET_IMPORT_MESSAGE_KEYS.actionAtlasNative
-  if (sourceLayout === 'atlas') return PET_IMPORT_MESSAGE_KEYS.actionAtlas
-  return PET_IMPORT_MESSAGE_KEYS.actionImage
 }
 
 function petArtifactDisplayFields(paths = {}) {
